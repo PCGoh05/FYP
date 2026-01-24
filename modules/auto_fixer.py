@@ -14,7 +14,7 @@ from io import BytesIO
 
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_font_info,
-    get_paragraph_alignment, set_margins, truncate_text
+    get_paragraph_alignment, set_margins, truncate_text, is_font_equivalent
 )
 from .paragraph_classifier import (
     ParagraphClassifier, ParagraphType, ClassifiedParagraph
@@ -383,17 +383,13 @@ class AutoFixer:
         
         # Fix font name - only if current is EXPLICITLY set AND different
         # If font.name is None, it means the font is inherited from style/template
-        # In this case, we should check if the actual displayed font matches before changing
         current_font = font.name
         if current_font is not None and expected_font is not None:
-            # Normalize for comparison (case-insensitive, trim spaces)
-            current_normalized = current_font.lower().strip()
-            expected_normalized = expected_font.lower().strip()
-            if current_normalized != expected_normalized:
+            # Use font equivalence check (Times New Roman ≈ Times)
+            if not is_font_equivalent(current_font, expected_font):
                 font.name = expected_font
                 changes.append(f"Font: {current_font} → {expected_font}")
         # NOTE: If current_font is None (inherited), we do NOT change it
-        # because the inherited font is likely already correct from the template
         
         # Fix font size - only if current is EXPLICITLY set AND different
         # If font.size is None, the size is inherited from style/template

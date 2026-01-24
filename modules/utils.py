@@ -13,6 +13,46 @@ import os
 import tempfile
 from io import BytesIO
 
+
+# Font equivalence groups - fonts that are considered equivalent
+FONT_EQUIVALENTS = {
+    "times": ["times new roman", "times", "times-roman", "timesnewroman"],
+    "arial": ["arial", "arial unicode ms", "arial narrow"],
+    "calibri": ["calibri", "calibri light"],
+    "cambria": ["cambria", "cambria math"],
+    "palatino": ["palatino linotype", "palatino", "book antiqua"],
+}
+
+
+def is_font_equivalent(font1: str, font2: str) -> bool:
+    """
+    Check if two fonts are equivalent (e.g., 'Times New Roman' and 'Times')
+    
+    Args:
+        font1: First font name
+        font2: Second font name
+        
+    Returns:
+        True if fonts are equivalent
+    """
+    if font1 is None or font2 is None:
+        return False
+    
+    f1 = font1.lower().strip()
+    f2 = font2.lower().strip()
+    
+    # Exact match
+    if f1 == f2:
+        return True
+    
+    # Check equivalence groups
+    for group in FONT_EQUIVALENTS.values():
+        if f1 in group and f2 in group:
+            return True
+    
+    return False
+
+
 # PDF conversion imports
 try:
     from pdf2docx import Converter as PDF2DOCXConverter

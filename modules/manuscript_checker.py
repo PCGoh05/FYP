@@ -12,7 +12,7 @@ from .utils import (
     load_document, get_paragraph_text, get_paragraph_font_info,
     get_paragraph_alignment, get_margins, get_line_spacing,
     detect_reference_style, calculate_compliance_score,
-    truncate_text
+    truncate_text, is_font_equivalent
 )
 from .paragraph_classifier import ParagraphClassifier, ParagraphType, ClassifiedParagraph
 from config import REQUIRED_SECTIONS, CAPTION_PATTERNS
@@ -164,24 +164,20 @@ class ManuscriptChecker:
                 font_info = cp.font_info
                 alignment = cp.alignment
                 
-                # Check font name (case-insensitive comparison)
+                # Check font name (using font equivalence)
                 expected_font = title_rules.get("font_name", "Times New Roman")
                 current_font = font_info.get("font_name")
-                if current_font:
-                    # Normalize for comparison
-                    current_normalized = current_font.lower().strip()
-                    expected_normalized = expected_font.lower().strip()
-                    if current_normalized != expected_normalized:
-                        self._add_issue(
-                            category="title",
-                            location="Paper Title",
-                            para_index=cp.index,
-                            description="Title font does not match template",
-                            current=current_font,
-                            expected=expected_font,
-                            severity="error",
-                            text_preview=truncate_text(cp.text, 60)
-                        )
+                if current_font and not is_font_equivalent(current_font, expected_font):
+                    self._add_issue(
+                        category="title",
+                        location="Paper Title",
+                        para_index=cp.index,
+                        description="Title font does not match template",
+                        current=current_font,
+                        expected=expected_font,
+                        severity="error",
+                        text_preview=truncate_text(cp.text, 60)
+                    )
                 
                 # Check font size (with 0.5pt tolerance)
                 expected_size = title_rules.get("font_size", 24)
