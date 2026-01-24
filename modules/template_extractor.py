@@ -259,22 +259,43 @@ class TemplateExtractor:
         Extract paper title formatting style using intelligent detection.
         
         This method distinguishes between:
-        - Journal name (e.g., "Journal of Informatics and Web Engineering")
-        - Journal info (e.g., "Vol. 3 No. 3", "eISSN: 2821-370X")
-        - Paper title (the actual manuscript title)
+        - Journal Title (e.g., "(Journal Title) Journal of Informatics...")
+        - Paper Title (e.g., "(Title) Preparation template...")
         
-        The paper title is identified by:
-        1. Skipping journal header patterns
-        2. Looking for content after journal info
-        3. Checking if followed by author information
+        The paper title is identified by looking for "(Title)" keyword first.
         """
+        from docx.oxml.ns import qn
+        
+        # STEP 1: Search for "(Title)" in ALL paragraph elements (including those in text boxes)
+        # This is the most reliable way to find Paper Title format
+        body_xml = self.document.element.body
+        all_p = body_xml.findall('.//' + qn('w:p'))
+        
+        for p_elem in all_p:
+            texts = [t.text for t in p_elem.findall('.//' + qn('w:t')) if t.text]
+            full_text = ''.join(texts)
+            
+            # Look for "(Title)" keyword (not "(Journal Title)")
+            if '(Title)' in full_text and '(Journal Title)' not in full_text:
+                # Found Paper Title paragraph - try to parse instruction format
+                instruction_rules = _parse_instruction_format(full_text)
+                if instruction_rules:
+                    return {
+                        "font_name": instruction_rules.get("font_name", "Times New Roman"),
+                        "font_size": instruction_rules.get("font_size", 24),
+                        "bold": instruction_rules.get("bold", False),
+                        "alignment": "CENTER"
+                    }
+        
+        # STEP 2: Fall back to original logic if "(Title)" not found
         # Keywords that indicate journal name (not paper title)
         journal_name_keywords = [
             'journal of', 'proceedings of', 'transactions on',
             'international journal', 'ieee', 'acm', 'springer',
             'elsevier', 'wiley', 'taylor & francis', 'mdpi',
             'frontiers in', 'annals of', 'advances in',
-            'review of', 'letters in', 'communications in'
+            'review of', 'letters in', 'communications in',
+            '(journal title)'  # Added this!
         ]
         
         # Keywords that indicate journal info (volume, issue, etc.)
@@ -282,7 +303,8 @@ class TemplateExtractor:
             'vol.', 'volume', 'issue', 'issn', 'eissn', 'e-issn',
             'p-issn', 'doi:', 'doi ', 'http', 'www.', '©',
             'copyright', 'open access', 'received', 'accepted',
-            'published', 'article info', 'article history'
+            'published', 'article info', 'article history',
+            'palatino linotype'  # This is journal title font, skip it!
         ]
         
         # Track paragraphs to find paper title
