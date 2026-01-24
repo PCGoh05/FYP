@@ -1,0 +1,223 @@
+"""
+Configuration settings for the Automated Manuscript Template Compliance Checker
+"""
+
+# Application Settings
+APP_TITLE = "Automated Manuscript Template Compliance Checker"
+APP_VERSION = "1.0.0"
+APP_AUTHOR = "FYP Project"
+
+# Default formatting rules (JIWE template style)
+DEFAULT_RULES = {
+    "margins": {
+        "left": 0.75,
+        "right": 0.75,
+        "top": 1.0,
+        "bottom": 1.0
+    },
+    "title": {
+        "font_name": "Times New Roman",
+        "font_size": 24,
+        "bold": True,
+        "alignment": "CENTER"
+    },
+    "author": {
+        "font_name": "Times New Roman",
+        "font_size": 11,
+        "bold": True,
+        "alignment": "CENTER"
+    },
+    "affiliation": {
+        "font_name": "Times New Roman",
+        "font_size": 9,
+        "alignment": "CENTER"
+    },
+    "body": {
+        "font_name": "Times New Roman",
+        "font_size": 10,
+        "line_spacing": 1.0
+    },
+    "heading": {
+        "font_name": "Times New Roman",
+        "font_size": 10,
+        "bold": True,
+        "all_caps": True
+    },
+    "abstract": {
+        "font_name": "Times New Roman",
+        "font_size": 9
+    },
+    "keywords": {
+        "font_name": "Times New Roman",
+        "font_size": 9
+    },
+    "caption": {
+        "font_name": "Times New Roman",
+        "font_size": 9,
+        "italic": False
+    },
+    "reference": {
+        "font_name": "Times New Roman",
+        "font_size": 9
+    },
+    "layout": {
+        "columns": 1,
+        "page_size": "A4"
+    }
+}
+
+# Paragraph classification patterns
+JOURNAL_HEADER_PATTERNS = [
+    r'journal\s+of',
+    r'vol\.\s*\d+',
+    r'volume\s*\d+',
+    r'issue\s*\d+',
+    r'issn[:\s]*[\d\-]+',
+    r'doi[:\s]*10\.',
+    r'https?://',
+    r'www\.',
+    r'©\s*\d{4}',
+    r'copyright',
+    r'open\s*access',
+    r'received[:\s]*\d',
+    r'accepted[:\s]*\d',
+    r'published[:\s]*\d',
+    r'e-issn',
+    r'p-issn',
+]
+
+AUTHOR_INFO_PATTERNS = [
+    r'@[\w\.-]+\.\w+',  # Email pattern
+    r'university',
+    r'universiti',  # Malay
+    r'fakulti',  # Malay
+    r'faculty',
+    r'department',
+    r'jabatan',  # Malay
+    r'college',
+    r'institute',
+    r'institut',
+    r'school\s+of',
+    r'center\s+for',
+    r'centre\s+for',
+    r'laboratory',
+    r'lab\s+of',
+    r'orcid',
+    r'\d{4}-\d{4}-\d{4}-\d{4}',  # ORCID pattern
+    r'大学',  # Chinese - university
+    r'学院',  # Chinese - college
+    r'研究所',  # Chinese - institute
+    r'corresponding\s+author',
+    r'\*.*author',
+    r'author.*\*',
+    r'^[A-Za-z]+\s+[A-Za-z]+\s*,',  # Name, affiliation pattern
+    r'^[A-Za-z]+\s+[A-Za-z]+\s*\d',  # Name with number superscript
+]
+
+SECTION_HEADING_PATTERNS = [
+    r'^abstract$',
+    r'^keywords?$',
+    r'^key\s*words?$',
+    r'^introduction$',
+    r'^background$',
+    r'^literature\s+review$',
+    r'^related\s+work',
+    r'^methodology$',
+    r'^method(s)?$',
+    r'^materials?\s+(and|&)\s+methods?$',
+    r'^experimental',
+    r'^results?$',
+    r'^findings?$',
+    r'^discussion$',
+    r'^analysis$',
+    r'^results?\s+(and|&)\s+discussion$',
+    r'^conclusion(s)?$',
+    r'^summary$',
+    r'^recommendations?$',
+    r'^future\s+work',
+    r'^references?$',
+    r'^bibliography$',
+    r'^works?\s+cited',
+    r'^acknowledgements?$',
+    r'^funding',
+    r'^conflict\s+of\s+interest',
+    r'^data\s+availability',
+    r'^appendix',
+    r'^appendices',
+    # Numbered headings: 1. Introduction, I. Introduction, A. Introduction
+    r'^\d+\.?\s*\w+',
+    r'^[IVXLC]+\.?\s*\w+',
+    r'^[A-Z]\.\s*\w+',
+]
+
+CAPTION_PATTERNS = [
+    r'^figure\s*\d+',
+    r'^fig\.\s*\d+',
+    r'^table\s*\d+',
+    r'^chart\s*\d+',
+    r'^diagram\s*\d+',
+    r'^image\s*\d+',
+    r'^plate\s*\d+',
+    r'^graph\s*\d+',
+    r'^rajah\s*\d+',  # Malay - figure
+    r'^jadual\s*\d+',  # Malay - table
+]
+
+REFERENCE_PATTERNS = [
+    r'^\[\d+\]',  # IEEE style [1]
+    r'^\d+\.\s+\w',  # Numbered list
+    r'^\(\d{4}\)',  # Year in parentheses
+    r',\s*\d{4}\.',  # Year with comma
+    r'et\s+al\.',
+    r'pp\.\s*\d+',
+    r'vol\.\s*\d+',
+    r'doi:',
+    r'isbn',
+    r'retrieved\s+from',
+    r'accessed',
+]
+
+# Required document sections
+REQUIRED_SECTIONS = [
+    "abstract",
+    "keywords",
+    "introduction",
+    "conclusion",
+    "references"
+]
+
+# LLM Configuration (NVIDIA DeepSeek R1)
+LLM_CONFIG = {
+    "nvidia_api_key": "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",
+    "nvidia_model": "deepseek-ai/deepseek-r1",
+    "max_tokens": 1024,
+    "temperature": 0.3
+}
+
+# Alignment mapping
+ALIGNMENT_MAP = {
+    0: "LEFT",
+    1: "CENTER", 
+    2: "RIGHT",
+    3: "JUSTIFY"
+}
+
+ALIGNMENT_REVERSE_MAP = {
+    "LEFT": 0,
+    "CENTER": 1,
+    "RIGHT": 2,
+    "JUSTIFY": 3
+}
+
+# Color codes for UI
+COLORS = {
+    "error": "#ffcccc",  # Light red
+    "correct": "#ccffcc",  # Light green
+    "warning": "#ffffcc",  # Light yellow
+    "info": "#cce5ff",  # Light blue
+    "error_text": "#cc0000",
+    "correct_text": "#008000"
+}
+
+# File size limits
+MAX_FILE_SIZE_MB = 50

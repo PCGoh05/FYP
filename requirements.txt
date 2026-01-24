@@ -1,0 +1,19 @@
+# Academic Manuscript Format Checker - Dependencies
+
+# Core Framework
+streamlit>=1.28.0
+
+# Document Processing
+python-docx>=1.1.0
+
+# PDF Support
+pdf2docx>=0.5.6
+docx2pdf>=0.1.8
+PyMuPDF>=1.23.0
+
+# LLM Integration
+groq>=0.4.0
+requests>=2.31.0
+
+# Utilities
+lxml>=4.9.0
