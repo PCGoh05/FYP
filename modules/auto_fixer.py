@@ -88,10 +88,12 @@ class AutoFixer:
                 self._fix_title(para, i)
             elif para_type == ParagraphType.SECTION_HEADING:
                 self._fix_heading(para, i)
-            elif para_type in [ParagraphType.BODY, ParagraphType.ABSTRACT_CONTENT]:
+            elif para_type == ParagraphType.BODY:
                 self._fix_body_text(para, i)
+            elif para_type == ParagraphType.ABSTRACT_CONTENT:
+                self._fix_abstract(para, i)  # Use abstract rules (9pt)
             elif para_type == ParagraphType.KEYWORDS_CONTENT:
-                self._fix_body_text(para, i)  # Use body rules for keywords content
+                self._fix_keywords(para, i)  # Use keywords rules
             elif para_type == ParagraphType.CAPTION:
                 self._fix_caption(para, i)
             elif para_type == ParagraphType.REFERENCE:
@@ -243,6 +245,61 @@ class AutoFixer:
                 paragraph_index=index,
                 location=f"Body Text (Para {index + 1})",
                 change_type="body",
+                before=f"{current_info.get('font_name', 'Unknown')} {current_info.get('font_size', '?')}pt",
+                after=f"{expected_font} {expected_size}pt",
+                text_preview=truncate_text(get_paragraph_text(paragraph), 40)
+            ))
+    
+    def _fix_abstract(self, paragraph, index: int):
+        """Fix abstract content formatting - uses ABSTRACT rules (not body)"""
+        abstract_rules = self.rules.get("abstract", {})
+        changes = []
+        
+        current_info = get_paragraph_font_info(paragraph)
+        
+        expected_font = abstract_rules.get("font_name", "Times New Roman")
+        expected_size = abstract_rules.get("font_size", 9)  # Abstract is typically 9pt
+        
+        for run in paragraph.runs:
+            if run.text.strip():
+                run_changes = self._fix_run_formatting(
+                    run, expected_font, expected_size, None
+                )
+                changes.extend(run_changes)
+        
+        if changes:
+            self.changes.append(ChangeRecord(
+                paragraph_index=index,
+                location=f"Abstract",
+                change_type="abstract",
+                before=f"{current_info.get('font_name', 'Unknown')} {current_info.get('font_size', '?')}pt",
+                after=f"{expected_font} {expected_size}pt",
+                text_preview=truncate_text(get_paragraph_text(paragraph), 40)
+            ))
+    
+    def _fix_keywords(self, paragraph, index: int):
+        """Fix keywords content formatting - uses KEYWORDS rules"""
+        # Keywords typically use same format as abstract
+        keywords_rules = self.rules.get("keywords", self.rules.get("abstract", {}))
+        changes = []
+        
+        current_info = get_paragraph_font_info(paragraph)
+        
+        expected_font = keywords_rules.get("font_name", "Times New Roman")
+        expected_size = keywords_rules.get("font_size", 9)  # Keywords is typically 9pt
+        
+        for run in paragraph.runs:
+            if run.text.strip():
+                run_changes = self._fix_run_formatting(
+                    run, expected_font, expected_size, None
+                )
+                changes.extend(run_changes)
+        
+        if changes:
+            self.changes.append(ChangeRecord(
+                paragraph_index=index,
+                location=f"Keywords",
+                change_type="keywords",
                 before=f"{current_info.get('font_name', 'Unknown')} {current_info.get('font_size', '?')}pt",
                 after=f"{expected_font} {expected_size}pt",
                 text_preview=truncate_text(get_paragraph_text(paragraph), 40)
