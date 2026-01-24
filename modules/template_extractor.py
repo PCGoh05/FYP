@@ -19,6 +19,43 @@ from .utils import (
 from config import DEFAULT_RULES, SECTION_HEADING_PATTERNS
 
 
+def _parse_instruction_format(text: str) -> Dict[str, Any]:
+    """
+    Parse formatting instructions from template instruction text.
+    
+    Examples:
+        "(24- Font size, bold Palatino Linotype)" -> may contain format info
+        "(11-Font size, bold Times New Roman)" -> font_size=11, bold=True, font_name="Times New Roman"
+        "(10-Font size, Times New Roman)" -> font_size=10, bold=False, font_name="Times New Roman"
+    
+    Returns:
+        Dictionary with extracted format rules (font_name, font_size, bold)
+        Empty dict if no format info found
+    """
+    result = {}
+    
+    # Look for patterns in parentheses or brackets
+    # Pattern: (XX- Font size, [bold] FontName) or (XX-Font size, [bold] FontName)
+    instruction_match = re.search(r'\((\d+)[- ]?\s*[Ff]ont\s*size,?\s*(bold)?\s*(.+?)\)', text)
+    if instruction_match:
+        result["font_size"] = int(instruction_match.group(1))
+        result["bold"] = instruction_match.group(2) is not None
+        font_name = instruction_match.group(3).strip()
+        # Clean up font name - remove trailing parenthesis or extra text
+        font_name = re.sub(r'\s*\(.*$', '', font_name).strip()
+        if font_name and len(font_name) > 2:
+            result["font_name"] = font_name
+    
+    # Also check for patterns like "10pt Times New Roman" or "Times New Roman 12pt"
+    if not result:
+        pt_match = re.search(r'(\d+)\s*pt\s+(\w[\w\s]+)', text, re.IGNORECASE)
+        if pt_match:
+            result["font_size"] = int(pt_match.group(1))
+            result["font_name"] = pt_match.group(2).strip()
+    
+    return result
+
+
 class TemplateExtractor:
     """Extract formatting rules from a journal template document"""
     
@@ -351,12 +388,26 @@ class TemplateExtractor:
                     # Try second best candidate
                     best = candidates[1]
             
-            return {
-                "font_name": best['font_info'].get("font_name", "Times New Roman"),
-                "font_size": best['font_info'].get("font_size", 14) or 14,
-                "bold": best['font_info'].get("bold", True),
-                "alignment": best['alignment'] or "CENTER"
-            }
+            # FIRST: Try to parse instruction format from the text itself
+            # This handles templates like "(24-Font size, bold Times New Roman)"
+            instruction_rules = _parse_instruction_format(best['text'])
+            
+            if instruction_rules:
+                # Use instruction rules if found
+                return {
+                    "font_name": instruction_rules.get("font_name", "Times New Roman"),
+                    "font_size": instruction_rules.get("font_size", 24),
+                    "bold": instruction_rules.get("bold", True),
+                    "alignment": best['alignment'] or "CENTER"
+                }
+            else:
+                # Fall back to actual paragraph formatting
+                return {
+                    "font_name": best['font_info'].get("font_name", "Times New Roman"),
+                    "font_size": best['font_info'].get("font_size", 14) or 14,
+                    "bold": best['font_info'].get("bold", True),
+                    "alignment": best['alignment'] or "CENTER"
+                }
         
         # Default title style if no candidates found
         return DEFAULT_RULES["title"]
