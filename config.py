@@ -186,10 +186,10 @@ REQUIRED_SECTIONS = [
     "references"
 ]
 
-# LLM Configuration (NVIDIA DeepSeek R1)
+# LLM Configuration (NVIDIA Llama 3.1 - Faster than DeepSeek R1)
 LLM_CONFIG = {
-    "nvidia_api_key": "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",
-    "nvidia_model": "deepseek-ai/deepseek-r1",
+    "nvidia_api_key": "",  # Load from .env file for security
+    "nvidia_model": "meta/llama-3.1-8b-instruct",  # Fast and efficient
     "max_tokens": 1024,
     "temperature": 0.3
 }

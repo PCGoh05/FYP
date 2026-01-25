@@ -95,25 +95,17 @@ class LLMIntegration:
         self._init_client()
     
     def _init_client(self):
-        """Initialize the NVIDIA API client"""
+        """Initialize the NVIDIA API client (lazy validation - no test call)"""
         if OPENAI_AVAILABLE and self.api_key:
             try:
                 self._client = OpenAI(
                     base_url="https://integrate.api.nvidia.com/v1",
                     api_key=self.api_key
                 )
-                # Test the connection
-                test_response = self._client.chat.completions.create(
-                    model=self.model,
-                    messages=[{"role": "user", "content": "test"}],
-                    max_tokens=10
-                )
-                if test_response and test_response.choices:
-                    self._available = True
-                    print(f"[OK] NVIDIA DeepSeek R1 initialized successfully")
-                else:
-                    print("[ERROR] NVIDIA API test failed: no response")
-                    self._available = False
+                # Skip test call for faster initialization
+                # Connection will be validated on first actual use
+                self._available = True
+                print(f"[OK] NVIDIA Llama 3.1 8B client initialized (lazy mode)")
             except Exception as e:
                 print(f"[ERROR] Failed to initialize NVIDIA client: {e}")
                 self._available = False
@@ -158,9 +150,7 @@ class LLMIntegration:
             )
             
             content = response.choices[0].message.content
-            # DeepSeek R1 may include <think>...</think> tags, remove them
-            content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
-            return content.strip()
+            return content.strip() if content else ""
         except Exception as e:
             print(f"LLM generation error: {e}")
             return ""

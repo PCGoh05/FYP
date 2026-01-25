@@ -12,6 +12,7 @@ docx2pdf>=0.1.8
 PyMuPDF>=1.23.0
 
 # LLM Integration
+openai>=1.0.0
 groq>=0.4.0
 requests>=2.31.0
 

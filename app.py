@@ -145,8 +145,8 @@ def display_sidebar():
             
             # Show current status
             if st.session_state.llm and st.session_state.llm.is_available():
-                st.success("✅ LLM Connected (NVIDIA DeepSeek R1)")
-                st.info("🤖 AI features enabled: error explanations, abstract analysis")
+                st.success("✅ LLM Connected (NVIDIA Llama 3.1 8B)")
+                st.info("🤖 AI features enabled: error explanations, smart classification")
                 if st.button("🔄 Disconnect LLM"):
                     st.session_state.llm = None
                     st.rerun()
@@ -559,15 +559,15 @@ def handle_auto_fix():
 
 
 def display_comparison_view(changes):
-    """Display Turnitin-style comparison view"""
-    st.header("📊 Comparison View")
+    """Display professional table-based comparison view"""
+    st.header("📊 Format Differences Detected")
     
     if not changes:
         st.info("No changes were made to the document")
         return
     
-    # Summary statistics
-    col1, col2 = st.columns(2)
+    # Summary statistics in a nice format
+    col1, col2, col3 = st.columns(3)
     
     changes_by_type = {}
     for change in changes:
@@ -575,32 +575,101 @@ def display_comparison_view(changes):
         changes_by_type[change_type] = changes_by_type.get(change_type, 0) + 1
     
     with col1:
-        st.subheader("📈 Changes Summary")
-        for change_type, count in changes_by_type.items():
-            st.write(f"- **{change_type.replace('_', ' ').title()}**: {count} changes")
+        st.metric("📝 Total Changes", len(changes))
     
     with col2:
-        st.subheader("📊 Statistics")
-        st.metric("Total Changes", len(changes))
+        # Most common change type
+        if changes_by_type:
+            most_common = max(changes_by_type, key=changes_by_type.get)
+            st.metric("🔄 Most Common", most_common.replace('_', ' ').title())
     
-    # Detailed comparison table
-    st.subheader("📝 Detailed Changes")
+    with col3:
+        st.metric("📑 Types", len(changes_by_type))
     
-    # Use expandable cards for each change
+    # Changes by type summary
+    with st.expander("📈 Changes Summary by Type", expanded=False):
+        for change_type, count in sorted(changes_by_type.items(), key=lambda x: -x[1]):
+            st.write(f"- **{change_type.replace('_', ' ').title()}**: {count} changes")
+    
+    st.divider()
+    
+    # Build table data
+    table_data = []
     for i, change in enumerate(changes, 1):
-        with st.expander(f"#{i} - {change.location}", expanded=False):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**Before:**")
-                st.error(change.before)
-            
-            with col2:
-                st.markdown("**After:**")
-                st.success(change.after)
-            
-            if change.text_preview:
-                st.caption(f"📄 Preview: {change.text_preview[:100]}{'...' if len(change.text_preview) > 100 else ''}")
+        # Parse before/after to extract font and size
+        before_parts = change.before.split()
+        after_parts = change.after.split()
+        
+        # Extract font name and size from "FontName 12pt" format
+        current_font = ""
+        current_size = ""
+        target_font = ""
+        target_size = ""
+        
+        # Parse "before" field (e.g., "Times New Roman 12pt" or "Left: 0.75in → 0.75in")
+        if "pt" in change.before.lower():
+            parts = change.before.rsplit(" ", 1)
+            if len(parts) == 2:
+                current_font = parts[0]
+                current_size = parts[1]
+            else:
+                current_font = change.before
+        else:
+            current_font = change.before
+        
+        # Parse "after" field
+        if "pt" in change.after.lower():
+            parts = change.after.rsplit(" ", 1)
+            if len(parts) == 2:
+                target_font = parts[0]
+                target_size = parts[1]
+            else:
+                target_font = change.after
+        else:
+            target_font = change.after
+        
+        # Truncate text preview
+        text_preview = change.text_preview[:40] + "..." if len(change.text_preview) > 40 else change.text_preview
+        
+        table_data.append({
+            "#": i,
+            "Type": change.change_type,
+            "Text": text_preview,
+            "Current Font": current_font,
+            "Target Font": target_font,
+            "Current Size": current_size,
+            "Target Size": target_size
+        })
+    
+    # Display as Streamlit dataframe with styling
+    import pandas as pd
+    df = pd.DataFrame(table_data)
+    
+    # Style the dataframe
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "#": st.column_config.NumberColumn("#", width="small"),
+            "Type": st.column_config.TextColumn("Type", width="medium"),
+            "Text": st.column_config.TextColumn("Text", width="large"),
+            "Current Font": st.column_config.TextColumn("Current Font", width="medium"),
+            "Target Font": st.column_config.TextColumn("Target Font", width="medium"),
+            "Current Size": st.column_config.TextColumn("Current Size", width="small"),
+            "Target Size": st.column_config.TextColumn("Target Size", width="small"),
+        }
+    )
+    
+    # Success message
+    st.success(f"✅ Made changes to {len(changes)} paragraphs")
+    
+    # Detailed changes (debug) - collapsible
+    with st.expander("🔍 Detailed Changes Applied (Debug)", expanded=False):
+        for i, change in enumerate(changes, 1):
+            st.markdown(f"**[{change.change_type}]** {change.text_preview[:60]}...")
+            st.caption(f"   ✓ {change.before} → {change.after}")
+
 
 
 def display_download_section():
