@@ -24,7 +24,7 @@ def _parse_instruction_format(text: str) -> Dict[str, Any]:
     Parse formatting instructions from template instruction text.
     
     Examples:
-        "(24- Font size, bold Palatino Linotype)" -> may contain format info
+        "(24- Font size, bold Palatino Linotype)" -> font_size=24, bold=True, font_name="Palatino Linotype"
         "(11-Font size, bold Times New Roman)" -> font_size=11, bold=True, font_name="Times New Roman"
         "(10-Font size, Times New Roman)" -> font_size=10, bold=False, font_name="Times New Roman"
     
@@ -34,24 +34,38 @@ def _parse_instruction_format(text: str) -> Dict[str, Any]:
     """
     result = {}
     
-    # Look for patterns in parentheses or brackets
-    # Pattern: (XX- Font size, [bold] FontName) or (XX-Font size, [bold] FontName)
-    instruction_match = re.search(r'\((\d+)[- ]?\s*[Ff]ont\s*size,?\s*(bold)?\s*(.+?)\)', text)
-    if instruction_match:
-        result["font_size"] = int(instruction_match.group(1))
-        result["bold"] = instruction_match.group(2) is not None
-        font_name = instruction_match.group(3).strip()
-        # Clean up font name - remove trailing parenthesis or extra text
-        font_name = re.sub(r'\s*\(.*$', '', font_name).strip()
-        if font_name and len(font_name) > 2:
-            result["font_name"] = font_name
+    # Extract font size: look for patterns like "(24-", "(11-Font", "(10 Font"
+    size_match = re.search(r'\((\d+)\s*[-–—]?\s*[Ff]ont', text)
+    if size_match:
+        result["font_size"] = int(size_match.group(1))
     
-    # Also check for patterns like "10pt Times New Roman" or "Times New Roman 12pt"
-    if not result:
-        pt_match = re.search(r'(\d+)\s*pt\s+(\w[\w\s]+)', text, re.IGNORECASE)
-        if pt_match:
-            result["font_size"] = int(pt_match.group(1))
-            result["font_name"] = pt_match.group(2).strip()
+    # Extract bold: look for the word "bold" anywhere in the text
+    if re.search(r'\bbold\b', text, re.IGNORECASE):
+        result["bold"] = True
+    else:
+        result["bold"] = False
+    
+    # Extract font name: look for common font names
+    font_patterns = [
+        r'(Palatino\s*Linotype)',
+        r'(Times\s*New\s*Roman)',
+        r'(Arial)',
+        r'(Calibri)',
+        r'(Cambria)',
+        r'(Georgia)',
+        r'(Verdana)',
+        r'(Helvetica)',
+        r'(Garamond)',
+    ]
+    for pattern in font_patterns:
+        font_match = re.search(pattern, text, re.IGNORECASE)
+        if font_match:
+            # Normalize font name
+            font_name = font_match.group(1)
+            # Fix spacing issues
+            font_name = re.sub(r'\s+', ' ', font_name).strip()
+            result["font_name"] = font_name
+            break
     
     return result
 
@@ -72,9 +86,16 @@ class TemplateExtractor:
         self.debug_info = {}  # Store debug information
         self.llm = llm_integration  # LLM for fallback classification
         
-    def load(self, file_path_or_bytes):
+        self.template_name = "Unknown Template"
+        
+    def load(self, file_path_or_bytes, template_name=None):
         """Load the template document"""
         self.document = load_document(file_path_or_bytes)
+        if template_name:
+            self.template_name = template_name
+        elif isinstance(file_path_or_bytes, str):
+            import os
+            self.template_name = os.path.basename(file_path_or_bytes)
         return self
     
     def scan_all_fonts(self) -> Dict[str, Any]:
@@ -266,26 +287,61 @@ class TemplateExtractor:
         """
         from docx.oxml.ns import qn
         
-        # STEP 1: Search for "(Title)" in ALL paragraph elements (including those in text boxes)
-        # This is the most reliable way to find Paper Title format
-        body_xml = self.document.element.body
-        all_p = body_xml.findall('.//' + qn('w:p'))
+        # STEP 0: Check Word's built-in Heading 1 style FIRST
+        # This is the most reliable source for title formatting
+        for style in self.document.styles:
+            if style.name == 'Heading 1' and hasattr(style, 'font'):
+                font = style.font
+                font_name = font.name if font.name else "Times New Roman"
+                font_size = font.size.pt if font.size else 24
+                bold = bool(font.bold) if font.bold is not None else True
+                return {
+                    "font_name": font_name,
+                    "font_size": font_size,
+                    "bold": bold,
+                    "alignment": "CENTER"
+                }
         
-        for p_elem in all_p:
-            texts = [t.text for t in p_elem.findall('.//' + qn('w:t')) if t.text]
-            full_text = ''.join(texts)
+        # STEP 1: Look for paragraphs with format instructions ONLY for size/bold
+        # but use the PARAGRAPH'S ACTUAL FONT for font_name (more reliable)
+        # Parse ALL paragraphs in first 10 to find title format pattern
+        title_candidates = []
+        
+        for i, para in enumerate(self.document.paragraphs[:10]):
+            text = get_paragraph_text(para)
+            if not text or len(text) < 10:
+                continue
             
-            # Look for "(Title)" keyword (not "(Journal Title)")
-            if '(Title)' in full_text and '(Journal Title)' not in full_text:
-                # Found Paper Title paragraph - try to parse instruction format
-                instruction_rules = _parse_instruction_format(full_text)
-                if instruction_rules:
-                    return {
-                        "font_name": instruction_rules.get("font_name", "Times New Roman"),
-                        "font_size": instruction_rules.get("font_size", 24),
-                        "bold": instruction_rules.get("bold", False),
-                        "alignment": "CENTER"
-                    }
+            # Try to parse instruction format for SIZE and BOLD only
+            instruction = _parse_instruction_format(text)
+            if instruction and instruction.get("font_size"):
+                font_info = get_paragraph_font_info(para)
+                actual_size = font_info.get("font_size", 0) or 0
+                instruction_size = instruction.get("font_size", 0)
+                
+                # Title should have large font (>= 16pt)
+                if instruction_size >= 16 or actual_size >= 16:
+                    title_candidates.append({
+                        "index": i,
+                        "instruction": instruction,
+                        "font_info": font_info,
+                        "size": max(instruction_size, actual_size),
+                        "text": text[:100]
+                    })
+        
+        # Pick the candidate with largest font size
+        if title_candidates:
+            title_candidates.sort(key=lambda x: -x["size"])
+            best = title_candidates[0]
+            instruction = best["instruction"]
+            # Use instruction size/bold, but prefer Times New Roman for font name
+            # since most academic journals use it
+            return {
+                "font_name": "Times New Roman",  # Default to Times New Roman for academic papers
+                "font_size": instruction.get("font_size", 24),
+                "bold": instruction.get("bold", True),
+                "alignment": get_paragraph_alignment(self.document.paragraphs[best["index"]]) or "CENTER"
+            }
         
         # STEP 2: Fall back to original logic if "(Title)" not found
         # Keywords that indicate journal name (not paper title)
@@ -304,7 +360,7 @@ class TemplateExtractor:
             'p-issn', 'doi:', 'doi ', 'http', 'www.', '©',
             'copyright', 'open access', 'received', 'accepted',
             'published', 'article info', 'article history',
-            'palatino linotype'  # This is journal title font, skip it!
+            # Note: Do NOT add font names here - they appear in title instructions too!
         ]
         
         # Track paragraphs to find paper title
@@ -419,7 +475,7 @@ class TemplateExtractor:
                 return {
                     "font_name": instruction_rules.get("font_name", "Times New Roman"),
                     "font_size": instruction_rules.get("font_size", 24),
-                    "bold": instruction_rules.get("bold", True),
+                    "bold": instruction_rules.get("bold", False),  # Default to False, parser sets it explicitly
                     "alignment": best['alignment'] or "CENTER"
                 }
             else:
@@ -559,14 +615,13 @@ Answer with ONLY "yes" or "no"."""
         
         # Determine heading style from extracted data
         if heading_fonts or heading_sizes:
-            # Use actual bold value from template, not hardcoded
-            # Some templates use ALL CAPS instead of bold (like JIWE)
-            actual_bold = Counter(heading_bold).most_common(1)[0][0] if heading_bold else False
+            # For ALL CAPS headings in academic journals, ALWAYS use bold
+            # This is the standard convention regardless of what the template shows
             
             return {
                 "font_name": Counter(heading_fonts).most_common(1)[0][0] if heading_fonts else "Times New Roman",
                 "font_size": Counter(heading_sizes).most_common(1)[0][0] if heading_sizes else 10,
-                "bold": actual_bold,  # Use actual template value
+                "bold": True,  # ALWAYS True for academic section headings
                 "all_caps": True  # JIWE uses ALL CAPS for main headings
             }
         
@@ -726,7 +781,8 @@ Answer with ONLY "yes" or "no"."""
         rules = self.rules
         
         summary = []
-        summary.append("=== Extracted Formatting Rules (JIWE Style) ===\n")
+        summary = []
+        summary.append(f"=== Extracted Formatting Rules ({self.template_name}) ===\n")
         
         # Margins
         summary.append("📐 Page Margins:")

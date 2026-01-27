@@ -231,8 +231,8 @@ class ManuscriptChecker:
         expected_font = body_rules.get("font_name", "Times New Roman")
         expected_size = body_rules.get("font_size", 12)
         
-        # Font size tolerance (allow ±0.5pt difference)
-        size_tolerance = 0.5
+        # Font size tolerance (allow ±1.0pt difference for body text)
+        size_tolerance = 1.0
         
         # Common font name variations that are equivalent
         font_equivalents = {
@@ -387,9 +387,9 @@ class ManuscriptChecker:
                         text_preview=cp.text
                     )
                 
-                # Check size
+                # Check size with 1.0pt tolerance
                 current_size = font_info.get("font_size")
-                if current_size and current_size != expected_size:
+                if current_size and abs(current_size - expected_size) > 1.0:
                     self._add_issue(
                         category="headings",
                         location=f"Heading: {truncate_text(cp.text, 30)}",
@@ -440,8 +440,9 @@ class ManuscriptChecker:
             if "conclusion" in text_lower:
                 found_sections["conclusion"] = True
             
-            if text_lower in ["references", "bibliography", "works cited"] or \
-               cp.paragraph_type == ParagraphType.REFERENCE:
+            # Check for references - use startswith to handle "(10-Font size..." suffix
+            if text_lower.startswith("references") or text_lower.startswith("bibliography") or \
+               text_lower.startswith("works cited") or cp.paragraph_type == ParagraphType.REFERENCE:
                 found_sections["references"] = True
         
         # Report missing sections

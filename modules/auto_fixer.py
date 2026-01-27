@@ -381,26 +381,27 @@ class AutoFixer:
         preserve_superscript = font.superscript
         preserve_strike = font.strike if expected_strike is None else None
         
-        # Fix font name - only if current is EXPLICITLY set AND different
-        # If font.name is None, it means the font is inherited from style/template
+        # Fix font name - ALWAYS apply if expected is set
+        # Previously: skipped if current was None (inherited), causing many paragraphs to be missed
         current_font = font.name
-        if current_font is not None and expected_font is not None:
-            # Use font equivalence check (Times New Roman ≈ Times)
-            if not is_font_equivalent(current_font, expected_font):
+        if expected_font is not None:
+            if current_font is None or not is_font_equivalent(current_font, expected_font):
                 font.name = expected_font
-                changes.append(f"Font: {current_font} → {expected_font}")
-        # NOTE: If current_font is None (inherited), we do NOT change it
+                if current_font is not None:
+                    changes.append(f"Font: {current_font} → {expected_font}")
+                else:
+                    changes.append(f"Font: (inherited) → {expected_font}")
         
-        # Fix font size - only if current is EXPLICITLY set AND different
-        # If font.size is None, the size is inherited from style/template
+        # Fix font size - ALWAYS apply if expected is set
+        # Previously: skipped if current was None (inherited), causing many paragraphs to be missed
         current_size = font.size.pt if font.size else None
-        if current_size is not None and expected_size is not None:
-            # Allow 0.5pt tolerance
-            if abs(current_size - expected_size) > 0.5:
+        if expected_size is not None:
+            if current_size is None or abs(current_size - expected_size) > 0.5:
                 font.size = Pt(expected_size)
-                changes.append(f"Size: {current_size}pt → {expected_size}pt")
-        # NOTE: If current_size is None (inherited), we do NOT change it
-        # because the inherited size is likely already correct from the template
+                if current_size is not None:
+                    changes.append(f"Size: {current_size}pt → {expected_size}pt")
+                else:
+                    changes.append(f"Size: (inherited) → {expected_size}pt")
         
         # Fix bold if specified
         if expected_bold is not None:

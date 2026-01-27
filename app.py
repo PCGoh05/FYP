@@ -251,7 +251,8 @@ def handle_template_upload(uploaded_file):
     if uploaded_file:
         try:
             file_bytes = uploaded_file.read()
-            file_name = uploaded_file.name.lower()
+            original_filename = uploaded_file.name
+            file_name = original_filename.lower()
             
             # Convert PDF to DOCX if needed
             if file_name.endswith('.pdf'):
@@ -265,7 +266,7 @@ def handle_template_upload(uploaded_file):
             
             with st.spinner("Extracting formatting rules from template..."):
                 extractor = TemplateExtractor(llm_integration=st.session_state.llm)
-                extractor.load(BytesIO(file_bytes))
+                extractor.load(BytesIO(file_bytes), template_name=original_filename)
                 rules = extractor.extract_all_rules()
                 
                 st.session_state.template_rules = rules

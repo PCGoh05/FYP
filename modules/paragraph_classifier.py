@@ -120,7 +120,7 @@ class ParagraphClassifier:
         """Use LLM to verify and improve low confidence classifications"""
         for i, cp in enumerate(self.classifications):
             # Skip high confidence, empty, and already-verified classifications
-            if cp.confidence >= 0.75 or cp.paragraph_type == ParagraphType.EMPTY:
+            if cp.confidence >= 0.85 or cp.paragraph_type == ParagraphType.EMPTY:
                 continue
             
             # Use LLM for uncertain classifications
@@ -224,11 +224,31 @@ class ParagraphClassifier:
         # Check for journal header (first few paragraphs)
         if index < 8 and not self._context["found_title"]:
             if self._is_journal_header(text):
+                self._context["last_journal_header_index"] = index
                 return self._create_classification(
                     index, text, ParagraphType.JOURNAL_HEADER,
                     0.85, font_info, alignment, False,
                     "Matches journal header pattern"
                 )
+            
+            # Check for journal name continuation (same format as previous journal header)
+            # e.g., "Journal of Informatics and" + "Web Engineering"
+            last_journal_idx = self._context.get("last_journal_header_index", -1)
+            if last_journal_idx >= 0 and index == last_journal_idx + 1:
+                # If short text and likely part of journal name
+                font_size = font_info.get("font_size", 0) or 0
+                font_name = font_info.get("font_name", "")
+                # Journal name continuation if: large font OR Palatino font OR short text right after journal header
+                is_journal_font = font_name and "palatino" in font_name.lower()
+                is_large_font = font_size >= 16
+                is_short_text = len(text) < 50 and not any(c in text.lower() for c in ['abstract', 'introduction', 'keyword'])
+                if is_short_text and (is_large_font or is_journal_font):
+                    self._context["last_journal_header_index"] = index  # Update for next continuation
+                    return self._create_classification(
+                        index, text, ParagraphType.JOURNAL_HEADER,
+                        0.80, font_info, alignment, False,
+                        "Continuation of journal header (same format)"
+                    )
         
         # Check for paper title (first substantial non-header paragraph)
         if not self._context["found_title"] and index < 15:
@@ -438,15 +458,31 @@ class ParagraphClassifier:
         return False
     
     def _is_section_heading(self, text: str) -> bool:
-        """Check if text is a section heading - ENHANCED"""
+        """Check if text is a section heading - ENHANCED with instruction stripping"""
         text_lower = text.lower().strip()
         original_text = text.strip()
         
         # Too long to be a heading
-        if len(original_text) > 100:
+        if len(original_text) > 150:
             return False
         
-        # Check exact matches first (most common section names)
+        # NEW: Strip parenthetical instructions like "(10-Font size, Times New Roman)"
+        # This is common in template files where headings have format instructions
+        clean_text = re.sub(r'\s*\([^)]*[Ff]ont[^)]*\)\s*$', '', original_text).strip()
+        clean_text_lower = clean_text.lower().strip()
+        
+        # Also strip any trailing whitespace and common punctuation
+        clean_text_lower = clean_text_lower.rstrip(':.')
+        
+        # EXCLUDE author/affiliation patterns - these should NOT be headings
+        affiliation_keywords = ['university', 'faculty', 'department', 'college', 'institute',
+                               'school', 'center', 'centre', 'laboratory', 'lab', 'malaysia',
+                               'indonesia', 'singapore', 'thailand', 'china', 'japan', 'korea',
+                               'email', '@', 'orcid', 'corresponding']
+        if any(kw in clean_text_lower for kw in affiliation_keywords):
+            return False
+        
+        # Check exact matches first (most common section names) - using CLEAN text
         exact_headings = [
             'abstract', 'keywords', 'key words', 'introduction', 'background',
             'literature review', 'related work', 'related works',
@@ -463,19 +499,25 @@ class ParagraphClassifier:
             'acknowledgements', 'acknowledgement', 'acknowledgment',
             'funding', 'conflict of interest', 'data availability',
             'appendix', 'appendices',
+            # Research methodology variations
+            'research methodology', 'research method', 'research design',
+            'data collection', 'data analysis', 'theoretical framework',
+            'conceptual framework', 'problem statement', 'research questions',
+            'research objectives', 'scope of study', 'limitations',
+            'significance of study', 'definition of terms',
         ]
         
-        if text_lower in exact_headings:
+        if clean_text_lower in exact_headings:
             return True
         
-        # Check patterns with optional numbering
+        # Check patterns with optional numbering using CLEAN text
         for pattern in SECTION_HEADING_PATTERNS:
-            if re.match(pattern, text_lower):
+            if re.match(pattern, clean_text_lower):
                 return True
         
         # Check for numbered headings like "1. Introduction", "2 Methodology", "I. Introduction"
         # Pattern: number + optional dot + space + heading text
-        numbered_match = re.match(r'^(\d+\.?\s*|\d+\.\d+\.?\s*|[IVXLC]+\.?\s*|[A-Z]\.?\s*)(.+)$', original_text, re.IGNORECASE)
+        numbered_match = re.match(r'^(\d+\.?\s+|\d+\.\d+\.?\s+|[IVXLC]+\.\s+)(.+)$', clean_text, re.IGNORECASE)
         if numbered_match:
             heading_text = numbered_match.group(2).strip().lower()
             # Check if the text part is a known heading
@@ -492,12 +534,12 @@ class ParagraphClassifier:
                 if any(kw in heading_text for kw in heading_keywords):
                     return True
         
-        # Check for ALL CAPS headings (common in some formats)
-        if original_text.isupper() and len(original_text) < 50 and len(original_text.split()) <= 5:
+        # Check for ALL CAPS headings (common in some formats) - using CLEAN text
+        if clean_text.isupper() and len(clean_text) < 60 and len(clean_text.split()) <= 6:
             return True
         
         # Check if it looks like a subsection heading (e.g., "3.2.1 Data Collection")
-        if re.match(r'^\d+(\.\d+)+\.?\s+\w+', text_lower):
+        if re.match(r'^\d+(\.\d+)+\.?\s+\w+', clean_text_lower):
             return True
         
         return False
