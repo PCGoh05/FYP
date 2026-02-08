@@ -316,45 +316,60 @@ Respond with ONLY the classification type, nothing else."""
         
         prompt = f"""Analyze this academic template and extract formatting rules.
 
+IMPORTANT: DISTINGUISH BETWEEN JOURNAL TITLE AND PAPER TITLE!
+
+In academic templates, there are TWO different titles:
+1. JOURNAL TITLE - The name of the journal (e.g., "Journal of Informatics and Web Engineering")
+   - Usually has "(Journal Title)" label
+   - Often uses Palatino Linotype font
+   - IGNORE THIS - we don't format journal names
+   
+2. PAPER TITLE - The title of the research paper itself (e.g., "Preparation template for...")
+   - Usually has "(Title)" label WITHOUT "Journal"
+   - This is what we need to extract rules for!
+   - Look for instructions like "(24-Font size, Times New Roman)" - NO BOLD mentioned = bold: false
+
 EXAMPLES OF INSTRUCTION TEXT PATTERNS:
 
-PATTERN 1: "(24-Font size, bold Palatino Linotype)"
-- Font size: 24
-- Font name: "Palatino Linotype" (the word "bold" is part of the font weight/variant)
-- Bold formatting: FALSE ❌ (no comma before "bold", so it's a font variant name)
+PATTERN 1: "(24-Font size, bold Palatino Linotype)" - used for JOURNAL title
+- Font variant: "Palatino Linotype Bold"  
+- Bold formatting: FALSE (bold is part of font name, not a format instruction)
 
-PATTERN 2: "(10-Font size, bold, Times New Roman)"  
-- Font size: 10
-- Font name: "Times New Roman"
-- Bold formatting: TRUE ✅ (bold has comma before it: ", bold,")
+PATTERN 2: "(24-Font size, Times New Roman)" - used for PAPER title  
+- Font: Times New Roman
+- Bold: FALSE ❌ (bold is NOT mentioned at all!)
 
-PATTERN 3: "(10-Font size, italic, Times New Roman)"
-- Font size: 10
-- Italic formatting: TRUE ✅
+PATTERN 3: "(10-Font size, bold, Times New Roman)" - note the comma before bold
+- Bold: TRUE ✅ (", bold," with commas = format instruction)
 
-PATTERN 4: "(10-Font size, Times New Roman)"
-- Bold formatting: FALSE (not mentioned at all)
-
-KEY RULE: "bold [FontName]" WITHOUT a comma before "bold" = font variant name, NOT bold formatting!
+KEY RULES:
+- "bold [FontName]" = font variant name, NOT bold formatting
+- "(X-Font size, FontName)" with NO "bold" mentioned = bold: false
+- Only ", bold," or ", bold)" with commas means bold: true
 
 PARAGRAPHS FROM TEMPLATE:
 {chr(10).join(formatted)}
 
+For the "title" field, extract rules for the PAPER TITLE (marked with "(Title)"), NOT the journal title!
+
 Return ONLY valid JSON:
 {{
     "title": {{"font": "FontName", "size": NUM, "bold": false, "italic": false}},
-    "heading": {{"font": "FontName", "size": NUM, "bold": false, "italic": BOOL}},
+    "heading": {{"font": "FontName", "size": NUM, "bold": BOOL, "italic": BOOL}},
     "body": {{"font": "FontName", "size": NUM, "bold": false, "italic": false}},
     "abstract": {{"font": "FontName", "size": NUM, "bold": false, "italic": false}},
     "reference": {{"font": "FontName", "size": NUM, "bold": false, "italic": false}},
     "caption": {{"font": "FontName", "size": NUM, "bold": false, "italic": BOOL}}
 }}
 
-CRITICAL: For the title instruction "(24- Font size, bold Palatino Linotype)", return bold: false because "bold Palatino Linotype" is the font variant name!"""
+CRITICAL FOR JIWE TEMPLATE: 
+- Paper Title instruction is "(24-Font size, Times New Roman)" 
+- This means: font="Times New Roman", size=24, bold=FALSE (bold not mentioned!)"""
 
         system_prompt = """You are analyzing academic template formatting instructions.
-CRITICAL RULE: "bold [FontName]" means the font is named "[FontName] Bold" - this is NOT bold formatting.
-Only return bold=true if there's ", bold," with commas, like "(10pt, bold, Arial)"."""
+CRITICAL: Look for "(Title)" to find PAPER title rules, ignore "(Journal Title)".
+For "(24-Font size, Times New Roman)" - bold is FALSE because it's not mentioned.
+Only return bold=true if there's ", bold," with commas."""
         
         try:
             response = self.generate(prompt, system_prompt)
@@ -364,11 +379,16 @@ Only return bold=true if there's ", bold," with commas, like "(10pt, bold, Arial
             
             response = response.strip()
             
+            # DEBUG: Print AI response
+            print(f"[DEBUG] AI Template Analysis Response:")
+            print(f"{response[:500]}...")
+            
             # Try to extract JSON from various formats
             # Method 1: Direct parse
             try:
                 rules = json.loads(response)
                 rules['_ai_extracted'] = True
+                print(f"[DEBUG] AI Extracted Title Rule: {rules.get('title', {})}")
                 return rules
             except json.JSONDecodeError:
                 pass
@@ -385,6 +405,7 @@ Only return bold=true if there's ", bold," with commas, like "(10pt, bold, Arial
                 try:
                     rules = json.loads(response)
                     rules['_ai_extracted'] = True
+                    print(f"[DEBUG] AI Extracted Title Rule: {rules.get('title', {})}")
                     return rules
                 except json.JSONDecodeError:
                     pass
@@ -395,10 +416,12 @@ Only return bold=true if there's ", bold," with commas, like "(10pt, bold, Arial
                 try:
                     rules = json.loads(json_match.group())
                     rules['_ai_extracted'] = True
+                    print(f"[DEBUG] AI Extracted Title Rule: {rules.get('title', {})}")
                     return rules
                 except json.JSONDecodeError:
                     pass
             
+            print(f"[DEBUG] AI failed to return valid JSON")
             return {}
         except Exception as e:
             print(f"[DEBUG] AI template analysis error: {e}")
