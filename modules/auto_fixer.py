@@ -158,7 +158,8 @@ class AutoFixer:
         
         expected_font = title_rules.get("font_name", "Times New Roman")
         expected_size = title_rules.get("font_size", 24)
-        expected_bold = title_rules.get("bold", True)
+        # Only apply bold if EXPLICITLY set in template rules
+        expected_bold = title_rules.get("bold", None)
         expected_alignment = title_rules.get("alignment", "CENTER")
         
         # Fix alignment
@@ -195,7 +196,8 @@ class AutoFixer:
         
         expected_font = heading_rules.get("font_name", "Times New Roman")
         expected_size = heading_rules.get("font_size", 14)
-        expected_bold = heading_rules.get("bold", True)
+        # Only apply bold if EXPLICITLY set in template rules, don't assume
+        expected_bold = heading_rules.get("bold", None)
         
         for run in paragraph.runs:
             if run.text.strip():
@@ -314,7 +316,8 @@ class AutoFixer:
         
         expected_font = caption_rules.get("font_name", "Times New Roman")
         expected_size = caption_rules.get("font_size", 10)
-        expected_italic = caption_rules.get("italic", True)
+        # Only apply italic if EXPLICITLY set in template rules
+        expected_italic = caption_rules.get("italic", None)
         
         for run in paragraph.runs:
             if run.text.strip():

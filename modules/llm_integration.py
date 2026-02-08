@@ -37,12 +37,8 @@ def load_env_file():
 # Load .env file on import
 load_env_file()
 
-# Try importing LLM libraries
-try:
-    from groq import Groq
-    GROQ_AVAILABLE = True
-except ImportError:
-    GROQ_AVAILABLE = False
+# LLM is disabled by default - using built-in fallback logic
+GROQ_AVAILABLE = False
 
 try:
     import requests
@@ -95,25 +91,25 @@ class LLMIntegration:
         self._init_client()
     
     def _init_client(self):
-        """Initialize the NVIDIA API client (lazy validation - no test call)"""
+        """Initialize the NVIDIA API client"""
         if OPENAI_AVAILABLE and self.api_key:
             try:
                 self._client = OpenAI(
                     base_url="https://integrate.api.nvidia.com/v1",
                     api_key=self.api_key
                 )
-                # Skip test call for faster initialization
-                # Connection will be validated on first actual use
+                # Verify the API key by making a simple test call
+                self._client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": "test"}],
+                    max_tokens=1
+                )
                 self._available = True
-                print(f"[OK] NVIDIA Llama 3.1 8B client initialized (lazy mode)")
-            except Exception as e:
-                print(f"[ERROR] Failed to initialize NVIDIA client: {e}")
+            except Exception:
+                self._client = None
                 self._available = False
         else:
-            if not OPENAI_AVAILABLE:
-                print("[WARNING] openai library not installed. Run: pip install openai")
-            if not self.api_key:
-                print("[WARNING] NVIDIA API key not provided. Set NVIDIA_API_KEY environment variable.")
+            self._available = False
     
     def is_available(self) -> bool:
         """Check if LLM is available"""
@@ -151,8 +147,7 @@ class LLMIntegration:
             
             content = response.choices[0].message.content
             return content.strip() if content else ""
-        except Exception as e:
-            print(f"LLM generation error: {e}")
+        except Exception:
             return ""
     
     def explain_error(self, issue: Dict[str, Any]) -> str:
@@ -295,6 +290,221 @@ Respond with ONLY the classification type, nothing else."""
         except Exception:
             return "unknown"
     
+    def analyze_template_rules(self, paragraphs_info: List[Dict]) -> Dict[str, Any]:
+        """
+        Use AI to analyze template paragraphs and extract formatting rules.
+        This is the PRIMARY method for understanding template requirements.
+        
+        Args:
+            paragraphs_info: List of dicts with 'text', 'font', 'size', 'bold', 'italic' info
+            
+        Returns:
+            Dictionary of extracted rules for each element type
+        """
+        if not self._available:
+            return {}
+        
+        # Format paragraphs for AI analysis - include more context
+        formatted = []
+        for i, p in enumerate(paragraphs_info[:40]):  # Analyze first 40 paragraphs
+            text = p.get('text', '')[:100]
+            font = p.get('font', 'Unknown')
+            size = p.get('size', '?')
+            bold = p.get('bold', 'Unknown')
+            italic = p.get('italic', False)
+            formatted.append(f"{i+1}. [{font}, {size}pt, italic={italic}] \"{text}\"")
+        
+        prompt = f"""Analyze this academic template and extract formatting rules.
+
+EXAMPLES OF INSTRUCTION TEXT PATTERNS:
+
+PATTERN 1: "(24-Font size, bold Palatino Linotype)"
+- Font size: 24
+- Font name: "Palatino Linotype" (the word "bold" is part of the font weight/variant)
+- Bold formatting: FALSE ❌ (no comma before "bold", so it's a font variant name)
+
+PATTERN 2: "(10-Font size, bold, Times New Roman)"  
+- Font size: 10
+- Font name: "Times New Roman"
+- Bold formatting: TRUE ✅ (bold has comma before it: ", bold,")
+
+PATTERN 3: "(10-Font size, italic, Times New Roman)"
+- Font size: 10
+- Italic formatting: TRUE ✅
+
+PATTERN 4: "(10-Font size, Times New Roman)"
+- Bold formatting: FALSE (not mentioned at all)
+
+KEY RULE: "bold [FontName]" WITHOUT a comma before "bold" = font variant name, NOT bold formatting!
+
+PARAGRAPHS FROM TEMPLATE:
+{chr(10).join(formatted)}
+
+Return ONLY valid JSON:
+{{
+    "title": {{"font": "FontName", "size": NUM, "bold": false, "italic": false}},
+    "heading": {{"font": "FontName", "size": NUM, "bold": false, "italic": BOOL}},
+    "body": {{"font": "FontName", "size": NUM, "bold": false, "italic": false}},
+    "abstract": {{"font": "FontName", "size": NUM, "bold": false, "italic": false}},
+    "reference": {{"font": "FontName", "size": NUM, "bold": false, "italic": false}},
+    "caption": {{"font": "FontName", "size": NUM, "bold": false, "italic": BOOL}}
+}}
+
+CRITICAL: For the title instruction "(24- Font size, bold Palatino Linotype)", return bold: false because "bold Palatino Linotype" is the font variant name!"""
+
+        system_prompt = """You are analyzing academic template formatting instructions.
+CRITICAL RULE: "bold [FontName]" means the font is named "[FontName] Bold" - this is NOT bold formatting.
+Only return bold=true if there's ", bold," with commas, like "(10pt, bold, Arial)"."""
+        
+        try:
+            response = self.generate(prompt, system_prompt)
+            # Parse JSON from response
+            import json
+            import re
+            
+            response = response.strip()
+            
+            # Try to extract JSON from various formats
+            # Method 1: Direct parse
+            try:
+                rules = json.loads(response)
+                rules['_ai_extracted'] = True
+                return rules
+            except json.JSONDecodeError:
+                pass
+            
+            # Method 2: Remove markdown code blocks
+            if response.startswith('```'):
+                lines = response.split('\n')
+                # Remove first and last lines if they are markdown markers
+                if lines[0].startswith('```'):
+                    lines = lines[1:]
+                if lines and lines[-1].strip() == '```':
+                    lines = lines[:-1]
+                response = '\n'.join(lines)
+                try:
+                    rules = json.loads(response)
+                    rules['_ai_extracted'] = True
+                    return rules
+                except json.JSONDecodeError:
+                    pass
+            
+            # Method 3: Find JSON object in response using regex
+            json_match = re.search(r'\{[\s\S]*\}', response)
+            if json_match:
+                try:
+                    rules = json.loads(json_match.group())
+                    rules['_ai_extracted'] = True
+                    return rules
+                except json.JSONDecodeError:
+                    pass
+            
+            return {}
+        except Exception as e:
+            print(f"[DEBUG] AI template analysis error: {e}")
+            return {}
+    
+    def classify_paragraphs_batch(self, paragraphs: List[str]) -> List[str]:
+        """
+        Classify multiple paragraphs in a single API call for efficiency.
+        
+        Args:
+            paragraphs: List of paragraph texts
+            
+        Returns:
+            List of classification strings
+        """
+        if not self._available:
+            return ["unknown"] * len(paragraphs)
+        
+        # Format paragraphs with indices
+        formatted = []
+        for i, text in enumerate(paragraphs[:30]):  # Limit to 30 paragraphs per call
+            preview = text[:100].replace('\n', ' ')
+            formatted.append(f"{i+1}. \"{preview}\"")
+        
+        prompt = f"""Classify each paragraph from this academic paper.
+
+PARAGRAPHS:
+{chr(10).join(formatted)}
+
+CLASSIFICATION TYPES:
+- journal_header (journal name, volume, dates, ISSN)
+- paper_title (the main title)
+- author_info (author names, affiliations)
+- abstract_content (abstract text)
+- keywords_content (keywords list)
+- section_heading (like INTRODUCTION, METHODOLOGY)
+- body (regular paragraphs)
+- caption (figure/table captions)
+- reference (bibliography entries)
+
+Return ONLY a JSON array with classifications in order, like:
+["paper_title", "author_info", "abstract_content", "section_heading", "body", ...]
+
+IMPORTANT: Return ONLY the JSON array, nothing else. Must have exactly {len(paragraphs[:30])} items."""
+
+        system_prompt = "You are an expert at classifying academic paper content. Be accurate and consistent."
+        
+        try:
+            response = self.generate(prompt, system_prompt)
+            import json
+            response = response.strip()
+            if response.startswith('```'):
+                lines = response.split('\n')
+                response = '\n'.join(lines[1:-1] if lines[-1] == '```' else lines[1:])
+            
+            classifications = json.loads(response)
+            
+            # Ensure we have enough classifications
+            while len(classifications) < len(paragraphs):
+                classifications.append("body")
+            
+            return classifications[:len(paragraphs)]
+        except Exception:
+            return ["unknown"] * len(paragraphs)
+    
+    def validate_correction(self, original_format: str, proposed_format: str, 
+                          paragraph_text: str, paragraph_type: str) -> Tuple[bool, str]:
+        """
+        Validate if a proposed formatting correction is appropriate.
+        
+        Args:
+            original_format: Description of original formatting
+            proposed_format: Description of proposed formatting
+            paragraph_text: The paragraph text
+            paragraph_type: The classified type of paragraph
+            
+        Returns:
+            Tuple of (should_apply, reason)
+        """
+        if not self._available:
+            return True, "AI validation unavailable"
+        
+        prompt = f"""Should this formatting correction be applied?
+
+PARAGRAPH TYPE: {paragraph_type}
+TEXT: "{paragraph_text[:100]}..."
+CURRENT FORMAT: {original_format}
+PROPOSED FORMAT: {proposed_format}
+
+Consider:
+1. Is the paragraph classified correctly?
+2. Is the proposed format appropriate for this content?
+3. Would this correction improve the manuscript?
+
+Respond with EXACTLY this format:
+DECISION: YES or NO
+REASON: (brief explanation)"""
+
+        system_prompt = "You are an academic formatting expert. Be strict but fair."
+        
+        try:
+            response = self.generate(prompt, system_prompt)
+            decision = "yes" in response.lower().split('\n')[0].lower()
+            return decision, response.strip()
+        except Exception:
+            return True, "Validation failed, applying correction"
 
 
 def create_llm_integration(api_key: str = None) -> LLMIntegration:

@@ -181,54 +181,35 @@ def display_sidebar():
         if st.session_state.template_rules:
             rules = st.session_state.template_rules
             
-            tab1, tab2 = st.tabs(["📐 Margins & Layout", "📝 Text Styles"])
+            # Show AI enhancement status
+            if rules.get("_ai_enhanced"):
+                st.success("🤖 AI-Enhanced Detection")
             
-            with tab1:
-                st.subheader("Page Margins")
+            st.subheader("📝 Extracted Text Styles")
+            
+            # Title style
+            st.markdown("**Title Style:**")
+            title = rules.get("title", {})
+            bold_display = "Yes" if title.get('bold') else ("No" if title.get('bold') is False else "Auto")
+            st.caption(f"Font: {title.get('font_name', 'Times New Roman')} | Size: {title.get('font_size', 24)}pt | Bold: {bold_display}")
+            
+            # Body style
+            st.markdown("**Body Text Style:**")
+            body = rules.get("body", {})
+            st.caption(f"Font: {body.get('font_name', 'Times New Roman')} | Size: {body.get('font_size', 12)}pt")
+            
+            # Heading style
+            st.markdown("**Heading Style:**")
+            heading = rules.get("heading", {})
+            bold_display = "Yes" if heading.get('bold') else ("No" if heading.get('bold') is False else "Auto")
+            st.caption(f"Font: {heading.get('font_name', 'Times New Roman')} | Size: {heading.get('font_size', 14)}pt | Bold: {bold_display}")
+            
+            # Show margins in collapsed expander (optional viewing)
+            with st.expander("📐 Page Margins (Advanced)", expanded=False):
                 margins = rules.get("margins", {})
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Left", f"{margins.get('left', 1.0):.2f} in")
-                    st.metric("Top", f"{margins.get('top', 1.0):.2f} in")
-                with col2:
-                    st.metric("Right", f"{margins.get('right', 1.0):.2f} in")
-                    st.metric("Bottom", f"{margins.get('bottom', 1.0):.2f} in")
-                
-                st.subheader("Layout")
-                layout = rules.get("layout", {})
-                st.write(f"**Columns:** {layout.get('columns', 1)}")
-                st.write(f"**Page Size:** {layout.get('page_size', 'A4')}")
-            
-            with tab2:
-                # Title style
-                st.subheader("Title Style")
-                title = rules.get("title", {})
-                st.markdown(f"""
-                - **Font:** {title.get('font_name', 'Times New Roman')}
-                - **Size:** {title.get('font_size', 24)}pt
-                - **Bold:** {'Yes' if title.get('bold') else 'No'}
-                - **Alignment:** {title.get('alignment', 'CENTER')}
-                """)
-                
-                # Body style
-                st.subheader("Body Text Style")
-                body = rules.get("body", {})
-                st.markdown(f"""
-                - **Font:** {body.get('font_name', 'Times New Roman')}
-                - **Size:** {body.get('font_size', 12)}pt
-                - **Line Spacing:** {body.get('line_spacing', 1.5)}
-                """)
-                
-                # Heading style
-                st.subheader("Heading Style")
-                heading = rules.get("heading", {})
-                st.markdown(f"""
-                - **Font:** {heading.get('font_name', 'Times New Roman')}
-                - **Size:** {heading.get('font_size', 14)}pt
-                - **Bold:** {'Yes' if heading.get('bold') else 'No'}
-                """)
+                st.caption(f"L: {margins.get('left', 1.0):.2f}in | R: {margins.get('right', 1.0):.2f}in | T: {margins.get('top', 1.0):.2f}in | B: {margins.get('bottom', 1.0):.2f}in")
         else:
-            st.info("Upload a template to see extracted formatting rules")
+            st.info("📤 Upload a template file to extract formatting rules")
         
         st.divider()
         
@@ -274,72 +255,9 @@ def handle_template_upload(uploaded_file):
                 
                 st.success("✅ Template rules extracted successfully!")
                 
-                # Display summary
+                # Display summary - user-friendly view
                 with st.expander("View Extracted Rules Summary", expanded=True):
                     st.text(extractor.get_rules_summary())
-                
-                # Display debug info for font detection
-                debug_info = rules.get("_debug", {})
-                if debug_info:
-                    with st.expander("🔍 Debug: All Detected Fonts & Sizes", expanded=True):
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            st.markdown("**Font Names Found:**")
-                            font_freq = debug_info.get("font_frequency", {})
-                            if font_freq:
-                                for font, count in font_freq.items():
-                                    st.write(f"- {font}: {count}x")
-                            else:
-                                st.warning("No fonts detected from runs")
-                            
-                            st.markdown("**Unique Fonts:**")
-                            unique_fonts = debug_info.get("unique_fonts", [])
-                            st.write(unique_fonts if unique_fonts else "None")
-                        
-                        with col2:
-                            st.markdown("**Font Sizes Found:**")
-                            size_freq = debug_info.get("size_frequency", {})
-                            if size_freq:
-                                for size, count in size_freq.items():
-                                    st.write(f"- {size}pt: {count}x")
-                            else:
-                                st.warning("No sizes detected from runs")
-                            
-                            st.markdown("**Unique Sizes:**")
-                            unique_sizes = debug_info.get("unique_sizes", [])
-                            st.write([f"{s}pt" for s in unique_sizes] if unique_sizes else "None")
-                        
-                        st.markdown("---")
-                        st.markdown(f"**Total Paragraphs Scanned:** {debug_info.get('total_paragraphs', 0)}")
-                        
-                        # Show paragraph samples
-                        samples = debug_info.get("paragraph_samples", [])
-                        if samples:
-                            st.markdown("**Sample Paragraphs with Font Info:**")
-                            for sample in samples[:10]:  # Show first 10
-                                with st.container():
-                                    st.markdown(f"**Para {sample['index']}:** `{sample['preview']}`")
-                                    details = []
-                                    if sample.get('sizes_from_runs'):
-                                        details.append(f"Run sizes: {sample['sizes_from_runs']}")
-                                    if sample.get('fonts_from_runs'):
-                                        details.append(f"Run fonts: {sample['fonts_from_runs']}")
-                                    if sample.get('style_name'):
-                                        details.append(f"Style: {sample['style_name']}")
-                                    if sample.get('style_size'):
-                                        details.append(f"Style size: {sample['style_size']}pt")
-                                    if sample.get('xml_size'):
-                                        details.append(f"XML size: {sample['xml_size']}pt")
-                                    if details:
-                                        st.caption(" | ".join(details))
-                        
-                        # Show document styles
-                        styles = debug_info.get("document_styles", [])
-                        if styles:
-                            with st.expander("Document Styles"):
-                                for style in styles:
-                                    st.write(style)
                 
         except Exception as e:
             st.error(f"Error extracting template rules: {str(e)}")
@@ -375,6 +293,10 @@ def handle_manuscript_check(uploaded_file):
             with st.spinner("Analyzing manuscript formatting..."):
                 # Use template rules or defaults
                 rules = st.session_state.template_rules or DEFAULT_RULES
+                
+                # Warn user if using default rules
+                if not st.session_state.template_rules:
+                    st.warning("⚠️ No template uploaded. Using default formatting rules (JIWE style). For accurate results, please upload a template file first.")
                 
                 # Create checker with LLM if available
                 checker = ManuscriptChecker(rules, st.session_state.llm)

@@ -39,8 +39,27 @@ def _parse_instruction_format(text: str) -> Dict[str, Any]:
     if size_match:
         result["font_size"] = int(size_match.group(1))
     
-    # Extract bold: look for the word "bold" anywhere in the text
-    if re.search(r'\bbold\b', text, re.IGNORECASE):
+    # Extract bold: CAREFUL distinction between format instruction vs font variant name
+    # Pattern 1: ", bold," or ", bold)" - bold is a separate format instruction → TRUE
+    # Pattern 2: "bold Palatino Linotype" - bold is part of font variant name → FALSE
+    # 
+    # Key rule: If "bold" is followed by a font name (without comma), it's a font variant
+    # If "bold" is followed by comma, closing paren, or end of instruction, it's a format instruction
+    bold_as_format = re.search(r',\s*bold\s*[,)\]]', text, re.IGNORECASE)  # ", bold," or ", bold)"
+    bold_at_end = re.search(r',\s*bold\s*$', text, re.IGNORECASE)  # ends with ", bold"
+    bold_standalone = re.search(r'\(\s*bold\s*[,)]', text, re.IGNORECASE)  # "(bold," or "(bold)"
+    
+    # Check if "bold" is followed by a font name (making it a font variant, not format instruction)
+    bold_font_variant = re.search(
+        r'\bbold\s+(palatino|times|arial|calibri|cambria|georgia|verdana|helvetica|garamond)',
+        text, re.IGNORECASE
+    )
+    
+    if bold_font_variant:
+        # "bold [FontName]" = font variant, NOT bold formatting
+        result["bold"] = False
+    elif bold_as_format or bold_at_end or bold_standalone:
+        # ", bold," or "(bold)" = actual bold format instruction
         result["bold"] = True
     else:
         result["bold"] = False
@@ -206,70 +225,194 @@ class TemplateExtractor:
         return self.debug_info
     
     def extract_all_rules(self) -> Dict[str, Any]:
-        """Extract all formatting rules from the template - SMART EXTRACTION"""
+        """Extract all formatting rules from the template - AI-FIRST APPROACH
+        
+        Architecture:
+        1. TRY AI FIRST - Let AI understand the template naturally
+        2. FALLBACK to traditional methods only for missing fields
+        3. Traditional methods are backup, not primary
+        """
         if not self.document:
             raise ValueError("No document loaded. Call load() first.")
         
-        # First scan all fonts for debugging
+        # Scan fonts first (needed for both AI and traditional)
         self.scan_all_fonts()
         
-        # Smart extraction based on frequency analysis
-        size_freq = self.debug_info.get("size_frequency", {})
+        # ========================================
+        # STEP 1: TRY AI EXTRACTION FIRST (SMART)
+        # ========================================
+        ai_rules = {}
+        if self.llm and self.llm.is_available():
+            ai_rules = self._extract_rules_with_ai()
         
-        # Find the most common sizes
-        sizes_sorted = sorted(size_freq.items(), key=lambda x: x[1], reverse=True)
-        
-        # Determine body size (most common) and other sizes
-        body_size = 10  # default
-        abstract_size = 9  # default
-        heading_size = 10  # default
-        title_size = 24  # default
-        
-        if sizes_sorted:
-            # Body text is usually the most common size
-            body_size = sizes_sorted[0][0]
+        # ========================================
+        # STEP 2: BUILD RULES (AI as primary source)
+        # ========================================
+        if ai_rules and ai_rules.get('_ai_extracted'):
+            # AI succeeded - use AI rules as primary
+            rules = {
+                "margins": self._extract_margins(),
+                "title": self._convert_ai_rule(ai_rules.get('title', {})),
+                "author": {
+                    "font_name": "Times New Roman",
+                    "font_size": 11,
+                    "bold": True,
+                    "alignment": "CENTER"
+                },
+                "affiliation": {
+                    "font_name": "Times New Roman", 
+                    "font_size": 9,
+                    "alignment": "CENTER"
+                },
+                "body": self._convert_ai_rule(ai_rules.get('body', {})),
+                "heading": self._convert_ai_rule(ai_rules.get('heading', {})),
+                "abstract": self._convert_ai_rule(ai_rules.get('abstract', {})),
+                "keywords": {
+                    "font_name": "Times New Roman",
+                    "font_size": 9
+                },
+                "caption": self._convert_ai_rule(ai_rules.get('caption', {})),
+                "reference": self._convert_ai_rule(ai_rules.get('reference', {})),
+                "layout": self._extract_layout(),
+                "_ai_enhanced": True,
+                "_ai_primary": True,  # Mark that AI was primary source
+                "_debug": self.debug_info
+            }
             
-            # Find smaller sizes for abstract/reference (usually 9pt)
-            for size, count in sizes_sorted:
-                if size < body_size and count > 5:
-                    abstract_size = size
-                    break
+            # Fill in any missing AI rules with traditional methods
+            if not rules["title"].get("font_size"):
+                rules["title"] = self._extract_title_style()
+            if not rules["body"].get("font_size"):
+                rules["body"] = self._extract_body_style()
+            if not rules["heading"].get("font_size"):
+                rules["heading"] = self._extract_heading_style()
+            if not rules["abstract"].get("font_size"):
+                rules["abstract"] = self._extract_abstract_style()
+                
+        else:
+            # AI failed or unavailable - use traditional methods (FALLBACK)
+            size_freq = self.debug_info.get("size_frequency", {})
+            sizes_sorted = sorted(size_freq.items(), key=lambda x: x[1], reverse=True)
             
-            # Find larger sizes for title
-            for size, count in sizes_sorted:
-                if size >= 20:
-                    title_size = size
-                    break
-        
-        rules = {
-            "margins": self._extract_margins(),
-            "title": self._extract_title_style(),
-            "author": {
-                "font_name": "Times New Roman",
-                "font_size": 11,
-                "bold": True,
-                "alignment": "CENTER"
-            },
-            "affiliation": {
-                "font_name": "Times New Roman", 
-                "font_size": abstract_size,
-                "alignment": "CENTER"
-            },
-            "body": self._extract_body_style(),
-            "heading": self._extract_heading_style(),
-            "abstract": self._extract_abstract_style(),
-            "keywords": {
-                "font_name": "Times New Roman",
-                "font_size": abstract_size
-            },
-            "caption": self._extract_caption_style(),
-            "reference": self._extract_reference_style(),
-            "layout": self._extract_layout(),
-            "_debug": self.debug_info
-        }
+            abstract_size = 9
+            if sizes_sorted:
+                for size, count in sizes_sorted:
+                    if size < sizes_sorted[0][0] and count > 5:
+                        abstract_size = size
+                        break
+            
+            rules = {
+                "margins": self._extract_margins(),
+                "title": self._extract_title_style(),
+                "author": {
+                    "font_name": "Times New Roman",
+                    "font_size": 11,
+                    "bold": True,
+                    "alignment": "CENTER"
+                },
+                "affiliation": {
+                    "font_name": "Times New Roman", 
+                    "font_size": abstract_size,
+                    "alignment": "CENTER"
+                },
+                "body": self._extract_body_style(),
+                "heading": self._extract_heading_style(),
+                "abstract": self._extract_abstract_style(),
+                "keywords": {
+                    "font_name": "Times New Roman",
+                    "font_size": abstract_size
+                },
+                "caption": self._extract_caption_style(),
+                "reference": self._extract_reference_style(),
+                "layout": self._extract_layout(),
+                "_ai_enhanced": False,
+                "_debug": self.debug_info
+            }
         
         self.rules = rules
         return rules
+    
+    def _convert_ai_rule(self, ai_rule: Dict) -> Dict:
+        """Convert AI rule format to internal format"""
+        if not ai_rule:
+            return {}
+        return {
+            "font_name": ai_rule.get("font", ai_rule.get("font_name", "Times New Roman")),
+            "font_size": ai_rule.get("size", ai_rule.get("font_size")),
+            "bold": ai_rule.get("bold"),
+            "italic": ai_rule.get("italic"),
+        }
+    
+    def _extract_rules_with_ai(self) -> Dict[str, Any]:
+        """Use AI to analyze template and extract formatting rules - PRIMARY METHOD"""
+        if not self.llm:
+            return {}
+        
+        # Collect paragraph info for AI analysis - include MORE context
+        paragraphs_info = []
+        for i, para in enumerate(self.document.paragraphs[:50]):  # First 50 paragraphs
+            text = get_paragraph_text(para)
+            if not text.strip():
+                continue
+            
+            # Get font info including italic
+            font_info = get_paragraph_font_info(para)
+            
+            # Also check for italic in runs
+            italic = False
+            for run in para.runs:
+                if run.font.italic:
+                    italic = True
+                    break
+            
+            paragraphs_info.append({
+                'text': text[:120],  # More text for context
+                'font': font_info.get('font_name', 'Unknown'),
+                'size': font_info.get('font_size', '?'),
+                'bold': font_info.get('bold', 'Unknown'),
+                'italic': italic
+            })
+        
+        if not paragraphs_info:
+            return {}
+        
+        # Ask AI to analyze - this is now the PRIMARY method
+        return self.llm.analyze_template_rules(paragraphs_info)
+    
+    def _merge_rules(self, traditional: Dict, ai_rules: Dict) -> Dict:
+        """Merge AI-extracted rules with traditional rules"""
+        merged = traditional.copy()
+        
+        # Map AI rule names to our rule names
+        rule_mapping = {
+            'title': 'title',
+            'heading': 'heading',
+            'body': 'body',
+            'abstract': 'abstract',
+            'reference': 'reference'
+        }
+        
+        for ai_key, our_key in rule_mapping.items():
+            if ai_key in ai_rules and our_key in merged:
+                ai_rule = ai_rules[ai_key]
+                
+                # AI has priority for bold detection (our main problem)
+                if 'bold' in ai_rule:
+                    merged[our_key]['bold'] = ai_rule['bold']
+                
+                # Use AI font if traditional couldn't detect
+                if 'font' in ai_rule and not merged[our_key].get('font_name'):
+                    merged[our_key]['font_name'] = ai_rule['font']
+                
+                # Use AI size if it seems more accurate
+                if 'size' in ai_rule:
+                    ai_size = ai_rule['size']
+                    trad_size = merged[our_key].get('font_size', 0)
+                    # Prefer AI size if traditional is a default value
+                    if trad_size in [10, 12, 14, 24]:  # Common defaults
+                        merged[our_key]['font_size'] = ai_size
+        
+        return merged
     
     def _extract_margins(self) -> Dict[str, float]:
         """Extract page margins from the template"""
@@ -283,29 +426,20 @@ class TemplateExtractor:
         - Journal Title (e.g., "(Journal Title) Journal of Informatics...")
         - Paper Title (e.g., "(Title) Preparation template...")
         
-        The paper title is identified by looking for "(Title)" keyword first.
+        The paper title is identified by looking for format instructions in template text.
         """
         from docx.oxml.ns import qn
+        import re
         
-        # STEP 0: Check Word's built-in Heading 1 style FIRST
-        # This is the most reliable source for title formatting
-        for style in self.document.styles:
-            if style.name == 'Heading 1' and hasattr(style, 'font'):
-                font = style.font
-                font_name = font.name if font.name else "Times New Roman"
-                font_size = font.size.pt if font.size else 24
-                bold = bool(font.bold) if font.bold is not None else True
-                return {
-                    "font_name": font_name,
-                    "font_size": font_size,
-                    "bold": bold,
-                    "alignment": "CENTER"
-                }
+        # NOTE: Do NOT check Word's built-in Heading 1 style first!
+        # Template instructions (like "24-Font size, Times New Roman") are more accurate.
+        # Heading 1 style often has default bold=True which doesn't match template intent.
         
-        # STEP 1: Look for paragraphs with format instructions ONLY for size/bold
-        # but use the PARAGRAPH'S ACTUAL FONT for font_name (more reliable)
+        # STEP 1: Look for paragraphs with format instructions
+        # e.g., "(24-Font size, Times New Roman)" or "(Title) 24pt"
         # Parse ALL paragraphs in first 10 to find title format pattern
         title_candidates = []
+
         
         for i, para in enumerate(self.document.paragraphs[:10]):
             text = get_paragraph_text(para)
@@ -334,12 +468,24 @@ class TemplateExtractor:
             title_candidates.sort(key=lambda x: -x["size"])
             best = title_candidates[0]
             instruction = best["instruction"]
-            # Use instruction size/bold, but prefer Times New Roman for font name
-            # since most academic journals use it
+            # Check if instruction text explicitly mentions 'bold' as FORMAT INSTRUCTION
+            # NOT as part of font name like "bold Palatino Linotype"
+            instruction_text = best.get("text", "").lower()
+            # Bold as format instruction patterns:
+            # - "24pt, bold" or "bold, 24pt" (bold followed by comma or end of string)
+            # - "(bold)" (bold in parentheses)
+            # - "bold Times New Roman" would still match, so exclude font names
+            import re
+            # Only match if bold is:
+            # 1. Followed by comma, closing paren, or end of text
+            # 2. OR preceded by comma and not followed by a font name
+            has_bold_instruction = bool(re.search(r'\bbold\s*[,)\]]', instruction_text) or 
+                                       re.search(r',\s*bold\b(?!\s*(times|arial|palatino|calibri|helvetica|georgia))', instruction_text))
+            # Use instruction-specified bold, or None if not mentioned (preserve original)
             return {
                 "font_name": "Times New Roman",  # Default to Times New Roman for academic papers
                 "font_size": instruction.get("font_size", 24),
-                "bold": instruction.get("bold", True),
+                "bold": True if has_bold_instruction else None,  # Only bold if explicitly specified as format
                 "alignment": get_paragraph_alignment(self.document.paragraphs[best["index"]]) or "CENTER"
             }
         
@@ -573,10 +719,11 @@ Answer with ONLY "yes" or "no"."""
         return body_style
     
     def _extract_heading_style(self) -> Dict[str, Any]:
-        """Extract section heading style - ENHANCED"""
+        """Extract section heading style - ENHANCED with better bold detection"""
         heading_fonts = []
         heading_sizes = []
         heading_bold = []
+        all_caps_count = 0
         
         for para in self.document.paragraphs:
             text = get_paragraph_text(para)
@@ -591,6 +738,9 @@ Answer with ONLY "yes" or "no"."""
             )
             
             if (is_all_caps or is_numbered or is_pattern_match) and len(text) < 100:
+                if is_all_caps:
+                    all_caps_count += 1
+                
                 # Get font info from the FIRST run only (heading text, not annotations)
                 for run in para.runs:
                     run_text = run.text.strip()
@@ -607,22 +757,43 @@ Answer with ONLY "yes" or "no"."""
                         heading_fonts.append(run_info["font_name"])
                     if run_info.get("font_size"):
                         heading_sizes.append(run_info["font_size"])
-                    if run_info.get("bold") is not None:
-                        heading_bold.append(run_info["bold"])
+                    
+                    # Check bold from multiple sources:
+                    # 1. Run level bold
+                    run_bold = run.font.bold
+                    if run_bold is not None:
+                        heading_bold.append(run_bold)
+                    
+                    # 2. Also check instruction text for bold/italic keywords
+                    # e.g., "(10-Font size, bold Times New Roman)" or "(10-Font size, italic)"
+                    if 'bold' in text.lower():
+                        heading_bold.append(True)
+                    elif 'italic' in text.lower():
+                        heading_bold.append(False)  # italic usually means NOT bold
                     
                     # Only take first meaningful run
                     break
         
         # Determine heading style from extracted data
         if heading_fonts or heading_sizes:
-            # For ALL CAPS headings in academic journals, ALWAYS use bold
-            # This is the standard convention regardless of what the template shows
+            # Determine bold from actual template analysis
+            detected_bold = None
+            
+            if heading_bold:
+                bold_count = sum(1 for b in heading_bold if b)
+                # If majority are bold, use bold
+                if bold_count > len(heading_bold) / 2:
+                    detected_bold = True
+                elif bold_count == 0:
+                    detected_bold = False
+            # If no bold info detected, leave as None (preserve original formatting)
+            # DO NOT assume bold=True for ALL CAPS headings - template must specify
             
             return {
                 "font_name": Counter(heading_fonts).most_common(1)[0][0] if heading_fonts else "Times New Roman",
                 "font_size": Counter(heading_sizes).most_common(1)[0][0] if heading_sizes else 10,
-                "bold": True,  # ALWAYS True for academic section headings
-                "all_caps": True  # JIWE uses ALL CAPS for main headings
+                "bold": detected_bold,  # Based on template analysis
+                "all_caps": all_caps_count > 0
             }
         
         return DEFAULT_RULES["heading"]

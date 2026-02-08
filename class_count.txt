@@ -1,0 +1,10 @@
+﻿Classification counts:
+  section_heading: 90
+  body: 44
+  empty: 35
+  unknown: 22
+  caption: 12
+  journal_header: 3
+  paper_title: 1
+  abstract_content: 1
+  keywords_content: 1

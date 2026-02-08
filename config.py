@@ -144,10 +144,12 @@ SECTION_HEADING_PATTERNS = [
     r'^data\s+availability',
     r'^appendix',
     r'^appendices',
-    # Numbered headings: 1. Introduction, I. Introduction, A. Introduction
-    r'^\d+\.?\s*\w+',
-    r'^[IVXLC]+\.?\s*\w+',
-    r'^[A-Z]\.\s*\w+',
+    # Numbered headings - MUST be followed by a known section word to avoid matching body text
+    # Matches: "1. Introduction", "2 Methodology", "3. Results" etc.
+    # Does NOT match: "1. This is body text", "2 items were found"
+    r'^\d+\.?\s+(introduction|background|methodology|method|methods|results?|discussion|conclusion|conclusions|references?|abstract|summary|findings?|analysis|experiments?|implementation|evaluation|related\s+work|literature\s+review|future\s+work|acknowledgements?)',
+    r'^[IVXLC]+\.?\s+(introduction|background|methodology|method|results?|discussion|conclusion|references?)',
+    r'^[A-Z]\.\s+(introduction|background|methodology|method|results?|discussion|conclusion|references?)',
 ]
 
 CAPTION_PATTERNS = [
@@ -186,12 +188,12 @@ REQUIRED_SECTIONS = [
     "references"
 ]
 
-# LLM Configuration (NVIDIA Llama 3.1 - Faster than DeepSeek R1)
+# LLM Configuration (Meta Llama 3.3 70B - Latest and most capable)
 LLM_CONFIG = {
     "nvidia_api_key": "",  # Load from .env file for security
-    "nvidia_model": "meta/llama-3.1-8b-instruct",  # Fast and efficient
-    "max_tokens": 1024,
-    "temperature": 0.3
+    "nvidia_model": "meta/llama-3.3-70b-instruct",  # Latest Llama - better at following instructions
+    "max_tokens": 2048,  # More tokens for complex analysis
+    "temperature": 0.1  # Lower = more consistent outputs
 }
 
 # Alignment mapping
