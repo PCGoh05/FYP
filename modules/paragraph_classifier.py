@@ -204,6 +204,32 @@ class ParagraphClassifier:
         
         return classifications
     
+    def _is_section_heading(self, text: str, font_info: Dict) -> bool:
+        """Check if text is likely a section heading"""
+        text_lower = text.lower().strip()
+        
+        # Common section headings
+        common_headings = [
+            "introduction", "methodology", "methods", "results", 
+            "discussion", "conclusion", "conclusions", "references", 
+            "acknowledgment", "acknowledgments", "acknowledgement",
+            "literature review", "background", "abstract", "keywords"
+        ]
+        
+        # Exact match (section headings are often just one word)
+        if text_lower in common_headings:
+            return True
+        
+        # Numbered headings: "1. Introduction", "2.1 Methods"
+        if re.match(r'^\d+\.?\d*\.?\s+\w', text):
+            return True
+        
+        # Short text with numbered prefix
+        if len(text) < 80 and re.match(r'^\d+', text):
+            return True
+        
+        return False
+    
     def _fallback_classify_single(self, data: Dict, context: Dict = None) -> ClassifiedParagraph:
         """
         Classify a single paragraph using minimal rules.
@@ -253,13 +279,27 @@ class ParagraphClassifier:
             return self._create_classification(data, ParagraphType.REFERENCE, 0.75, "Reference entry")
         
         # First substantial paragraph with large font → likely title
+        # More strict criteria to avoid false positives
         if not context.get("found_title") and index < 10:
             font_size = font_info.get("font_size") or 0
-            if font_size >= 16 or (font_info.get("bold") and len(text) < 200):
-                return self._create_classification(data, ParagraphType.PAPER_TITLE, 0.70, "Large font, early position")
+            is_bold = font_info.get("bold", False)
+            
+            # Title should have LARGE font (>=16pt) OR (>=14pt AND bold AND centered AND reasonable length)
+            if font_size >= 16 and len(text) > 10:
+                return self._create_classification(data, ParagraphType.PAPER_TITLE, 0.75, "Large font, early position")
+            elif font_size >= 14 and is_bold and alignment == "CENTER" and 20 < len(text) < 200:
+                return self._create_classification(data, ParagraphType.PAPER_TITLE, 0.70, "Medium-large bold centered text")
         
         # Context-based classification
         if context.get("in_abstract"):
+            # Check if this is a section heading that should exit abstract mode
+            if self._is_section_heading(text, font_info):
+                context["in_abstract"] = False
+                return self._create_classification(data, ParagraphType.SECTION_HEADING, 0.85, "Section heading after abstract")
+            # Check if this is a keywords line (also exits abstract mode)
+            if re.match(r'^keywords?:', text_lower):
+                context["in_abstract"] = False
+                return self._create_classification(data, ParagraphType.KEYWORDS_LABEL, 0.90, "Keywords label")
             return self._create_classification(data, ParagraphType.ABSTRACT_CONTENT, 0.70, "After abstract label")
         
         # Default to body text
