@@ -126,8 +126,7 @@ class AutoFixer:
             para_type = classification.paragraph_type
             
             if para_type == ParagraphType.JOURNAL_HEADER and self._is_journal_title_header(classification.text):
-                if self._should_fix_category(i, ["journal_header"]):
-                    self._fix_journal_header(para, i)
+                self._fix_journal_header(para, i)
             elif para_type == ParagraphType.PAPER_TITLE:
                 if self._should_fix_category(i, ["title"]):
                     self._fix_title(para, i)
@@ -155,7 +154,7 @@ class AutoFixer:
     def _is_journal_title_header(self, text: str) -> bool:
         """Return True for journal title lines, excluding volume and ISSN metadata."""
         text_lower = text.lower()
-        return "journal of" in text_lower or "web engineering" in text_lower
+        return "journal of informatics" in text_lower or text_lower.strip() == "web engineering"
     
     def _fix_margins(self):
         """Fix page margins"""
