@@ -34,6 +34,7 @@ class ParagraphType(Enum):
     ALGORITHM = "algorithm"
     CODE_BLOCK = "code_block"
     EQUATION = "equation"
+    TEMPLATE_INSTRUCTION = "template_instruction"
     UNKNOWN = "unknown"
 
 
@@ -68,6 +69,7 @@ class ParagraphClassifier:
         ParagraphType.ALGORITHM,
         ParagraphType.CODE_BLOCK,
         ParagraphType.EQUATION,
+        ParagraphType.TEMPLATE_INSTRUCTION,
     }
 
     FIX_TYPES = {
@@ -170,6 +172,9 @@ class ParagraphClassifier:
 
         if not text:
             return self._create_classification(data, ParagraphType.EMPTY, 1.0, "Empty paragraph")
+
+        if self._is_template_instruction(text_lower):
+            return self._create_classification(data, ParagraphType.TEMPLATE_INSTRUCTION, 0.95, "Template instruction")
 
         if self._is_journal_header(text_lower, index):
             return self._create_classification(data, ParagraphType.JOURNAL_HEADER, 0.95, "Journal header")
@@ -315,8 +320,16 @@ class ParagraphClassifier:
             "discussion",
             "results and discussion",
             "results and discussions",
+            "implementation",
+            "evaluation",
+            "experiment",
+            "experiments",
+            "experimental setup",
+            "test configuration",
             "conclusion",
             "conclusions",
+            "conclusion and future work",
+            "future work",
             "acknowledgement",
             "acknowledgements",
             "acknowledgment",
@@ -338,7 +351,9 @@ class ParagraphClassifier:
         heading_words = (
             "introduction|background|literature review|related work|methodology|"
             "methods?|materials and methods|research methodology|results?|discussion|"
-            "results and discussions?|conclusions?|references?|bibliography|"
+            "results and discussions?|implementation|evaluation|experiments?|"
+            "experimental setup|test configuration|conclusions?|conclusion and future work|"
+            "future work|references?|bibliography|"
             "acknowledgements?|funding statement|author contributions?|"
             "conflict of interests?|ethics statements?"
         )
@@ -349,6 +364,10 @@ class ParagraphClassifier:
             return any(word in text_lower for word in common)
 
         return False
+
+    def _is_template_instruction(self, text_lower: str) -> bool:
+        """Return True for template-only formatting instructions."""
+        return bool(re.match(r"^\(?\s*\d+(?:\.\d+)?\s*[-\s]*(?:font size|point|pt)", text_lower))
 
     def _is_caption(self, text_lower: str) -> bool:
         """Return True for figure and table captions."""

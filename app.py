@@ -731,15 +731,15 @@ def display_download_section():
         if st.session_state.highlighted_doc_bytes:
             base_filename = st.session_state.manuscript_filename
             st.download_button(
-                label="🔍 Download Highlighted (DOCX)",
+                label="🔍 Download Original with Highlighted Issues (DOCX)",
                 data=st.session_state.highlighted_doc_bytes,
                 file_name=f"highlighted_{base_filename}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 use_container_width=True,
-                help="Changes are highlighted in yellow"
+                help="Highlights are shown on the original manuscript to indicate locations changed in the corrected document."
             )
         else:
-            st.button("🔍 Download Highlighted Doc", disabled=True, use_container_width=True)
+            st.button("🔍 Download Highlighted Original", disabled=True, use_container_width=True)
     
     with col3:
         if st.session_state.report_bytes:
