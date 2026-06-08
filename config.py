@@ -185,12 +185,13 @@ REQUIRED_SECTIONS = [
     "references"
 ]
 
-# LLM Configuration (Meta Llama 3.3 70B - Latest and most capable)
+# LLM Configuration (optional explanation layer)
 LLM_CONFIG = {
     "nvidia_api_key": "",  # Load from .env file for security
-    "nvidia_model": "meta/llama-3.3-70b-instruct",  # Latest Llama - better at following instructions
-    "max_tokens": 2048,  # More tokens for complex analysis
-    "temperature": 0.1  # Lower = more consistent outputs
+    "nvidia_model": "meta/llama-3.3-70b-instruct",
+    "max_tokens": 500,
+    "temperature": 0.1,
+    "timeout_seconds": 20
 }
 
 # Alignment mapping

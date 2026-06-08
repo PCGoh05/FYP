@@ -16,7 +16,7 @@ from modules.paragraph_classifier import ParagraphClassifier, ParagraphType
 from modules.manuscript_checker import ManuscriptChecker
 from modules.auto_fixer import AutoFixer
 from modules.report_generator import ReportGenerator
-from modules.llm_integration import LLMIntegration, create_llm_integration
+from modules.llm_integration import create_llm_integration
 from modules.utils import pdf_to_docx, docx_to_pdf, PDF2DOCX_AVAILABLE, DOCX2PDF_AVAILABLE
 from config import APP_TITLE, APP_VERSION, DEFAULT_RULES, COLORS
 
@@ -101,6 +101,8 @@ def init_session_state():
         st.session_state.report_bytes = None
     if "llm" not in st.session_state:
         st.session_state.llm = None
+    if "ai_explanations_enabled" not in st.session_state:
+        st.session_state.ai_explanations_enabled = False
     if "manuscript_bytes" not in st.session_state:
         st.session_state.manuscript_bytes = None
     if "manuscript_filename" not in st.session_state:
@@ -121,39 +123,40 @@ def display_header():
     """, unsafe_allow_html=True)
 
 
-def init_llm_from_env():
-    """Try to initialize LLM from environment variables or config"""
-    from config import LLM_CONFIG
-    api_key = LLM_CONFIG.get("nvidia_api_key", "")
-    if api_key:
-        llm = create_llm_integration(api_key=api_key)
-        if llm.is_available():
-            return llm
-    return None
-
-
 def display_sidebar():
     """Display sidebar with template rules and settings"""
     with st.sidebar:
         st.header("📋 Template Rules")
         
         # LLM Configuration
-        with st.expander("🤖 LLM Settings", expanded=True):
-            # Check if LLM is already configured from .env
-            if st.session_state.llm is None:
-                st.session_state.llm = init_llm_from_env()
+        with st.expander("AI Explanation Settings", expanded=False):
+            st.caption(
+                "AI is optional and is used only for issue explanations. "
+                "Template extraction, compliance checking, auto-fix, and accuracy evaluation remain rule-based."
+            )
+            ai_enabled = st.checkbox(
+                "Enable AI explanations",
+                value=st.session_state.ai_explanations_enabled,
+                help="Turn this on only when you want AI-generated explanations for detected issues."
+            )
+            st.session_state.ai_explanations_enabled = ai_enabled
+
+            if not ai_enabled:
+                st.session_state.llm = None
+                st.info("AI explanations are disabled. Core checking is rule-based.")
             
             # Show current status
-            if st.session_state.llm and st.session_state.llm.is_available():
+            if ai_enabled and st.session_state.llm and st.session_state.llm.is_available():
                 st.success("LLM connected through NVIDIA API")
-                st.info("AI features enabled: error explanations and report assistance. Core checking remains rule-based.")
+                st.info("AI explanations are enabled. Core checking remains rule-based.")
                 if st.button("🔄 Disconnect LLM"):
                     st.session_state.llm = None
+                    st.session_state.ai_explanations_enabled = False
                     st.rerun()
-            else:
+            elif ai_enabled:
                 st.warning("⚠️ LLM not connected")
                 st.markdown("""
-                **To enable AI features:**
+                **To enable AI explanations:**
                 1. Get NVIDIA API key at [build.nvidia.com](https://build.nvidia.com)
                 2. Enter the key below
                 """)
@@ -164,14 +167,14 @@ def display_sidebar():
                     placeholder="nvapi-xxxxxxxxxxxx",
                     help="Get API key at build.nvidia.com"
                 )
-                if st.button("🔗 Connect to NVIDIA API", type="primary"):
+                if st.button("Connect to NVIDIA API", type="primary"):
                     if api_key:
                         st.session_state.llm = create_llm_integration(api_key=api_key)
                         if st.session_state.llm.is_available():
-                            st.success("✅ Connected successfully!")
+                            st.success("Connected successfully.")
                             st.rerun()
                         else:
-                            st.error("❌ Connection failed. Check your API key.")
+                            st.error("Connection failed. Check your API key.")
                     else:
                         st.error("Please enter an API key")
         
@@ -255,7 +258,7 @@ def handle_template_upload(uploaded_file):
                         return
             
             with st.spinner("Extracting formatting rules from template..."):
-                extractor = TemplateExtractor(llm_integration=st.session_state.llm)
+                extractor = TemplateExtractor(llm_integration=None)
                 extractor.load(BytesIO(file_bytes), template_name=original_filename)
                 rules = extractor.extract_all_rules()
                 
@@ -313,8 +316,8 @@ def handle_manuscript_check(uploaded_file):
                 if not st.session_state.template_rules:
                     st.warning("⚠️ No template uploaded. Using default formatting rules (JIWE style). For accurate results, please upload a template file first.")
                 
-                # Create checker with LLM if available
-                checker = ManuscriptChecker(rules, st.session_state.llm)
+                # Core checking is rule-based. LLM is not used for compliance decisions.
+                checker = ManuscriptChecker(rules, None)
                 checker.load_manuscript(BytesIO(manuscript_bytes))
                 
                 # Run all checks
@@ -470,7 +473,11 @@ def display_check_results(result):
                     """)
                     
                     # LLM explanation if available
-                    if st.session_state.llm and st.session_state.llm.is_available():
+                    if (
+                        st.session_state.ai_explanations_enabled
+                        and st.session_state.llm
+                        and st.session_state.llm.is_available()
+                    ):
                         if st.button(f"💡 Explain", key=f"explain_{category}_{tab_idx}_{issue_idx}_{issue.paragraph_index}"):
                             explanation = st.session_state.llm.explain_error({
                                 "location": issue.location,

@@ -85,6 +85,7 @@ class LLMIntegration:
         self.model = LLM_CONFIG.get("nvidia_model", "deepseek-ai/deepseek-r1")
         self.max_tokens = LLM_CONFIG.get("max_tokens", 1024)
         self.temperature = LLM_CONFIG.get("temperature", 0.3)
+        self.timeout_seconds = LLM_CONFIG.get("timeout_seconds", 20)
         
         self._client = None
         self._available = False
@@ -96,7 +97,9 @@ class LLMIntegration:
             try:
                 self._client = OpenAI(
                     base_url="https://integrate.api.nvidia.com/v1",
-                    api_key=self.api_key
+                    api_key=self.api_key,
+                    timeout=self.timeout_seconds,
+                    max_retries=0
                 )
                 # Verify the API key by making a simple test call
                 self._client.chat.completions.create(
