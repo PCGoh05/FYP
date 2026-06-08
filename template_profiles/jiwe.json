@@ -33,6 +33,7 @@
     "font_name": "Times New Roman",
     "body_font_size": 10,
     "abstract_font_size": 9,
+    "caption_font_size": 10,
     "reference_font_size": 9,
     "page_size": "Letter"
   }

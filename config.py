@@ -53,7 +53,7 @@ DEFAULT_RULES = {
     },
     "caption": {
         "font_name": "Times New Roman",
-        "font_size": 9,
+        "font_size": 10,
         "italic": False
     },
     "reference": {

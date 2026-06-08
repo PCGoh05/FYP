@@ -266,6 +266,8 @@ class TemplateExtractor:
             text = get_paragraph_text(paragraph).lower()
             if re.match(r"^(figure|fig\.?|table)\s*\d+", text):
                 return True
+            if re.search(r"(figure|table)\s+caption", text):
+                return True
         return False
 
     def _has_reference_evidence(self) -> bool:
@@ -929,6 +931,8 @@ Answer with ONLY "yes" or "no"."""
         caption_fonts = []
         caption_sizes = []
         caption_italic = []
+        instruction_fonts = []
+        instruction_sizes = []
         
         caption_patterns = [
             r'^figure\s*\d+',
@@ -938,9 +942,10 @@ Answer with ONLY "yes" or "no"."""
         
         for para in self.document.paragraphs:
             text = get_paragraph_text(para)
+            text_lower = text.lower()
             
             is_caption = any(
-                re.match(pattern, text.lower()) 
+                re.match(pattern, text_lower)
                 for pattern in caption_patterns
             )
             
@@ -953,12 +958,34 @@ Answer with ONLY "yes" or "no"."""
                     caption_sizes.append(font_info["font_size"])
                 if font_info.get("italic") is not None:
                     caption_italic.append(font_info["italic"])
+
+            instruction_match = re.search(
+                r"(?:use\s+)?(\d+(?:\.\d+)?)\s*(?:point|pt)\s+"
+                r"(times\s+new\s+roman|palatino\s+linotype|arial|calibri|cambria)"
+                r".{0,80}?(?:figure|table)\s+caption",
+                text_lower,
+            )
+            if instruction_match:
+                instruction_sizes.append(float(instruction_match.group(1)))
+                font_name = re.sub(r"\s+", " ", instruction_match.group(2)).title()
+                if font_name.lower() == "times new roman":
+                    font_name = "Times New Roman"
+                elif font_name.lower() == "palatino linotype":
+                    font_name = "Palatino Linotype"
+                instruction_fonts.append(font_name)
         
         if caption_fonts or caption_sizes:
             return {
                 "font_name": Counter(caption_fonts).most_common(1)[0][0] if caption_fonts else "Times New Roman",
                 "font_size": Counter(caption_sizes).most_common(1)[0][0] if caption_sizes else 10,
                 "italic": Counter(caption_italic).most_common(1)[0][0] if caption_italic else True
+            }
+
+        if instruction_fonts or instruction_sizes:
+            return {
+                "font_name": Counter(instruction_fonts).most_common(1)[0][0] if instruction_fonts else "Times New Roman",
+                "font_size": Counter(instruction_sizes).most_common(1)[0][0] if instruction_sizes else 10,
+                "italic": False
             }
         
         return DEFAULT_RULES.get("caption", {"font_name": "Times New Roman", "font_size": 10, "italic": True})
