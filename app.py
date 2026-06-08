@@ -145,8 +145,8 @@ def display_sidebar():
             
             # Show current status
             if st.session_state.llm and st.session_state.llm.is_available():
-                st.success("✅ LLM Connected (NVIDIA Llama 3.1 8B)")
-                st.info("🤖 AI features enabled: error explanations, smart classification")
+                st.success("LLM connected through NVIDIA API")
+                st.info("AI features enabled: error explanations and report assistance. Core checking remains rule-based.")
                 if st.button("🔄 Disconnect LLM"):
                     st.session_state.llm = None
                     st.rerun()
@@ -180,6 +180,15 @@ def display_sidebar():
         # Display extracted rules if available
         if st.session_state.template_rules:
             rules = st.session_state.template_rules
+            extraction_summary = rules.get("_extraction_summary", {})
+            profile = rules.get("_profile", {})
+            if extraction_summary:
+                st.info(
+                    f"Profile: {profile.get('name', 'Generic')} | "
+                    f"{extraction_summary.get('extracted', 0)} extracted, "
+                    f"{extraction_summary.get('inferred', 0)} inferred, "
+                    f"{extraction_summary.get('default', 0)} defaulted"
+                )
             
             # Show AI enhancement status
             if rules.get("_ai_enhanced"):
@@ -253,7 +262,13 @@ def handle_template_upload(uploaded_file):
                 st.session_state.template_rules = rules
                 st.session_state.template_uploaded = True
                 
-                st.success("✅ Template rules extracted successfully!")
+                summary = rules.get("_extraction_summary", {})
+                st.success(
+                    "Template rules processed: "
+                    f"{summary.get('extracted', 0)} extracted, "
+                    f"{summary.get('inferred', 0)} inferred, "
+                    f"{summary.get('default', 0)} defaulted."
+                )
                 
                 # Display summary - user-friendly view
                 with st.expander("View Extracted Rules Summary", expanded=True):
@@ -341,9 +356,10 @@ def display_check_results(result):
         st.markdown(f"""
         <div class="score-card {score_class}">
             <h2 style="margin: 0;">{score_emoji} {score}%</h2>
-            <p style="margin: 5px 0 0 0;">Compliance Score</p>
+            <p style="margin: 5px 0 0 0;">Compliance Index</p>
         </div>
         """, unsafe_allow_html=True)
+        st.caption("UI index only. FYP accuracy is evaluated with Precision, Recall, and F1.")
     
     with col2:
         st.markdown(f"""
@@ -365,9 +381,18 @@ def display_check_results(result):
     # Document structure
     st.subheader("📑 Document Structure")
     structure = result.document_structure
+    structure_details = structure if isinstance(structure.get("sections"), dict) else None
+    if structure_details:
+        structure = {
+            name: details.get("found", False)
+            for name, details in structure_details.get("sections", {}).items()
+        }
     
-    structure_cols = st.columns(5)
-    sections = ["abstract", "keywords", "introduction", "conclusion", "references"]
+    sections = (
+        structure_details.get("expected_order", [])
+        if structure_details else ["abstract", "keywords", "introduction", "conclusion", "references"]
+    )
+    structure_cols = st.columns(max(1, len(sections)))
     icons = ["📝", "🔑", "📖", "✅", "📚"]
     
     for i, (section, icon) in enumerate(zip(sections, icons)):
@@ -376,6 +401,22 @@ def display_check_results(result):
             status = "✅" if found else "❌"
             st.markdown(f"**{icon} {section.title()}**")
             st.write(status)
+
+    if structure_details:
+        format_rows = []
+        for section in sections:
+            details = structure_details.get("sections", {}).get(section, {})
+            format_rows.append({
+                "Section": section.title(),
+                "Found": "Yes" if details.get("found") else "No",
+                "Paragraph": details.get("index"),
+                "Format Evidence": details.get("format_status", "not_checked"),
+            })
+        st.dataframe(format_rows, use_container_width=True, hide_index=True)
+        if structure_details.get("order_correct", True):
+            st.caption("Section order check: passed")
+        else:
+            st.warning("Section order check: required sections may be out of order.")
     
     # Issues by category
     st.subheader("🔍 Issues by Category")
@@ -452,7 +493,10 @@ def handle_auto_fix():
             classifications = st.session_state.classifications
             
             # Create auto-fixer
-            fixer = AutoFixer(rules, classifications)
+            issues_by_category = {}
+            if st.session_state.check_result:
+                issues_by_category = st.session_state.check_result.issues_by_category
+            fixer = AutoFixer(rules, classifications, issues_by_category=issues_by_category)
             fixer.load_manuscript(BytesIO(st.session_state.manuscript_bytes))
             
             # Apply fixes
@@ -558,10 +602,8 @@ def display_comparison_view(changes):
             "#": i,
             "Type": change.change_type,
             "Text": text_preview,
-            "Current Font": current_font,
-            "Target Font": target_font,
-            "Current Size": current_size,
-            "Target Size": target_size
+            "Current Value": current_font or current_size,
+            "Target Value": target_font or target_size,
         })
     
     # Display as Streamlit dataframe with styling
@@ -577,10 +619,8 @@ def display_comparison_view(changes):
             "#": st.column_config.NumberColumn("#", width="small"),
             "Type": st.column_config.TextColumn("Type", width="medium"),
             "Text": st.column_config.TextColumn("Text", width="large"),
-            "Current Font": st.column_config.TextColumn("Current Font", width="medium"),
-            "Target Font": st.column_config.TextColumn("Target Font", width="medium"),
-            "Current Size": st.column_config.TextColumn("Current Size", width="small"),
-            "Target Size": st.column_config.TextColumn("Target Size", width="small"),
+            "Current Value": st.column_config.TextColumn("Current Value", width="medium"),
+            "Target Value": st.column_config.TextColumn("Target Value", width="medium"),
         }
     )
     
@@ -593,6 +633,49 @@ def display_comparison_view(changes):
             st.markdown(f"**[{change.change_type}]** {change.text_preview[:60]}...")
             st.caption(f"   ✓ {change.before} → {change.after}")
 
+def display_comparison_view(changes):
+    """Display structured change records without parsing free-text strings."""
+    st.header("Format Changes Applied")
+
+    if not changes:
+        st.info("No changes were made to the document")
+        return
+
+    changes_by_type = {}
+    for change in changes:
+        changes_by_type[change.change_type] = changes_by_type.get(change.change_type, 0) + 1
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Properties Changed", len(changes))
+    with col2:
+        most_common = max(changes_by_type, key=changes_by_type.get)
+        st.metric("Most Common", most_common.replace("_", " ").title())
+    with col3:
+        st.metric("Change Types", len(changes_by_type))
+
+    with st.expander("Changes Summary by Type", expanded=False):
+        for change_type, count in sorted(changes_by_type.items(), key=lambda item: -item[1]):
+            st.write(f"- **{change_type.replace('_', ' ').title()}**: {count} properties")
+
+    table_data = []
+    for index, change in enumerate(changes, 1):
+        text_preview = change.text_preview[:60] + "..." if len(change.text_preview) > 60 else change.text_preview
+        table_data.append({
+            "#": index,
+            "Paragraph": change.paragraph_index + 1 if change.paragraph_index >= 0 else "Document",
+            "Type": change.change_type,
+            "Property": change.property_name,
+            "Current Value": change.current_value or change.before,
+            "Target Value": change.target_value or change.after,
+            "Text": text_preview,
+            "Evidence": change.evidence,
+        })
+
+    import pandas as pd
+    df = pd.DataFrame(table_data)
+    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.success(f"Recorded {len(changes)} formatting property changes")
 
 
 def display_download_section():

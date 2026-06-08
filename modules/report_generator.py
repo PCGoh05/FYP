@@ -210,7 +210,7 @@ class ReportGenerator:
     
     def _add_compliance_section(self):
         """Add compliance score section"""
-        self.document.add_heading("Compliance Score", level=1)
+        self.document.add_heading("Compliance Index", level=1)
         
         score = self.check_result.compliance_score
         total_issues = self.check_result.total_issues
@@ -236,6 +236,11 @@ class ReportGenerator:
         para = self.document.add_paragraph()
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         para.add_run(f"Total issues found: {total_issues}")
+        note = self.document.add_paragraph()
+        note.add_run(
+            "This index is a user-facing rule-weighted indicator. "
+            "FYP accuracy should be reported with Precision, Recall, and F1."
+        )
         
         # Issues breakdown
         if self.check_result.issues_by_category:
@@ -262,11 +267,11 @@ class ReportGenerator:
             return
         
         # Create changes table
-        table = self.document.add_table(rows=1, cols=4)
+        table = self.document.add_table(rows=1, cols=5)
         table.style = 'Table Grid'
         
         # Header row
-        headers = ["#", "Location", "Before", "After"]
+        headers = ["#", "Location", "Property", "Current", "Target"]
         header_cells = table.rows[0].cells
         for i, header in enumerate(headers):
             header_cells[i].text = header
@@ -293,19 +298,25 @@ class ReportGenerator:
                 preview_run.font.italic = True
                 preview_run.font.color.rgb = RGBColor(128, 128, 128)
             
-            # Before (red background)
-            before_cell = row.cells[2]
+            # Property
+            property_cell = row.cells[2]
+            property_para = property_cell.paragraphs[0]
+            run = property_para.add_run(change.property_name or change.change_type)
+            run.font.size = Pt(9)
+
+            # Current value (red background)
+            before_cell = row.cells[3]
             self._set_cell_background(before_cell, self.LIGHT_RED)
             before_para = before_cell.paragraphs[0]
-            run = before_para.add_run(change.before)
+            run = before_para.add_run(change.current_value or change.before)
             run.font.color.rgb = self.RED
             run.font.size = Pt(9)
             
-            # After (green background)
-            after_cell = row.cells[3]
+            # Target value (green background)
+            after_cell = row.cells[4]
             self._set_cell_background(after_cell, self.LIGHT_GREEN)
             after_para = after_cell.paragraphs[0]
-            run = after_para.add_run(change.after)
+            run = after_para.add_run(change.target_value or change.after)
             run.font.color.rgb = self.GREEN
             run.font.size = Pt(9)
         
@@ -313,8 +324,9 @@ class ReportGenerator:
         for row in table.rows:
             row.cells[0].width = Inches(0.4)
             row.cells[1].width = Inches(2.5)
-            row.cells[2].width = Inches(2)
-            row.cells[3].width = Inches(2)
+            row.cells[2].width = Inches(1.2)
+            row.cells[3].width = Inches(1.8)
+            row.cells[4].width = Inches(1.8)
         
         self.document.add_paragraph()  # Spacing
     
@@ -416,7 +428,7 @@ class ReportGenerator:
             score_class = "score-good" if score >= 80 else "score-medium" if score >= 60 else "score-poor"
             html_parts.append(f"""
             <div style="text-align: center; margin: 20px 0;">
-                <span class="score-badge {score_class}">Compliance Score: {score}%</span>
+                <span class="score-badge {score_class}">Compliance Index: {score}%</span>
             </div>
             """)
         
@@ -428,8 +440,9 @@ class ReportGenerator:
                 <tr>
                     <th style="width: 5%;">#</th>
                     <th style="width: 35%;">Location</th>
-                    <th style="width: 30%;">Before (Original)</th>
-                    <th style="width: 30%;">After (Corrected)</th>
+                    <th style="width: 15%;">Property</th>
+                    <th style="width: 22%;">Current</th>
+                    <th style="width: 23%;">Target</th>
                 </tr>
             """)
             
@@ -441,8 +454,9 @@ class ReportGenerator:
                 <tr>
                     <td>{i}</td>
                     <td class="location-cell">{change.location}{preview_html}</td>
-                    <td class="before-cell">{change.before}</td>
-                    <td class="after-cell">{change.after}</td>
+                    <td>{change.property_name or change.change_type}</td>
+                    <td class="before-cell">{change.current_value or change.before}</td>
+                    <td class="after-cell">{change.target_value or change.after}</td>
                 </tr>
                 """)
             

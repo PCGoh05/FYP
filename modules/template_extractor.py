@@ -9,6 +9,8 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from collections import Counter
 from typing import Dict, List, Any, Optional
+from pathlib import Path
+import json
 import re
 
 from .utils import (
@@ -223,114 +225,196 @@ class TemplateExtractor:
         }
         
         return self.debug_info
-    
-    def extract_all_rules(self) -> Dict[str, Any]:
-        """Extract all formatting rules from the template - AI-FIRST APPROACH
+
+    def _load_template_profile(self, profile_name: str) -> Dict[str, Any]:
+        """Load a template profile from JSON, with a safe fallback."""
+        profile_path = Path(__file__).resolve().parent.parent / "template_profiles" / f"{profile_name}.json"
+        try:
+            if profile_path.exists():
+                with open(profile_path, "r", encoding="utf-8") as profile_file:
+                    return json.load(profile_file)
+        except (OSError, json.JSONDecodeError):
+            pass
+
+        return {
+            "name": profile_name,
+            "description": "Fallback academic manuscript profile",
+            "required_sections": ["abstract", "keywords", "introduction", "conclusion", "references"],
+            "heading_patterns": [],
+            "rule_weights": {},
+            "fallback_defaults": DEFAULT_RULES,
+        }
+
+    def _detect_template_profile(self) -> Dict[str, Any]:
+        """Detect the closest known template profile."""
+        first_text = "\n".join(
+            get_paragraph_text(paragraph).lower()
+            for paragraph in self.document.paragraphs[:30]
+        )
+        template_name = self.template_name.lower()
+        if (
+            "journal of informatics and web engineering" in first_text
+            or "jiwe" in first_text
+            or "jiwe" in template_name
+        ):
+            return self._load_template_profile("jiwe")
+        return self._load_template_profile("generic")
+
+    def _has_caption_evidence(self) -> bool:
+        """Return True when the template contains caption-like paragraphs."""
+        for paragraph in self.document.paragraphs:
+            text = get_paragraph_text(paragraph).lower()
+            if re.match(r"^(figure|fig\.?|table)\s*\d+", text):
+                return True
+        return False
+
+    def _has_reference_evidence(self) -> bool:
+        """Return True when the template contains a reference section or entries."""
+        for paragraph in self.document.paragraphs:
+            text = get_paragraph_text(paragraph).strip().lower()
+            if text in {"references", "bibliography", "works cited"}:
+                return True
+            if re.match(r"^\[\d+\]", text):
+                return True
+        return False
+
+    def _add_rule_provenance(self, rules: Dict[str, Any], abstract_size: float) -> None:
+        """Attach source, confidence, and evidence metadata to extracted rules."""
+        profile = self._detect_template_profile()
+        has_caption = self._has_caption_evidence()
+        has_reference = self._has_reference_evidence()
+        provenance = {}
+
+        category_sources = {
+            "margins": ("extracted", 0.95, "Read directly from DOCX section margins"),
+            "title": ("extracted", 0.85, "Detected from title instruction or title-like paragraph"),
+            "author": ("default", 0.55, f"{profile['name']} fallback because author style is not reliably extractable"),
+            "affiliation": ("inferred", 0.65, f"Inferred from smaller repeated text size {abstract_size} pt"),
+            "body": ("extracted", 0.85, "Inferred from most frequent body paragraph run formatting"),
+            "heading": ("extracted", 0.75, "Detected from section heading-like paragraphs"),
+            "abstract": ("extracted", 0.75, "Detected from abstract section or template default when absent"),
+            "keywords": ("inferred", 0.65, "Inferred from abstract style"),
+            "caption": (
+                "extracted" if has_caption else "default",
+                0.75 if has_caption else 0.55,
+                "Detected from caption-like paragraphs" if has_caption else f"{profile['name']} caption fallback",
+            ),
+            "reference": (
+                "extracted" if has_reference else "default",
+                0.75 if has_reference else 0.55,
+                "Detected from reference section" if has_reference else f"{profile['name']} reference fallback",
+            ),
+            "layout": ("extracted", 0.90, "Read from DOCX section layout"),
+        }
+
+        counts = {"extracted": 0, "inferred": 0, "default": 0}
+        for category, values in rules.items():
+            if category.startswith("_") or not isinstance(values, dict):
+                continue
+            source, confidence, evidence = category_sources.get(
+                category,
+                ("default", 0.50, "No specific extraction evidence available"),
+            )
+            for field, value in values.items():
+                key = f"{category}.{field}"
+                provenance[key] = {
+                    "value": value,
+                    "source": source,
+                    "confidence": confidence,
+                    "evidence": evidence,
+                }
+                counts[source] = counts.get(source, 0) + 1
+
+        rules["_profile"] = profile
+        rules["_provenance"] = provenance
+        rules["_extraction_summary"] = {
+            "extracted": counts.get("extracted", 0),
+            "inferred": counts.get("inferred", 0),
+            "default": counts.get("default", 0),
+            "total": sum(counts.values()),
+        }
         
-        Architecture:
-        1. TRY AI FIRST - Let AI understand the template naturally
-        2. FALLBACK to traditional methods only for missing fields
-        3. Traditional methods are backup, not primary
-        """
+    def extract_all_rules(self) -> Dict[str, Any]:
+        """Extract template rules with deterministic DOCX parsing first."""
         if not self.document:
             raise ValueError("No document loaded. Call load() first.")
-        
-        # Scan fonts first (needed for both AI and traditional)
+
         self.scan_all_fonts()
-        
-        # ========================================
-        # STEP 1: TRY AI EXTRACTION FIRST (SMART)
-        # ========================================
-        ai_rules = {}
+
+        size_freq = self.debug_info.get("size_frequency", {})
+        sizes_sorted = sorted(size_freq.items(), key=lambda x: x[1], reverse=True)
+
+        abstract_size = 9
+        if sizes_sorted:
+            for size, count in sizes_sorted:
+                if size < sizes_sorted[0][0] and count > 5:
+                    abstract_size = size
+                    break
+
+        rules = {
+            "margins": self._extract_margins(),
+            "title": self._extract_title_style(),
+            "author": {
+                "font_name": "Times New Roman",
+                "font_size": 11,
+                "bold": True,
+                "alignment": "CENTER"
+            },
+            "affiliation": {
+                "font_name": "Times New Roman",
+                "font_size": abstract_size,
+                "alignment": "CENTER"
+            },
+            "body": self._extract_body_style(),
+            "heading": self._extract_heading_style(),
+            "abstract": self._extract_abstract_style(),
+            "keywords": {
+                "font_name": "Times New Roman",
+                "font_size": abstract_size
+            },
+            "caption": self._extract_caption_style(),
+            "reference": self._extract_reference_style(),
+            "layout": self._extract_layout(),
+            "_ai_enhanced": False,
+            "_ai_primary": False,
+            "_debug": self.debug_info
+        }
+
         if self.llm and self.llm.is_available():
             ai_rules = self._extract_rules_with_ai()
-        
-        # ========================================
-        # STEP 2: BUILD RULES (AI as primary source)
-        # ========================================
-        if ai_rules and ai_rules.get('_ai_extracted'):
-            # AI succeeded - use AI rules as primary
-            rules = {
-                "margins": self._extract_margins(),
-                "title": self._convert_ai_rule(ai_rules.get('title', {})),
-                "author": {
-                    "font_name": "Times New Roman",
-                    "font_size": 11,
-                    "bold": True,
-                    "alignment": "CENTER"
-                },
-                "affiliation": {
-                    "font_name": "Times New Roman", 
-                    "font_size": 9,
-                    "alignment": "CENTER"
-                },
-                "body": self._convert_ai_rule(ai_rules.get('body', {})),
-                "heading": self._convert_ai_rule(ai_rules.get('heading', {})),
-                "abstract": self._convert_ai_rule(ai_rules.get('abstract', {})),
-                "keywords": {
-                    "font_name": "Times New Roman",
-                    "font_size": 9
-                },
-                "caption": self._convert_ai_rule(ai_rules.get('caption', {})),
-                "reference": self._convert_ai_rule(ai_rules.get('reference', {})),
-                "layout": self._extract_layout(),
-                "_ai_enhanced": True,
-                "_ai_primary": True,  # Mark that AI was primary source
-                "_debug": self.debug_info
-            }
-            
-            # Fill in any missing AI rules with traditional methods
-            if not rules["title"].get("font_size"):
-                rules["title"] = self._extract_title_style()
-            if not rules["body"].get("font_size"):
-                rules["body"] = self._extract_body_style()
-            if not rules["heading"].get("font_size"):
-                rules["heading"] = self._extract_heading_style()
-            if not rules["abstract"].get("font_size"):
-                rules["abstract"] = self._extract_abstract_style()
-                
-        else:
-            # AI failed or unavailable - use traditional methods (FALLBACK)
-            size_freq = self.debug_info.get("size_frequency", {})
-            sizes_sorted = sorted(size_freq.items(), key=lambda x: x[1], reverse=True)
-            
-            abstract_size = 9
-            if sizes_sorted:
-                for size, count in sizes_sorted:
-                    if size < sizes_sorted[0][0] and count > 5:
-                        abstract_size = size
-                        break
-            
-            rules = {
-                "margins": self._extract_margins(),
-                "title": self._extract_title_style(),
-                "author": {
-                    "font_name": "Times New Roman",
-                    "font_size": 11,
-                    "bold": True,
-                    "alignment": "CENTER"
-                },
-                "affiliation": {
-                    "font_name": "Times New Roman", 
-                    "font_size": abstract_size,
-                    "alignment": "CENTER"
-                },
-                "body": self._extract_body_style(),
-                "heading": self._extract_heading_style(),
-                "abstract": self._extract_abstract_style(),
-                "keywords": {
-                    "font_name": "Times New Roman",
-                    "font_size": abstract_size
-                },
-                "caption": self._extract_caption_style(),
-                "reference": self._extract_reference_style(),
-                "layout": self._extract_layout(),
-                "_ai_enhanced": False,
-                "_debug": self.debug_info
-            }
-        
+            if ai_rules and ai_rules.get("_ai_extracted"):
+                rules = self._fill_missing_rules_with_ai(rules, ai_rules)
+                rules["_ai_enhanced"] = True
+
+        self._add_rule_provenance(rules, abstract_size)
         self.rules = rules
         return rules
+
+    def _fill_missing_rules_with_ai(self, rules: Dict[str, Any], ai_rules: Dict[str, Any]) -> Dict[str, Any]:
+        """Use AI only to fill missing values from deterministic extraction."""
+        merged = rules.copy()
+        rule_mapping = {
+            "title": "title",
+            "heading": "heading",
+            "body": "body",
+            "abstract": "abstract",
+            "reference": "reference",
+            "caption": "caption",
+        }
+
+        for ai_key, local_key in rule_mapping.items():
+            if local_key not in merged:
+                continue
+
+            ai_rule = self._convert_ai_rule(ai_rules.get(ai_key, {}))
+            if not ai_rule:
+                continue
+
+            for field in ["font_name", "font_size", "bold", "italic"]:
+                if merged[local_key].get(field) is None and ai_rule.get(field) is not None:
+                    merged[local_key][field] = ai_rule[field]
+
+        return merged
     
     def _convert_ai_rule(self, ai_rule: Dict) -> Dict:
         """Convert AI rule format to internal format"""
@@ -344,7 +428,7 @@ class TemplateExtractor:
         }
     
     def _extract_rules_with_ai(self) -> Dict[str, Any]:
-        """Use AI to analyze template and extract formatting rules - PRIMARY METHOD"""
+        """Use AI only as an optional fallback for missing template fields."""
         if not self.llm:
             return {}
         
@@ -376,7 +460,7 @@ class TemplateExtractor:
         if not paragraphs_info:
             return {}
         
-        # Ask AI to analyze - this is now the PRIMARY method
+        # Ask AI to analyze only as optional fallback support.
         return self.llm.analyze_template_rules(paragraphs_info)
     
     def _merge_rules(self, traditional: Dict, ai_rules: Dict) -> Dict:
@@ -1018,3 +1102,55 @@ Answer with ONLY "yes" or "no"."""
         summary.append(f"   Page Size: {layout.get('page_size', 'A4')}")
         
         return "\n".join(summary)
+
+    def get_rules_summary(self) -> str:
+        """Generate an evidence-based summary of extracted formatting rules."""
+        rules = self.rules
+        extraction_summary = rules.get("_extraction_summary", {})
+        profile = rules.get("_profile", {})
+        provenance = rules.get("_provenance", {})
+
+        lines = [f"=== Formatting Rules Summary ({self.template_name}) ==="]
+        if profile:
+            lines.append(f"Template Profile: {profile.get('name', 'Generic')}")
+        if extraction_summary:
+            lines.append(
+                "Rule Sources: "
+                f"{extraction_summary.get('extracted', 0)} extracted, "
+                f"{extraction_summary.get('inferred', 0)} inferred, "
+                f"{extraction_summary.get('default', 0)} defaulted"
+            )
+        lines.append("")
+
+        display_order = [
+            ("margins", "Page Margins"),
+            ("title", "Paper Title Style"),
+            ("author", "Author Style"),
+            ("affiliation", "Affiliation Style"),
+            ("abstract", "Abstract Style"),
+            ("keywords", "Keywords Style"),
+            ("body", "Body Text Style"),
+            ("heading", "Section Heading Style"),
+            ("caption", "Caption Style"),
+            ("reference", "Reference Style"),
+            ("layout", "Layout"),
+        ]
+
+        for category, label in display_order:
+            values = rules.get(category, {})
+            if not isinstance(values, dict):
+                continue
+            lines.append(f"{label}:")
+            for field, value in values.items():
+                note = provenance.get(f"{category}.{field}", {})
+                if note:
+                    lines.append(
+                        f"  {field}: {value} "
+                        f"[{note.get('source', 'unknown')}, confidence {note.get('confidence', 0):.2f}]"
+                    )
+                    lines.append(f"    Evidence: {note.get('evidence', 'No evidence recorded')}")
+                else:
+                    lines.append(f"  {field}: {value}")
+            lines.append("")
+
+        return "\n".join(lines).strip()

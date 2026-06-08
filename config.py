@@ -10,15 +10,15 @@ APP_AUTHOR = "FYP Project"
 # Default formatting rules (JIWE template style)
 DEFAULT_RULES = {
     "margins": {
-        "left": 0.75,
-        "right": 0.75,
+        "left": 1.0,
+        "right": 1.0,
         "top": 1.0,
         "bottom": 1.0
     },
     "title": {
         "font_name": "Times New Roman",
         "font_size": 24,
-        "bold": True,
+        "bold": None,
         "alignment": "CENTER"
     },
     "author": {
@@ -62,7 +62,7 @@ DEFAULT_RULES = {
     },
     "layout": {
         "columns": 1,
-        "page_size": "A4"
+        "page_size": "Letter"
     }
 }
 
@@ -104,9 +104,6 @@ AUTHOR_INFO_PATTERNS = [
     r'lab\s+of',
     r'orcid',
     r'\d{4}-\d{4}-\d{4}-\d{4}',  # ORCID pattern
-    r'大学',  # Chinese - university
-    r'学院',  # Chinese - college
-    r'研究所',  # Chinese - institute
     r'corresponding\s+author',
     r'\*.*author',
     r'author.*\*',

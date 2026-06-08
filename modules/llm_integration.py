@@ -1,6 +1,6 @@
 """
 LLM Integration Module
-Provides intelligent analysis using LLM APIs (NVIDIA/DeepSeek, Groq, or Ollama)
+Provides optional explanation and report-assistance features through NVIDIA API.
 """
 
 import os
@@ -65,12 +65,12 @@ class LLMResponse:
 
 class LLMIntegration:
     """
-    LLM integration for intelligent analysis using NVIDIA API (DeepSeek R1)
+    Optional LLM integration using NVIDIA API.
     
     Features:
     - Intelligent error explanations
     - Abstract quality analysis
-    - Paragraph classification fallback
+    - Report assistance
     - Writing suggestions
     """
     

@@ -1,0 +1,39 @@
+{
+  "name": "JIWE",
+  "description": "Journal of Informatics and Web Engineering manuscript template profile",
+  "required_sections": [
+    "abstract",
+    "keywords",
+    "introduction",
+    "conclusion",
+    "references"
+  ],
+  "heading_patterns": [
+    "introduction",
+    "related work",
+    "methodology",
+    "results",
+    "discussion",
+    "conclusion",
+    "references"
+  ],
+  "rule_weights": {
+    "margins": 10,
+    "title": 15,
+    "body_text": 20,
+    "headings": 10,
+    "structure": 15,
+    "tables": 5,
+    "figures": 5,
+    "references": 10,
+    "line_spacing": 5,
+    "other": 5
+  },
+  "fallback_defaults": {
+    "font_name": "Times New Roman",
+    "body_font_size": 10,
+    "abstract_font_size": 9,
+    "reference_font_size": 9,
+    "page_size": "Letter"
+  }
+}

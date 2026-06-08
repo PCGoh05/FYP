@@ -1,22 +1,22 @@
 # Automated Manuscript Template Compliance Checker
 
-A comprehensive web application for checking and fixing academic manuscript formatting against journal templates. Built with Python Streamlit and featuring LLM integration (Groq) for intelligent analysis.
+A comprehensive web application for checking and fixing academic manuscript formatting against journal templates. Built with Python Streamlit, deterministic rule-based validation, and optional LLM-assisted explanations.
 
 ## 🎯 Features
 
 ### Core Functionality
 - **Template Rule Extraction**: Automatically extract formatting rules from any journal template (.docx)
 - **10-Category Format Checking**: Comprehensive checks for margins, title, body text, headings, structure, tables, figures, references, line spacing, and overall compliance
-- **Intelligent Paragraph Classification**: Smart classifier to identify and preserve special content (journal headers, author info, etc.)
+- **Rule-Based Paragraph Classification**: Deterministic classifier to identify and preserve special content (journal headers, author info, etc.)
 - **Auto-Fix System**: Automatically correct formatting issues while preserving special formatting
 - **Turnitin-Style Comparison View**: Visual comparison showing before/after changes
 - **Two Output Files**: Corrected document and detailed comparison report
 
 ### LLM Integration (Optional)
-- Intelligent error explanations
-- Abstract quality analysis
-- Smart paragraph classification fallback
+- Human-friendly error explanations
+- Report assistance
 - Writing suggestions
+- Core checking remains rule-based
 
 ## 📁 Project Structure
 
@@ -35,7 +35,7 @@ FYP/
     ├── manuscript_checker.py   # Format checking engine
     ├── auto_fixer.py          # Auto-fix formatting issues
     ├── report_generator.py    # Generate comparison reports
-    ├── llm_integration.py     # LLM integration (Groq)
+    ├── llm_integration.py     # Optional LLM explanation layer
     └── utils.py               # Utility functions
 ```
 
@@ -92,7 +92,7 @@ FYP/
 3. View compliance score and issues found
 
 ### Step 3: Review Results
-- **Compliance Score**: Overall formatting compliance percentage
+- **Compliance Index**: User-facing rule-weighted indicator; formal accuracy is evaluated with Precision, Recall, and F1-score
 - **Document Structure**: Check for required sections (Abstract, Introduction, etc.)
 - **Issues by Category**: Detailed view of all formatting issues
 
@@ -101,19 +101,15 @@ FYP/
 2. Review the comparison view showing all changes
 3. Download the corrected document and comparison report
 
-## 🤖 LLM Configuration
+## LLM Configuration
 
-### Using Groq (Cloud - Recommended)
-1. Get a free API key from [console.groq.com](https://console.groq.com)
+The LLM is optional. It is used for explanations and report assistance only.
+Core compliance checking remains deterministic and rule-based.
+
+### Using NVIDIA API
+1. Get an API key from [build.nvidia.com](https://build.nvidia.com)
 2. In the sidebar, expand "LLM Settings"
-3. Select "Groq (Cloud)"
-4. Enter your API key
-
-### Using Ollama (Local)
-1. Install Ollama from [ollama.ai](https://ollama.ai)
-2. Run `ollama pull llama3.1`
-3. Start Ollama server
-4. In the sidebar, select "Ollama (Local)"
+3. Enter the NVIDIA API key
 
 ## 📋 Format Checking Categories
 
@@ -200,8 +196,8 @@ pip install --upgrade streamlit
 - Check file is not corrupted or password-protected
 
 **4. LLM connection failed:**
-- Verify API key is correct (Groq)
-- Ensure Ollama is running (Local)
+- Verify that the NVIDIA API key is correct
+- Check the selected NVIDIA model name in `config.py`
 
 ## 🔒 Privacy
 

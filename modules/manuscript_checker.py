@@ -39,7 +39,7 @@ class CheckResult:
     total_issues: int
     issues_by_category: Dict[str, List[FormatIssue]]
     classifications: List[ClassifiedParagraph]
-    document_structure: Dict[str, bool]
+    document_structure: Dict[str, Any]
     statistics: Dict[str, Any]
 
 
@@ -70,6 +70,7 @@ class ManuscriptChecker:
         self.classifier = ParagraphClassifier(llm_integration)
         self.issues: Dict[str, List[FormatIssue]] = {cat: [] for cat in self.CATEGORIES}
         self.classifications: List[ClassifiedParagraph] = []
+        self.required_sections = rules.get("_profile", {}).get("required_sections", REQUIRED_SECTIONS)
     
     def load_manuscript(self, file_path_or_bytes):
         """Load the manuscript to check"""
@@ -157,10 +158,12 @@ class ManuscriptChecker:
     def _check_title(self):
         """Check paper title formatting"""
         title_rules = self.rules.get("title", {})
+        found_title = False
         
         # Find the paper title
         for cp in self.classifications:
             if cp.paragraph_type == ParagraphType.PAPER_TITLE:
+                found_title = True
                 font_info = cp.font_info
                 alignment = cp.alignment
                 
@@ -195,9 +198,9 @@ class ManuscriptChecker:
                     )
                 
                 # Check bold
-                expected_bold = title_rules.get("bold", True)
+                expected_bold = title_rules.get("bold")
                 current_bold = font_info.get("bold", False)
-                if current_bold != expected_bold:
+                if expected_bold is not None and current_bold != expected_bold:
                     self._add_issue(
                         category="title",
                         location="Paper Title",
@@ -224,6 +227,17 @@ class ManuscriptChecker:
                     )
                 
                 break  # Only check the first title
+
+        if not found_title:
+            self._add_issue(
+                category="title",
+                location="Paper Title",
+                para_index=-1,
+                description="Paper title could not be identified",
+                current="Not found",
+                expected="One clear paper title near the beginning of the manuscript",
+                severity="error"
+            )
     
     def _check_body_text(self):
         """Check body text formatting - ENHANCED with tolerance"""
@@ -416,38 +430,61 @@ class ManuscriptChecker:
                         text_preview=cp.text
                     )
     
-    def _check_document_structure(self) -> Dict[str, bool]:
-        """Check for required document sections"""
-        found_sections = {section: False for section in REQUIRED_SECTIONS}
-        
+    def _check_document_structure(self) -> Dict[str, Any]:
+        """Check required sections, order, and heading-role confidence."""
+        sections = {
+            section: {"found": False, "index": None, "format_status": "not_checked"}
+            for section in self.required_sections
+        }
+
+        def mark_section(section_name: str, cp: ClassifiedParagraph, format_status: str):
+            if section_name not in sections or sections[section_name]["found"]:
+                return
+            sections[section_name] = {
+                "found": True,
+                "index": cp.index,
+                "format_status": format_status,
+            }
+
         for cp in self.classifications:
             text_lower = cp.text.lower().strip()
-            
-            # Check for abstract - include ABSTRACT_CONTENT type
-            if "abstract" in text_lower or cp.paragraph_type in [
-                ParagraphType.ABSTRACT_LABEL, ParagraphType.ABSTRACT_CONTENT
-            ]:
-                found_sections["abstract"] = True
-            
-            # Check for keywords - include KEYWORDS_CONTENT type
-            if any(kw in text_lower for kw in ["keywords", "key words"]) or \
+
+            if "abstract" in text_lower or cp.paragraph_type in {
+                ParagraphType.ABSTRACT_LABEL,
+                ParagraphType.ABSTRACT_CONTENT,
+            }:
+                status = "valid" if cp.paragraph_type in {
+                    ParagraphType.ABSTRACT_LABEL,
+                    ParagraphType.ABSTRACT_CONTENT,
+                } else "weak"
+                mark_section("abstract", cp, status)
+
+            if any(keyword in text_lower for keyword in ["keywords", "key words"]) or \
                cp.paragraph_type == ParagraphType.KEYWORDS_CONTENT:
-                found_sections["keywords"] = True
-            
+                status = "valid" if cp.paragraph_type in {
+                    ParagraphType.KEYWORDS_LABEL,
+                    ParagraphType.KEYWORDS_CONTENT,
+                } else "weak"
+                mark_section("keywords", cp, status)
+
             if "introduction" in text_lower:
-                found_sections["introduction"] = True
-            
+                status = "valid" if cp.paragraph_type == ParagraphType.SECTION_HEADING else "weak"
+                mark_section("introduction", cp, status)
+
             if "conclusion" in text_lower:
-                found_sections["conclusion"] = True
-            
-            # Check for references - use startswith to handle "(10-Font size..." suffix
-            if text_lower.startswith("references") or text_lower.startswith("bibliography") or \
-               text_lower.startswith("works cited") or cp.paragraph_type == ParagraphType.REFERENCE:
-                found_sections["references"] = True
-        
-        # Report missing sections
-        for section, found in found_sections.items():
-            if not found:
+                status = "valid" if cp.paragraph_type == ParagraphType.SECTION_HEADING else "weak"
+                mark_section("conclusion", cp, status)
+
+            if text_lower.startswith(("references", "bibliography", "works cited")) or \
+               cp.paragraph_type == ParagraphType.REFERENCE:
+                status = "valid" if cp.paragraph_type in {
+                    ParagraphType.SECTION_HEADING,
+                    ParagraphType.REFERENCE,
+                } else "weak"
+                mark_section("references", cp, status)
+
+        for section, details in sections.items():
+            if not details["found"]:
                 self._add_issue(
                     category="structure",
                     location="Document Structure",
@@ -457,8 +494,39 @@ class ManuscriptChecker:
                     expected=f"{section.capitalize()} section",
                     severity="error"
                 )
-        
-        return found_sections
+            elif details["format_status"] == "weak":
+                self._add_issue(
+                    category="structure",
+                    location=f"{section.capitalize()} Section",
+                    para_index=details["index"],
+                    description="Section was found but its heading role is not confidently detected",
+                    current="Weak section evidence",
+                    expected="Recognized section heading or section label",
+                    severity="warning"
+                )
+
+        found_positions = [
+            sections[section]["index"]
+            for section in self.required_sections
+            if sections[section]["found"] and sections[section]["index"] is not None
+        ]
+        order_correct = found_positions == sorted(found_positions)
+        if len(found_positions) > 1 and not order_correct:
+            self._add_issue(
+                category="structure",
+                location="Document Section Order",
+                para_index=-1,
+                description="Required sections are not in the expected order",
+                current="Out of order",
+                expected=", ".join(section.title() for section in self.required_sections),
+                severity="warning"
+            )
+
+        return {
+            "sections": sections,
+            "order_correct": order_correct,
+            "expected_order": self.required_sections,
+        }
     
     def _check_tables(self):
         """Check tables in the document"""
@@ -506,19 +574,10 @@ class ManuscriptChecker:
             re.match(r'^(figure|fig\.?)\s*\d+', cp.text.lower())
         ]
         
-        # Check inline shapes (images)
-        image_count = 0
-        for para in self.document.paragraphs:
-            for run in para.runs:
-                if run._element.xpath('.//a:blip'):
-                    image_count += 1
-        
-        # Also check for figures in document's inline shapes
         try:
-            for shape in self.document.inline_shapes:
-                image_count += 1
+            image_count = len(self.document.inline_shapes)
         except Exception:
-            pass
+            image_count = 0
         
         if image_count > 0 and len(figure_captions) < image_count:
             self._add_issue(
