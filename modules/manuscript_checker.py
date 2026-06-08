@@ -51,6 +51,7 @@ class ManuscriptChecker:
     
     CATEGORIES = [
         "margins",
+        "journal_header",
         "title",
         "body_text",
         "headings",
@@ -90,6 +91,7 @@ class ManuscriptChecker:
         
         # Run all checks
         self._check_margins()
+        self._check_journal_header()
         self._check_title()
         self._check_body_text()
         self._check_headings()
@@ -238,6 +240,91 @@ class ManuscriptChecker:
                 expected="One clear paper title near the beginning of the manuscript",
                 severity="error"
             )
+
+    def _check_journal_header(self):
+        """Check journal header formatting separately from the paper title."""
+        header_rules = self.rules.get("journal_header", {})
+        expected_font = header_rules.get("font_name", "Palatino Linotype")
+        expected_size = header_rules.get("font_size", 24)
+        expected_bold = header_rules.get("bold", True)
+        expected_align = header_rules.get("alignment", "CENTER")
+
+        header_paragraphs = [
+            cp for cp in self.classifications
+            if (
+                cp.paragraph_type == ParagraphType.JOURNAL_HEADER
+                and cp.index <= 1
+                and ("journal of" in cp.text.lower() or "web engineering" in cp.text.lower())
+            )
+        ]
+
+        if not header_paragraphs:
+            self._add_issue(
+                category="journal_header",
+                location="Journal Header",
+                para_index=-1,
+                description="Journal header could not be identified",
+                current="Not found",
+                expected="Journal title/header near the top of the manuscript",
+                severity="warning"
+            )
+            return
+
+        for cp in header_paragraphs:
+            font_info = cp.font_info
+            location = f"Journal Header (Para {cp.index + 1})"
+            preview = truncate_text(cp.text, 60)
+
+            current_font = font_info.get("font_name")
+            if current_font and not is_font_equivalent(current_font, expected_font):
+                self._add_issue(
+                    category="journal_header",
+                    location=location,
+                    para_index=cp.index,
+                    description="Journal header font does not match template",
+                    current=current_font,
+                    expected=expected_font,
+                    severity="warning",
+                    text_preview=preview
+                )
+
+            current_size = font_info.get("font_size")
+            if current_size and abs(current_size - expected_size) > 0.5:
+                self._add_issue(
+                    category="journal_header",
+                    location=location,
+                    para_index=cp.index,
+                    description="Journal header font size does not match template",
+                    current=f"{current_size}pt",
+                    expected=f"{expected_size}pt",
+                    severity="warning",
+                    text_preview=preview
+                )
+
+            current_bold = font_info.get("bold", False)
+            if expected_bold is not None and current_bold != expected_bold:
+                self._add_issue(
+                    category="journal_header",
+                    location=location,
+                    para_index=cp.index,
+                    description="Journal header bold formatting does not match template",
+                    current="Bold" if current_bold else "Not Bold",
+                    expected="Bold" if expected_bold else "Not Bold",
+                    severity="warning",
+                    text_preview=preview
+                )
+
+            if cp.alignment != expected_align:
+                self._add_issue(
+                    category="journal_header",
+                    location=location,
+                    para_index=cp.index,
+                    description="Journal header alignment does not match template",
+                    current=cp.alignment,
+                    expected=expected_align,
+                    severity="warning",
+                    text_preview=preview
+                )
     
     def _check_body_text(self):
         """Check body text formatting - ENHANCED with tolerance"""

@@ -15,6 +15,12 @@ DEFAULT_RULES = {
         "top": 1.0,
         "bottom": 1.0
     },
+    "journal_header": {
+        "font_name": "Palatino Linotype",
+        "font_size": 24,
+        "bold": True,
+        "alignment": "CENTER"
+    },
     "title": {
         "font_name": "Times New Roman",
         "font_size": 24,

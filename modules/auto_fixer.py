@@ -125,7 +125,10 @@ class AutoFixer:
             
             para_type = classification.paragraph_type
             
-            if para_type == ParagraphType.PAPER_TITLE:
+            if para_type == ParagraphType.JOURNAL_HEADER and self._is_journal_title_header(classification.text):
+                if self._should_fix_category(i, ["journal_header"]):
+                    self._fix_journal_header(para, i)
+            elif para_type == ParagraphType.PAPER_TITLE:
                 if self._should_fix_category(i, ["title"]):
                     self._fix_title(para, i)
             elif para_type == ParagraphType.SECTION_HEADING:
@@ -148,6 +151,11 @@ class AutoFixer:
                     self._fix_reference(para, i)
         
         return self.document, self.changes
+
+    def _is_journal_title_header(self, text: str) -> bool:
+        """Return True for journal title lines, excluding volume and ISSN metadata."""
+        text_lower = text.lower()
+        return "journal of" in text_lower or "web engineering" in text_lower
     
     def _fix_margins(self):
         """Fix page margins"""
@@ -287,6 +295,48 @@ class AutoFixer:
                 text_preview=text_preview,
                 paragraph_type=paragraph_type,
                 evidence=detail.get("evidence", "Detected formatting difference"),
+            )
+
+    def _fix_journal_header(self, paragraph, index: int):
+        """Fix journal title/header formatting without using paper title rules."""
+        header_rules = self.rules.get("journal_header", {})
+        changes = []
+        current_alignment = get_paragraph_alignment(paragraph)
+
+        expected_font = header_rules.get("font_name", "Palatino Linotype")
+        expected_size = header_rules.get("font_size", 24)
+        expected_bold = header_rules.get("bold", True)
+        expected_alignment = header_rules.get("alignment", "CENTER")
+
+        if current_alignment != expected_alignment:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH(
+                ALIGNMENT_REVERSE_MAP.get(expected_alignment, 1)
+            )
+            changes.append({
+                "property_name": "alignment",
+                "current_value": current_alignment,
+                "target_value": expected_alignment,
+                "evidence": "Journal header alignment did not match target rule",
+            })
+
+        for run in paragraph.runs:
+            if run.text.strip():
+                changes.extend(self._fix_run_formatting(
+                    run,
+                    expected_font,
+                    expected_size,
+                    expected_bold,
+                    expected_strike=False,
+                ))
+
+        if changes:
+            self._add_property_changes(
+                paragraph_index=index,
+                location="Journal Header",
+                change_type="journal_header",
+                details=changes,
+                text_preview=truncate_text(get_paragraph_text(paragraph), 50),
+                paragraph_type=ParagraphType.JOURNAL_HEADER.value,
             )
 
     def _fix_title(self, paragraph, index: int):

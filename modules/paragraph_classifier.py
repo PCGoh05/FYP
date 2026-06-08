@@ -62,7 +62,6 @@ class ParagraphClassifier:
 
     SKIP_TYPES = {
         ParagraphType.EMPTY,
-        ParagraphType.JOURNAL_HEADER,
         ParagraphType.AUTHOR_INFO,
         ParagraphType.ABSTRACT_LABEL,
         ParagraphType.KEYWORDS_LABEL,
@@ -74,6 +73,7 @@ class ParagraphClassifier:
 
     FIX_TYPES = {
         ParagraphType.PAPER_TITLE,
+        ParagraphType.JOURNAL_HEADER,
         ParagraphType.SECTION_HEADING,
         ParagraphType.BODY,
         ParagraphType.ABSTRACT_CONTENT,

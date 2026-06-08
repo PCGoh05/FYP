@@ -280,15 +280,31 @@ class TemplateExtractor:
                 return True
         return False
 
+    def _has_journal_header_evidence(self) -> bool:
+        """Return True when journal header formatting evidence exists in the template."""
+        for paragraph in self.document.paragraphs[:10]:
+            text = get_paragraph_text(paragraph).lower()
+            font_info = get_paragraph_font_info(paragraph)
+            font_name = (font_info.get("font_name") or "").lower()
+            if "journal title" in text or "palatino linotype" in text or "palatino linotype" in font_name:
+                return True
+        return False
+
     def _add_rule_provenance(self, rules: Dict[str, Any], abstract_size: float) -> None:
         """Attach source, confidence, and evidence metadata to extracted rules."""
         profile = self._detect_template_profile()
+        has_journal_header = self._has_journal_header_evidence()
         has_caption = self._has_caption_evidence()
         has_reference = self._has_reference_evidence()
         provenance = {}
 
         category_sources = {
             "margins": ("extracted", 0.95, "Read directly from DOCX section margins"),
+            "journal_header": (
+                "extracted" if has_journal_header else "default",
+                0.85 if has_journal_header else 0.55,
+                "Detected from journal title instruction" if has_journal_header else f"{profile['name']} journal header fallback",
+            ),
             "title": ("extracted", 0.85, "Detected from title instruction or title-like paragraph"),
             "author": ("default", 0.55, f"{profile['name']} fallback because author style is not reliably extractable"),
             "affiliation": ("inferred", 0.65, f"Inferred from smaller repeated text size {abstract_size} pt"),
@@ -355,6 +371,7 @@ class TemplateExtractor:
 
         rules = {
             "margins": self._extract_margins(),
+            "journal_header": self._extract_journal_header_style(),
             "title": self._extract_title_style(),
             "author": {
                 "font_name": "Times New Roman",
@@ -391,6 +408,36 @@ class TemplateExtractor:
         self._add_rule_provenance(rules, abstract_size)
         self.rules = rules
         return rules
+
+    def _extract_journal_header_style(self) -> Dict[str, Any]:
+        """Extract journal title/header style separately from the paper title style."""
+        default_rule = DEFAULT_RULES.get("journal_header", {})
+
+        for i, para in enumerate(self.document.paragraphs[:10]):
+            text = get_paragraph_text(para)
+            text_lower = text.lower()
+            if not text:
+                continue
+
+            font_info = get_paragraph_font_info(para)
+            instruction = _parse_instruction_format(text)
+            font_name = font_info.get("font_name") or instruction.get("font_name")
+            mentions_journal_header = (
+                "journal title" in text_lower
+                or "palatino linotype" in text_lower
+                or (font_name and font_name.lower() == "palatino linotype")
+            )
+            if not mentions_journal_header:
+                continue
+
+            return {
+                "font_name": font_name or default_rule.get("font_name", "Palatino Linotype"),
+                "font_size": font_info.get("font_size") or instruction.get("font_size") or default_rule.get("font_size", 24),
+                "bold": font_info.get("bold") if font_info.get("bold") is not None else default_rule.get("bold", True),
+                "alignment": get_paragraph_alignment(para) or default_rule.get("alignment", "CENTER"),
+            }
+
+        return default_rule.copy()
 
     def _fill_missing_rules_with_ai(self, rules: Dict[str, Any], ai_rules: Dict[str, Any]) -> Dict[str, Any]:
         """Use AI only to fill missing values from deterministic extraction."""
@@ -1151,6 +1198,7 @@ Answer with ONLY "yes" or "no"."""
 
         display_order = [
             ("margins", "Page Margins"),
+            ("journal_header", "Journal Header Style"),
             ("title", "Paper Title Style"),
             ("author", "Author Style"),
             ("affiliation", "Affiliation Style"),

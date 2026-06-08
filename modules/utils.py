@@ -400,6 +400,7 @@ def calculate_compliance_score(issues: Dict[str, List]) -> float:
     """Calculate overall compliance score based on issues found"""
     weights = {
         "margins": 10,
+        "journal_header": 5,
         "title": 15,
         "body_text": 20,
         "headings": 10,
