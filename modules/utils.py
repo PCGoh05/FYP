@@ -120,11 +120,14 @@ def docx_to_pdf(docx_bytes: bytes) -> bytes:
         
         return pdf_bytes
     finally:
-        # Clean up temp files
-        if os.path.exists(docx_path):
-            os.remove(docx_path)
-        if os.path.exists(pdf_path):
-            os.remove(pdf_path)
+        # Word can keep temporary files locked briefly after conversion.
+        # Cleanup must not turn a successful PDF conversion into a user-facing failure.
+        for temp_path in (docx_path, pdf_path):
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except PermissionError:
+                pass
 
 
 def load_document(file_path_or_bytes) -> Document:
