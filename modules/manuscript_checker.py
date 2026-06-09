@@ -714,7 +714,7 @@ class ManuscriptChecker:
         """Check references section formatting"""
         reference_rules = self.rules.get("reference", {})
         expected_font = reference_rules.get("font_name", "Times New Roman")
-        expected_size = reference_rules.get("font_size", 10)
+        expected_size = reference_rules.get("font_size", 9)
         
         references = [
             cp for cp in self.classifications
@@ -755,8 +755,8 @@ class ManuscriptChecker:
                 severity="warning"
             )
         
-        # Check font formatting (sample first few)
-        for i, cp in enumerate(references[:5]):
+        # Check font formatting for every reference entry.
+        for i, cp in enumerate(references):
             current_font = cp.font_info.get("font_name")
             current_size = cp.font_info.get("font_size")
             

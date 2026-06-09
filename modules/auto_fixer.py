@@ -146,7 +146,7 @@ class AutoFixer:
                 if self._should_fix_category(i, ["figures", "tables"]):
                     self._fix_caption(para, i)
             elif para_type == ParagraphType.REFERENCE:
-                if self._should_fix_category(i, ["references"]):
+                if self._has_category_issue("references"):
                     self._fix_reference(para, i)
         
         return self.document, self.changes
@@ -890,7 +890,7 @@ class AutoFixer:
         changes = []
 
         expected_font = reference_rules.get("font_name", "Times New Roman")
-        expected_size = reference_rules.get("font_size", 10)
+        expected_size = reference_rules.get("font_size", 9)
 
         for run in paragraph.runs:
             if run.text.strip():
