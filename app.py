@@ -109,6 +109,8 @@ def init_session_state():
         st.session_state.manuscript_filename = "manuscript.docx"
     if "highlighted_doc_bytes" not in st.session_state:
         st.session_state.highlighted_doc_bytes = None
+    if "output_timestamp" not in st.session_state:
+        st.session_state.output_timestamp = ""
 
 
 def display_header():
@@ -352,7 +354,6 @@ def display_check_results(result):
     else:
         score_class = "score-poor"
         score_emoji = "🔴"
-    
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -513,6 +514,7 @@ def handle_auto_fix():
             st.session_state.changes = changes
             st.session_state.fixed_doc_bytes = fixer.get_fixed_document_bytes()
             st.session_state.highlighted_doc_bytes = fixer.get_highlighted_document_bytes()
+            st.session_state.output_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             
             # Generate report
             report_gen = ReportGenerator(
@@ -652,7 +654,6 @@ def display_comparison_view(changes):
     changes_by_type = {}
     for change in changes:
         changes_by_type[change.change_type] = changes_by_type.get(change.change_type, 0) + 1
-
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Total Properties Changed", len(changes))
@@ -698,6 +699,7 @@ def display_download_section():
         help="PDF download requires Microsoft Word installed on the server"
     )
     
+    output_timestamp = st.session_state.output_timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -708,7 +710,7 @@ def display_download_section():
                 st.download_button(
                     label="📄 Download Corrected Document (DOCX)",
                     data=st.session_state.fixed_doc_bytes,
-                    file_name=f"corrected_{base_filename}.docx",
+                    file_name=f"corrected_{base_filename}_{output_timestamp}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     use_container_width=True
                 )
@@ -722,7 +724,7 @@ def display_download_section():
                                 st.download_button(
                                     label="📄 Download PDF",
                                     data=pdf_bytes,
-                                    file_name=f"corrected_{base_filename}.pdf",
+                                    file_name=f"corrected_{base_filename}_{output_timestamp}.pdf",
                                     mime="application/pdf",
                                     use_container_width=True,
                                     key="download_pdf_corrected"
@@ -741,7 +743,7 @@ def display_download_section():
             st.download_button(
                 label="🔍 Download Original with Highlighted Issues (DOCX)",
                 data=st.session_state.highlighted_doc_bytes,
-                file_name=f"highlighted_{base_filename}.docx",
+                file_name=f"highlighted_{base_filename}_{output_timestamp}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 use_container_width=True,
                 help="Highlights are shown on the original manuscript to indicate locations changed in the corrected document."
@@ -756,7 +758,7 @@ def display_download_section():
                 st.download_button(
                     label="📊 Download Comparison Report (DOCX)",
                     data=st.session_state.report_bytes,
-                    file_name=f"{base_filename}_report.docx",
+                    file_name=f"{base_filename}_report_{output_timestamp}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     use_container_width=True
                 )
@@ -770,7 +772,7 @@ def display_download_section():
                                 st.download_button(
                                     label="📊 Download PDF Report",
                                     data=pdf_bytes,
-                                    file_name=f"{base_filename}_report.pdf",
+                                    file_name=f"{base_filename}_report_{output_timestamp}.pdf",
                                     mime="application/pdf",
                                     use_container_width=True,
                                     key="download_pdf_report"
