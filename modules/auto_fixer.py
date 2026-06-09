@@ -6,6 +6,8 @@ Automatically fixes formatting issues while preserving special formatting
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 from copy import deepcopy
@@ -756,6 +758,13 @@ class AutoFixer:
         expected_size = heading_rules.get("font_size", 14)
         expected_bold = heading_rules.get("bold", None)
 
+        changes.extend(self._fix_numbering_formatting(
+            paragraph,
+            expected_font,
+            expected_size,
+            expected_bold,
+        ))
+
         for run in paragraph.runs:
             if run.text.strip():
                 changes.extend(self._fix_run_formatting(
@@ -775,6 +784,113 @@ class AutoFixer:
                 text_preview=truncate_text(get_paragraph_text(paragraph), 40),
                 paragraph_type=ParagraphType.SECTION_HEADING.value,
             )
+
+    def _get_numbering_level(self, paragraph):
+        """Return the numbering level XML element for a numbered paragraph."""
+        p_pr = paragraph._p.pPr
+        if p_pr is None or p_pr.numPr is None:
+            return None
+
+        num_id_element = p_pr.numPr.numId
+        ilvl_element = p_pr.numPr.ilvl
+        if num_id_element is None:
+            return None
+
+        num_id = num_id_element.val
+        ilvl = str(ilvl_element.val if ilvl_element is not None else 0)
+        numbering = self.document.part.numbering_part.element
+
+        abstract_num_id = None
+        for num in numbering.findall(qn("w:num")):
+            if num.get(qn("w:numId")) == str(num_id):
+                abstract_node = num.find(qn("w:abstractNumId"))
+                if abstract_node is not None:
+                    abstract_num_id = abstract_node.get(qn("w:val"))
+                break
+
+        if abstract_num_id is None:
+            return None
+
+        for abstract_num in numbering.findall(qn("w:abstractNum")):
+            if abstract_num.get(qn("w:abstractNumId")) != str(abstract_num_id):
+                continue
+            for level in abstract_num.findall(qn("w:lvl")):
+                if level.get(qn("w:ilvl")) == ilvl:
+                    return level
+
+        return None
+
+    def _get_or_create_child(self, parent, tag_name: str):
+        """Return a child XML node, creating it when missing."""
+        child = parent.find(qn(tag_name))
+        if child is None:
+            child = OxmlElement(tag_name)
+            parent.append(child)
+        return child
+
+    def _numbering_bold_value(self, r_pr) -> Optional[bool]:
+        """Read numbering bold value from a numbering rPr node."""
+        bold = r_pr.find(qn("w:b")) if r_pr is not None else None
+        if bold is None:
+            return None
+        value = bold.get(qn("w:val"))
+        return value not in {"0", "false", "False", "off"}
+
+    def _fix_numbering_formatting(
+        self,
+        paragraph,
+        expected_font: str,
+        expected_size: float,
+        expected_bold: Optional[bool],
+    ) -> List[Dict[str, str]]:
+        """Fix Word list numbering formatting for numbered headings."""
+        level = self._get_numbering_level(paragraph)
+        if level is None:
+            return []
+
+        changes = []
+        r_pr = self._get_or_create_child(level, "w:rPr")
+
+        if expected_font:
+            r_fonts = self._get_or_create_child(r_pr, "w:rFonts")
+            current_font = r_fonts.get(qn("w:ascii")) or r_fonts.get(qn("w:hAnsi"))
+            if current_font and not is_font_equivalent(current_font, expected_font):
+                changes.append({
+                    "property_name": "number_font_name",
+                    "current_value": current_font,
+                    "target_value": expected_font,
+                    "evidence": "Heading number font did not match target rule",
+                })
+            r_fonts.set(qn("w:ascii"), expected_font)
+            r_fonts.set(qn("w:hAnsi"), expected_font)
+
+        if expected_size:
+            size_node = self._get_or_create_child(r_pr, "w:sz")
+            current_size = None
+            if size_node.get(qn("w:val")):
+                current_size = int(size_node.get(qn("w:val"))) / 2
+            if current_size is not None and abs(current_size - expected_size) > 0.5:
+                changes.append({
+                    "property_name": "number_font_size",
+                    "current_value": f"{current_size:.1f} pt",
+                    "target_value": f"{expected_size} pt",
+                    "evidence": "Heading number font size did not match target rule",
+                })
+            size_node.set(qn("w:val"), str(int(float(expected_size) * 2)))
+
+        if expected_bold is not None:
+            current_bold = self._numbering_bold_value(r_pr)
+            if current_bold != expected_bold:
+                changes.append({
+                    "property_name": "number_bold",
+                    "current_value": "Bold" if current_bold else "Not Bold",
+                    "target_value": "Bold" if expected_bold else "Not Bold",
+                    "evidence": "Heading number bold setting did not match target rule",
+                })
+            bold_node = self._get_or_create_child(r_pr, "w:b")
+            bold_node.set(qn("w:val"), "1" if expected_bold else "0")
+
+        return changes
 
     def _fix_body_text(self, paragraph, index: int):
         """Fix body text formatting with structured change records."""

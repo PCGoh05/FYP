@@ -4,6 +4,7 @@ Checks manuscript formatting against template rules
 """
 
 from docx import Document
+from docx.oxml.ns import qn
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
 import re
@@ -516,6 +517,20 @@ class ManuscriptChecker:
                         severity="warning",
                         text_preview=cp.text
                     )
+
+                paragraph = self.document.paragraphs[cp.index]
+                numbering_bold = self._get_numbering_bold(paragraph)
+                if numbering_bold is not None and numbering_bold != expected_bold_val:
+                    self._add_issue(
+                        category="headings",
+                        location=f"Heading Number: {truncate_text(cp.text, 30)}",
+                        para_index=cp.index,
+                        description="Heading number bold formatting does not match template",
+                        current="Bold" if numbering_bold else "Not Bold",
+                        expected="Bold" if expected_bold_val else "Not Bold",
+                        severity="warning",
+                        text_preview=cp.text
+                    )
     
     def _check_document_structure(self) -> Dict[str, Any]:
         """Check required sections, order, and heading-role confidence."""
@@ -783,7 +798,49 @@ class ManuscriptChecker:
                     severity="warning",
                     text_preview=truncate_text(cp.text, 50)
                 )
-    
+
+    def _get_numbering_level(self, paragraph):
+        """Return the numbering level XML element for a numbered paragraph."""
+        p_pr = paragraph._p.pPr
+        if p_pr is None or p_pr.numPr is None or p_pr.numPr.numId is None:
+            return None
+
+        num_id = p_pr.numPr.numId.val
+        ilvl = str(p_pr.numPr.ilvl.val if p_pr.numPr.ilvl is not None else 0)
+        numbering = self.document.part.numbering_part.element
+
+        abstract_num_id = None
+        for num in numbering.findall(qn("w:num")):
+            if num.get(qn("w:numId")) == str(num_id):
+                abstract_node = num.find(qn("w:abstractNumId"))
+                if abstract_node is not None:
+                    abstract_num_id = abstract_node.get(qn("w:val"))
+                break
+
+        if abstract_num_id is None:
+            return None
+
+        for abstract_num in numbering.findall(qn("w:abstractNum")):
+            if abstract_num.get(qn("w:abstractNumId")) != str(abstract_num_id):
+                continue
+            for level in abstract_num.findall(qn("w:lvl")):
+                if level.get(qn("w:ilvl")) == ilvl:
+                    return level
+        return None
+
+    def _get_numbering_bold(self, paragraph) -> Optional[bool]:
+        """Read bold formatting from a paragraph numbering level."""
+        level = self._get_numbering_level(paragraph)
+        if level is None:
+            return None
+        r_pr = level.find(qn("w:rPr"))
+        if r_pr is None:
+            return None
+        bold = r_pr.find(qn("w:b"))
+        if bold is None:
+            return None
+        value = bold.get(qn("w:val"))
+        return value not in {"0", "false", "False", "off"}
     def _check_line_spacing(self):
         """Check line spacing throughout document"""
         body_rules = self.rules.get("body", {})
