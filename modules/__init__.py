@@ -3,6 +3,7 @@ Modules for Academic Manuscript Format Checker
 """
 
 from .template_extractor import TemplateExtractor
+from .profile_loader import ProfileLoader
 from .paragraph_classifier import ParagraphClassifier
 from .manuscript_checker import ManuscriptChecker
 from .auto_fixer import AutoFixer
@@ -12,6 +13,7 @@ from .utils import *
 
 __all__ = [
     'TemplateExtractor',
+    'ProfileLoader',
     'ParagraphClassifier', 
     'ManuscriptChecker',
     'AutoFixer',

@@ -36,5 +36,68 @@
     "caption_font_size": 10,
     "reference_font_size": 9,
     "page_size": "Letter"
+  },
+  "rules": {
+    "margins": {
+      "left": 1.0,
+      "right": 1.0,
+      "top": 1.0,
+      "bottom": 1.0
+    },
+    "journal_header": {
+      "font_name": "Palatino Linotype",
+      "font_size": 24,
+      "bold": true,
+      "alignment": "CENTER"
+    },
+    "title": {
+      "font_name": "Times New Roman",
+      "font_size": 24,
+      "bold": null,
+      "alignment": "CENTER"
+    },
+    "author": {
+      "font_name": "Times New Roman",
+      "font_size": 11,
+      "bold": true,
+      "alignment": "CENTER"
+    },
+    "affiliation": {
+      "font_name": "Times New Roman",
+      "font_size": 9,
+      "alignment": "CENTER"
+    },
+    "body": {
+      "font_name": "Times New Roman",
+      "font_size": 10,
+      "line_spacing": 1.0
+    },
+    "heading": {
+      "font_name": "Times New Roman",
+      "font_size": 10,
+      "bold": true,
+      "all_caps": true
+    },
+    "abstract": {
+      "font_name": "Times New Roman",
+      "font_size": 9
+    },
+    "keywords": {
+      "font_name": "Times New Roman",
+      "font_size": 9
+    },
+    "caption": {
+      "font_name": "Times New Roman",
+      "font_size": 10,
+      "italic": false
+    },
+    "reference": {
+      "font_name": "Times New Roman",
+      "font_size": 9
+    },
+    "layout": {
+      "columns": 1,
+      "page_size": "Letter"
+    }
   }
 }

@@ -9,10 +9,9 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from collections import Counter
 from typing import Dict, List, Any, Optional
-from pathlib import Path
-import json
 import re
 
+from .profile_loader import ProfileLoader
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_font_info,
     get_paragraph_alignment, get_margins, get_line_spacing,
@@ -103,7 +102,9 @@ class TemplateExtractor:
             llm_integration: Optional LLM integration for intelligent analysis
         """
         self.document = document
-        self.rules = DEFAULT_RULES.copy()
+        self.profile_loader = ProfileLoader()
+        self.profile = self.profile_loader.load("generic")
+        self.rules = self.profile_loader.default_rules(self.profile)
         self.debug_info = {}  # Store debug information
         self.llm = llm_integration  # LLM for fallback classification
         
@@ -226,39 +227,15 @@ class TemplateExtractor:
         
         return self.debug_info
 
-    def _load_template_profile(self, profile_name: str) -> Dict[str, Any]:
-        """Load a template profile from JSON, with a safe fallback."""
-        profile_path = Path(__file__).resolve().parent.parent / "template_profiles" / f"{profile_name}.json"
-        try:
-            if profile_path.exists():
-                with open(profile_path, "r", encoding="utf-8") as profile_file:
-                    return json.load(profile_file)
-        except (OSError, json.JSONDecodeError):
-            pass
-
-        return {
-            "name": profile_name,
-            "description": "Fallback academic manuscript profile",
-            "required_sections": ["abstract", "keywords", "introduction", "conclusion", "references"],
-            "heading_patterns": [],
-            "rule_weights": {},
-            "fallback_defaults": DEFAULT_RULES,
-        }
-
     def _detect_template_profile(self) -> Dict[str, Any]:
         """Detect the closest known template profile."""
-        first_text = "\n".join(
-            get_paragraph_text(paragraph).lower()
-            for paragraph in self.document.paragraphs[:30]
-        )
-        template_name = self.template_name.lower()
-        if (
-            "journal of informatics and web engineering" in first_text
-            or "jiwe" in first_text
-            or "jiwe" in template_name
-        ):
-            return self._load_template_profile("jiwe")
-        return self._load_template_profile("generic")
+        self.profile = self.profile_loader.detect_from_document(self.document, self.template_name)
+        return self.profile
+
+    def _profile_default(self, category: str, fallback: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Return profile default rules for one category."""
+        defaults = self.profile_loader.default_rules(self.profile).get(category, fallback or {})
+        return defaults.copy() if isinstance(defaults, dict) else {}
 
     def _has_caption_evidence(self) -> bool:
         """Return True when the template contains caption-like paragraphs."""
@@ -358,6 +335,8 @@ class TemplateExtractor:
             raise ValueError("No document loaded. Call load() first.")
 
         self.scan_all_fonts()
+        profile = self._detect_template_profile()
+        default_rules = self.profile_loader.default_rules(profile)
 
         size_freq = self.debug_info.get("size_frequency", {})
         sizes_sorted = sorted(size_freq.items(), key=lambda x: x[1], reverse=True)
@@ -374,21 +353,17 @@ class TemplateExtractor:
             "journal_header": self._extract_journal_header_style(),
             "title": self._extract_title_style(),
             "author": {
-                "font_name": "Times New Roman",
-                "font_size": 11,
-                "bold": True,
-                "alignment": "CENTER"
+                **default_rules.get("author", {}),
             },
             "affiliation": {
-                "font_name": "Times New Roman",
+                **default_rules.get("affiliation", {}),
                 "font_size": abstract_size,
-                "alignment": "CENTER"
             },
             "body": self._extract_body_style(),
             "heading": self._extract_heading_style(),
             "abstract": self._extract_abstract_style(),
             "keywords": {
-                "font_name": "Times New Roman",
+                **default_rules.get("keywords", {}),
                 "font_size": abstract_size
             },
             "caption": self._extract_caption_style(),
@@ -405,13 +380,14 @@ class TemplateExtractor:
                 rules = self._fill_missing_rules_with_ai(rules, ai_rules)
                 rules["_ai_enhanced"] = True
 
+        rules = self.profile_loader.apply_rule_defaults(rules, profile)
         self._add_rule_provenance(rules, abstract_size)
         self.rules = rules
         return rules
 
     def _extract_journal_header_style(self) -> Dict[str, Any]:
         """Extract journal title/header style separately from the paper title style."""
-        default_rule = DEFAULT_RULES.get("journal_header", {})
+        default_rule = self._profile_default("journal_header", DEFAULT_RULES.get("journal_header", {}))
 
         for i, para in enumerate(self.document.paragraphs[:10]):
             text = get_paragraph_text(para)
@@ -767,7 +743,7 @@ class TemplateExtractor:
                 }
         
         # Default title style if no candidates found
-        return DEFAULT_RULES["title"]
+        return self._profile_default("title", DEFAULT_RULES["title"])
     
     def _llm_verify_title(self, text: str) -> bool:
         """
@@ -844,9 +820,9 @@ Answer with ONLY "yes" or "no"."""
         
         # Get most common values
         body_style = {
-            "font_name": Counter(font_names).most_common(1)[0][0] if font_names else "Times New Roman",
-            "font_size": Counter(font_sizes).most_common(1)[0][0] if font_sizes else 10,
-            "line_spacing": Counter(line_spacings).most_common(1)[0][0] if line_spacings else 1.0
+            "font_name": Counter(font_names).most_common(1)[0][0] if font_names else self._profile_default("body", DEFAULT_RULES["body"]).get("font_name", "Times New Roman"),
+            "font_size": Counter(font_sizes).most_common(1)[0][0] if font_sizes else self._profile_default("body", DEFAULT_RULES["body"]).get("font_size", 10),
+            "line_spacing": Counter(line_spacings).most_common(1)[0][0] if line_spacings else self._profile_default("body", DEFAULT_RULES["body"]).get("line_spacing", 1.0)
         }
         
         return body_style
@@ -923,13 +899,13 @@ Answer with ONLY "yes" or "no"."""
             # DO NOT assume bold=True for ALL CAPS headings - template must specify
             
             return {
-                "font_name": Counter(heading_fonts).most_common(1)[0][0] if heading_fonts else "Times New Roman",
-                "font_size": Counter(heading_sizes).most_common(1)[0][0] if heading_sizes else 10,
+                "font_name": Counter(heading_fonts).most_common(1)[0][0] if heading_fonts else self._profile_default("heading", DEFAULT_RULES["heading"]).get("font_name", "Times New Roman"),
+                "font_size": Counter(heading_sizes).most_common(1)[0][0] if heading_sizes else self._profile_default("heading", DEFAULT_RULES["heading"]).get("font_size", 10),
                 "bold": detected_bold,  # Based on template analysis
                 "all_caps": all_caps_count > 0
             }
         
-        return DEFAULT_RULES["heading"]
+        return self._profile_default("heading", DEFAULT_RULES["heading"])
     
     def _extract_abstract_style(self) -> Dict[str, Any]:
         """Extract abstract text style"""
@@ -971,7 +947,7 @@ Answer with ONLY "yes" or "no"."""
             ):
                 break
         
-        return DEFAULT_RULES.get("abstract", {"font_name": "Times New Roman", "font_size": 9})
+        return self._profile_default("abstract", DEFAULT_RULES.get("abstract", {"font_name": "Times New Roman", "font_size": 9}))
     
     def _extract_caption_style(self) -> Dict[str, Any]:
         """Extract figure/table caption style"""
@@ -1023,19 +999,19 @@ Answer with ONLY "yes" or "no"."""
         
         if caption_fonts or caption_sizes:
             return {
-                "font_name": Counter(caption_fonts).most_common(1)[0][0] if caption_fonts else "Times New Roman",
-                "font_size": Counter(caption_sizes).most_common(1)[0][0] if caption_sizes else 10,
+                "font_name": Counter(caption_fonts).most_common(1)[0][0] if caption_fonts else self._profile_default("caption", DEFAULT_RULES["caption"]).get("font_name", "Times New Roman"),
+                "font_size": Counter(caption_sizes).most_common(1)[0][0] if caption_sizes else self._profile_default("caption", DEFAULT_RULES["caption"]).get("font_size", 10),
                 "italic": Counter(caption_italic).most_common(1)[0][0] if caption_italic else True
             }
 
         if instruction_fonts or instruction_sizes:
             return {
-                "font_name": Counter(instruction_fonts).most_common(1)[0][0] if instruction_fonts else "Times New Roman",
-                "font_size": Counter(instruction_sizes).most_common(1)[0][0] if instruction_sizes else 10,
+                "font_name": Counter(instruction_fonts).most_common(1)[0][0] if instruction_fonts else self._profile_default("caption", DEFAULT_RULES["caption"]).get("font_name", "Times New Roman"),
+                "font_size": Counter(instruction_sizes).most_common(1)[0][0] if instruction_sizes else self._profile_default("caption", DEFAULT_RULES["caption"]).get("font_size", 10),
                 "italic": False
             }
         
-        return DEFAULT_RULES.get("caption", {"font_name": "Times New Roman", "font_size": 10, "italic": True})
+        return self._profile_default("caption", DEFAULT_RULES.get("caption", {"font_name": "Times New Roman", "font_size": 10, "italic": True}))
     
     def _extract_reference_style(self) -> Dict[str, Any]:
         """Extract reference entry style - ENHANCED"""
@@ -1070,11 +1046,11 @@ Answer with ONLY "yes" or "no"."""
         
         if ref_fonts or ref_sizes:
             return {
-                "font_name": Counter(ref_fonts).most_common(1)[0][0] if ref_fonts else "Times New Roman",
-                "font_size": Counter(ref_sizes).most_common(1)[0][0] if ref_sizes else 9
+                "font_name": Counter(ref_fonts).most_common(1)[0][0] if ref_fonts else self._profile_default("reference", DEFAULT_RULES["reference"]).get("font_name", "Times New Roman"),
+                "font_size": Counter(ref_sizes).most_common(1)[0][0] if ref_sizes else self._profile_default("reference", DEFAULT_RULES["reference"]).get("font_size", 9)
             }
         
-        return DEFAULT_RULES.get("reference", {"font_name": "Times New Roman", "font_size": 9})
+        return self._profile_default("reference", DEFAULT_RULES.get("reference", {"font_name": "Times New Roman", "font_size": 9}))
     
     def _extract_layout(self) -> Dict[str, Any]:
         """Extract document layout settings"""
@@ -1094,7 +1070,7 @@ Answer with ONLY "yes" or "no"."""
             else:
                 page_size = f"{width:.2f}x{height:.2f}"
         except Exception:
-            page_size = "A4"
+            page_size = self._profile_default("layout", DEFAULT_RULES["layout"]).get("page_size", "A4")
         
         return {
             "columns": columns,
