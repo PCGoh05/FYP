@@ -82,9 +82,114 @@ class ParagraphClassifier:
         ParagraphType.REFERENCE,
     }
 
-    def __init__(self, llm_integration=None):
+    DEFAULT_CLASSIFICATION_PATTERNS = {
+        "journal_header": [
+            r"journal\s+of",
+            r"web\s+engineering$",
+            r"vol\.\s*\d+",
+            r"volume\s*\d+",
+            r"eissn|pissn|issn",
+            r"doi[:\s]",
+            r"https?://",
+            r"www\.",
+        ],
+        "caption": [
+            r"^(figure|fig\.?|table|chart|diagram|image)\s*\d+",
+        ],
+        "reference": [
+            r"^\[\d+\]",
+        ],
+        "author_info": [
+            r"orcid",
+            r"corresponding\s+author",
+            r"university|universiti|faculty|fakulti|department|school|college|institute|centre|center",
+        ],
+    }
+
+    DEFAULT_SECTION_TERMS = [
+        "introduction",
+        "background",
+        "literature review",
+        "related work",
+        "methodology",
+        "method",
+        "methods",
+        "materials and methods",
+        "research methodology",
+        "results",
+        "discussion",
+        "results and discussion",
+        "results and discussions",
+        "implementation",
+        "evaluation",
+        "experiment",
+        "experiments",
+        "experimental setup",
+        "test configuration",
+        "conclusion",
+        "conclusions",
+        "conclusion and future work",
+        "future work",
+        "acknowledgement",
+        "acknowledgements",
+        "acknowledgment",
+        "acknowledgments",
+        "funding statement",
+        "author contributions",
+        "conflict of interests",
+        "conflict of interest",
+        "ethics statements",
+        "ethics statement",
+        "references",
+        "bibliography",
+        "biographies of authors",
+    ]
+
+    def __init__(self, llm_integration=None, profile: Dict[str, Any] = None):
         self.llm = llm_integration
+        self.profile = profile or {}
+        self.classification_patterns = self._load_classification_patterns(self.profile)
+        self.section_terms = self._load_section_terms(self.profile)
         self.classifications: List[ClassifiedParagraph] = []
+
+    def _load_classification_patterns(self, profile: Dict[str, Any]) -> Dict[str, List[str]]:
+        """Merge profile classification patterns with safe defaults."""
+        patterns = {
+            name: list(values)
+            for name, values in self.DEFAULT_CLASSIFICATION_PATTERNS.items()
+        }
+        profile_patterns = profile.get("classification_patterns", {}) if profile else {}
+        if isinstance(profile_patterns, dict):
+            for name, values in profile_patterns.items():
+                if not isinstance(values, list):
+                    continue
+                existing = patterns.setdefault(name, [])
+                for value in values:
+                    if isinstance(value, str) and value not in existing:
+                        existing.append(value)
+        return patterns
+
+    def _load_section_terms(self, profile: Dict[str, Any]) -> List[str]:
+        """Merge profile heading terms with safe defaults."""
+        terms = list(self.DEFAULT_SECTION_TERMS)
+        profile_terms = profile.get("heading_patterns", []) if profile else []
+        if isinstance(profile_terms, list):
+            for term in profile_terms:
+                if isinstance(term, str):
+                    normalized = re.sub(r"\s+", " ", term.lower().strip())
+                    if normalized and normalized not in terms:
+                        terms.append(normalized)
+        return terms
+
+    def _matches_pattern_group(self, group_name: str, text: str) -> bool:
+        """Return True when text matches any profile/default pattern group."""
+        for pattern in self.classification_patterns.get(group_name, []):
+            try:
+                if re.search(pattern, text):
+                    return True
+            except re.error:
+                continue
+        return False
 
     def classify_document(self, document) -> List[ClassifiedParagraph]:
         """Classify all paragraphs in a document."""
@@ -231,17 +336,7 @@ class ParagraphClassifier:
         if index > 8:
             return False
 
-        patterns = [
-            r"journal\s+of",
-            r"web\s+engineering$",
-            r"vol\.\s*\d+",
-            r"volume\s*\d+",
-            r"eissn|pissn|issn",
-            r"doi[:\s]",
-            r"https?://",
-            r"www\.",
-        ]
-        return any(re.search(pattern, text_lower) for pattern in patterns)
+        return self._matches_pattern_group("journal_header", text_lower)
 
     def _is_author_info(self, text: str, text_lower: str, index: int, alignment: str, context: Dict) -> bool:
         """Return True for author names, affiliations, emails, and ORCID lines."""
@@ -251,13 +346,7 @@ class ParagraphClassifier:
         if re.search(r"[\w\.-]+@[\w\.-]+\.\w+", text):
             return True
 
-        if re.search(r"orcid|corresponding\s+author", text_lower):
-            return True
-
-        if re.search(
-            r"university|universiti|faculty|fakulti|department|school|college|institute|centre|center",
-            text_lower,
-        ):
+        if self._matches_pattern_group("author_info", text_lower):
             return True
 
         if context.get("found_title") and not self._starts_with_label(text_lower, "abstract"):
@@ -306,62 +395,17 @@ class ParagraphClassifier:
         text_clean = re.sub(r"\s+", " ", text.strip())
         text_lower = text_clean.lower().strip(".")
 
-        common = {
-            "introduction",
-            "background",
-            "literature review",
-            "related work",
-            "methodology",
-            "method",
-            "methods",
-            "materials and methods",
-            "research methodology",
-            "results",
-            "discussion",
-            "results and discussion",
-            "results and discussions",
-            "implementation",
-            "evaluation",
-            "experiment",
-            "experiments",
-            "experimental setup",
-            "test configuration",
-            "conclusion",
-            "conclusions",
-            "conclusion and future work",
-            "future work",
-            "acknowledgement",
-            "acknowledgements",
-            "acknowledgment",
-            "acknowledgments",
-            "funding statement",
-            "author contributions",
-            "conflict of interests",
-            "conflict of interest",
-            "ethics statements",
-            "ethics statement",
-            "references",
-            "bibliography",
-            "biographies of authors",
-        }
+        section_terms = set(self.section_terms)
 
-        if text_lower in common:
+        if text_lower in section_terms:
             return True
 
-        heading_words = (
-            "introduction|background|literature review|related work|methodology|"
-            "methods?|materials and methods|research methodology|results?|discussion|"
-            "results and discussions?|implementation|evaluation|experiments?|"
-            "experimental setup|test configuration|conclusions?|conclusion and future work|"
-            "future work|references?|bibliography|"
-            "acknowledgements?|funding statement|author contributions?|"
-            "conflict of interests?|ethics statements?"
-        )
+        heading_words = "|".join(re.escape(term) for term in sorted(section_terms, key=len, reverse=True))
         if re.match(rf"^(\d+(\.\d+)*\.?|[ivxlc]+\.?)\s+({heading_words})$", text_lower):
             return True
 
         if text_clean.isupper() and 4 <= len(text_clean) <= 80:
-            return any(word in text_lower for word in common)
+            return any(word in text_lower for word in section_terms)
 
         return False
 
@@ -371,12 +415,12 @@ class ParagraphClassifier:
 
     def _is_caption(self, text_lower: str) -> bool:
         """Return True for figure and table captions."""
-        return bool(re.match(r"^(figure|fig\.?|table|chart|diagram|image)\s*\d+", text_lower))
+        return self._matches_pattern_group("caption", text_lower)
 
     def _is_reference_entry(self, text: str, in_references: bool) -> bool:
         """Return True for bibliography entries."""
         stripped = text.strip()
-        if re.match(r"^\[\d+\]", stripped):
+        if self._matches_pattern_group("reference", stripped.lower()):
             return True
         if in_references and len(stripped) > 20:
             return True

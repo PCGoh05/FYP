@@ -69,10 +69,11 @@ class ManuscriptChecker:
         self.rules = rules
         self.llm = llm_integration
         self.document = None
-        self.classifier = ParagraphClassifier(llm_integration)
+        self.profile = rules.get("_profile", {})
+        self.classifier = ParagraphClassifier(llm_integration, self.profile)
         self.issues: Dict[str, List[FormatIssue]] = {cat: [] for cat in self.CATEGORIES}
         self.classifications: List[ClassifiedParagraph] = []
-        self.required_sections = rules.get("_profile", {}).get("required_sections", REQUIRED_SECTIONS)
+        self.required_sections = self.profile.get("required_sections", REQUIRED_SECTIONS)
     
     def load_manuscript(self, file_path_or_bytes):
         """Load the manuscript to check"""

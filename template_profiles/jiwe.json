@@ -17,6 +17,25 @@
     "conclusion",
     "references"
   ],
+  "classification_patterns": {
+    "journal_header": [
+      "journal\\s+of\\s+informatics",
+      "web\\s+engineering$",
+      "vol\\.\\s*\\d+",
+      "eissn|pissn|issn"
+    ],
+    "caption": [
+      "^(figure|fig\\.?|table)\\s*\\d+"
+    ],
+    "reference": [
+      "^\\[\\d+\\]"
+    ],
+    "author_info": [
+      "orcid",
+      "corresponding\\s+author",
+      "university|universiti|faculty|fakulti|department|school|college|institute"
+    ]
+  },
   "rule_weights": {
     "margins": 10,
     "title": 15,

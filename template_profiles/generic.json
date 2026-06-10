@@ -17,6 +17,29 @@
     "conclusion",
     "references"
   ],
+  "classification_patterns": {
+    "journal_header": [
+      "journal\\s+of",
+      "vol\\.\\s*\\d+",
+      "volume\\s*\\d+",
+      "eissn|pissn|issn",
+      "doi[:\\s]",
+      "https?://",
+      "www\\."
+    ],
+    "caption": [
+      "^(figure|fig\\.?|table|chart|diagram|image)\\s*\\d+"
+    ],
+    "reference": [
+      "^\\[\\d+\\]",
+      "^\\d+\\.\\s+\\w"
+    ],
+    "author_info": [
+      "orcid",
+      "corresponding\\s+author",
+      "university|universiti|faculty|fakulti|department|school|college|institute|centre|center"
+    ]
+  },
   "rule_weights": {
     "margins": 10,
     "title": 15,
