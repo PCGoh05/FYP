@@ -478,7 +478,7 @@ class ManuscriptChecker:
                 
                 # Check font
                 current_font = font_info.get("font_name")
-                if current_font and current_font != expected_font:
+                if current_font and not is_font_equivalent(current_font, expected_font):
                     self._add_issue(
                         category="headings",
                         location=f"Heading: {truncate_text(cp.text, 30)}",
@@ -702,7 +702,7 @@ class ManuscriptChecker:
             current_font = cp.font_info.get("font_name")
             current_size = cp.font_info.get("font_size")
             
-            if current_font and current_font != expected_font:
+            if current_font and not is_font_equivalent(current_font, expected_font):
                 self._add_issue(
                     category="figures",
                     location=f"Caption: {truncate_text(cp.text, 30)}",
@@ -776,7 +776,7 @@ class ManuscriptChecker:
             current_font = cp.font_info.get("font_name")
             current_size = cp.font_info.get("font_size")
             
-            if current_font and current_font != expected_font:
+            if current_font and not is_font_equivalent(current_font, expected_font):
                 self._add_issue(
                     category="references",
                     location=f"Reference {i + 1}",
