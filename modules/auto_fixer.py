@@ -15,11 +15,11 @@ import re
 from io import BytesIO
 
 from .utils import (
-    load_document, get_paragraph_text, get_paragraph_alignment, set_margins,
-    truncate_text, is_font_equivalent, get_run_font_info
+    load_document, get_paragraph_text, get_paragraph_alignment, truncate_text,
+    is_font_equivalent, get_run_font_info
 )
 from .paragraph_classifier import (
-    ParagraphClassifier, ParagraphType, ClassifiedParagraph
+    ParagraphType, ClassifiedParagraph
 )
 from config import ALIGNMENT_REVERSE_MAP
 
