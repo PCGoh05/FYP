@@ -68,6 +68,8 @@ class AutoFixer:
         self._classification_map: Dict[int, ClassifiedParagraph] = {}
         self._issue_map: Dict[int, set] = {}
         self._issue_property_map: Dict[int, set] = {}
+        self._global_issue_categories: set = set()
+        self._global_issue_property_map: Dict[str, set] = {}
         self._has_explicit_issues = bool(issues_by_category)
         self._build_issue_map()
     
@@ -83,10 +85,16 @@ class AutoFixer:
         """Build paragraph-to-category and paragraph-to-property maps from detected issues."""
         self._issue_map = {}
         self._issue_property_map = {}
+        self._global_issue_categories = set()
+        self._global_issue_property_map = {}
         for category, issues in self.issues_by_category.items():
             for issue in issues:
                 para_index = getattr(issue, "paragraph_index", -1)
                 if para_index is None or para_index < 0:
+                    self._global_issue_categories.add(category)
+                    properties = self._infer_global_issue_properties(category, issue)
+                    if properties:
+                        self._global_issue_property_map.setdefault(category, set()).update(properties)
                     continue
                 self._issue_map.setdefault(para_index, set()).add(category)
                 property_name = self._infer_issue_property(issue)
@@ -120,18 +128,42 @@ class AutoFixer:
             return "italic"
         return None
 
+    def _infer_global_issue_properties(self, category: str, issue: Any) -> set:
+        """Infer properties represented by an aggregate category-level issue."""
+        property_name = self._infer_issue_property(issue)
+        if property_name:
+            return {property_name}
+
+        if category == "body_text":
+            return {"font_name", "font_size"}
+        if category in {"references", "figures", "tables"}:
+            return {"font_name", "font_size"}
+        if category == "line_spacing":
+            return {"line_spacing"}
+        return set()
+
     def _should_fix_category(self, index: int, categories: List[str]) -> bool:
         """Return True when a paragraph has a detected issue for the target categories."""
         if not self._has_explicit_issues:
             return True
         found_categories = self._issue_map.get(index, set())
-        return any(category in found_categories for category in categories)
+        return any(
+            category in found_categories or category in self._global_issue_categories
+            for category in categories
+        )
 
-    def _allowed_properties_for(self, index: int, fallback: Optional[List[str]] = None) -> Optional[set]:
+    def _allowed_properties_for(
+        self,
+        index: int,
+        categories: Optional[List[str]] = None,
+        fallback: Optional[List[str]] = None,
+    ) -> Optional[set]:
         """Return properties that may be fixed for a paragraph."""
         if not self._has_explicit_issues:
             return None
-        properties = self._issue_property_map.get(index, set())
+        properties = set(self._issue_property_map.get(index, set()))
+        for category in categories or []:
+            properties.update(self._global_issue_property_map.get(category, set()))
         if properties:
             return properties
         return set(fallback or [])
@@ -305,7 +337,8 @@ class AutoFixer:
         current_alignment = get_paragraph_alignment(paragraph)
         allowed_properties = self._allowed_properties_for(
             index,
-            ["font_name", "font_size", "bold", "alignment"],
+            categories=["journal_header"],
+            fallback=["font_name", "font_size", "bold", "alignment"],
         )
 
         expected_font = header_rules.get("font_name", "Palatino Linotype")
@@ -427,7 +460,8 @@ class AutoFixer:
         current_alignment = get_paragraph_alignment(paragraph)
         allowed_properties = self._allowed_properties_for(
             index,
-            ["font_name", "font_size", "bold", "alignment"],
+            categories=["title"],
+            fallback=["font_name", "font_size", "bold", "alignment"],
         )
 
         expected_font = title_rules.get("font_name", "Times New Roman")
@@ -473,7 +507,8 @@ class AutoFixer:
         changes = []
         allowed_properties = self._allowed_properties_for(
             index,
-            ["font_name", "font_size", "bold", "number_font_name", "number_font_size", "number_bold"],
+            categories=["headings"],
+            fallback=["font_name", "font_size", "bold", "number_font_name", "number_font_size", "number_bold"],
         )
 
         expected_font = heading_rules.get("font_name", "Times New Roman")
@@ -623,7 +658,8 @@ class AutoFixer:
         changes = []
         allowed_properties = self._allowed_properties_for(
             index,
-            ["font_name", "font_size", "line_spacing"],
+            categories=["body_text", "line_spacing"],
+            fallback=["font_name", "font_size", "line_spacing"],
         )
 
         expected_font = body_rules.get("font_name", "Times New Roman")
@@ -666,7 +702,11 @@ class AutoFixer:
         """Fix abstract formatting with structured change records."""
         abstract_rules = self.rules.get("abstract", {})
         changes = []
-        allowed_properties = self._allowed_properties_for(index, ["font_name", "font_size"])
+        allowed_properties = self._allowed_properties_for(
+            index,
+            categories=["body_text", "line_spacing"],
+            fallback=["font_name", "font_size", "line_spacing"],
+        )
 
         expected_font = abstract_rules.get("font_name", "Times New Roman")
         expected_size = abstract_rules.get("font_size", 9)
@@ -680,6 +720,19 @@ class AutoFixer:
                     None,
                     allowed_properties=allowed_properties,
                 ))
+
+        expected_spacing = abstract_rules.get("line_spacing", self.rules.get("body", {}).get("line_spacing"))
+        if expected_spacing and self._property_allowed("line_spacing", allowed_properties):
+            paragraph_format = paragraph.paragraph_format
+            if paragraph_format.line_spacing != expected_spacing:
+                current_spacing = paragraph_format.line_spacing
+                paragraph_format.line_spacing = expected_spacing
+                changes.append({
+                    "property_name": "line_spacing",
+                    "current_value": str(current_spacing) if current_spacing is not None else "(inherited)",
+                    "target_value": str(expected_spacing),
+                    "evidence": "Abstract line spacing did not match target rule",
+                })
 
         if changes:
             self._add_property_changes(
@@ -695,7 +748,11 @@ class AutoFixer:
         """Fix keyword formatting with structured change records."""
         keywords_rules = self.rules.get("keywords", self.rules.get("abstract", {}))
         changes = []
-        allowed_properties = self._allowed_properties_for(index, ["font_name", "font_size"])
+        allowed_properties = self._allowed_properties_for(
+            index,
+            categories=["body_text"],
+            fallback=["font_name", "font_size"],
+        )
 
         expected_font = keywords_rules.get("font_name", "Times New Roman")
         expected_size = keywords_rules.get("font_size", 9)
@@ -724,7 +781,11 @@ class AutoFixer:
         """Fix caption formatting with structured change records."""
         caption_rules = self.rules.get("caption", {})
         changes = []
-        allowed_properties = self._allowed_properties_for(index, ["font_name", "font_size", "italic"])
+        allowed_properties = self._allowed_properties_for(
+            index,
+            categories=["figures", "tables"],
+            fallback=["font_name", "font_size", "italic"],
+        )
 
         expected_font = caption_rules.get("font_name", "Times New Roman")
         expected_size = caption_rules.get("font_size", 10)
@@ -755,7 +816,11 @@ class AutoFixer:
         """Fix reference formatting with structured change records."""
         reference_rules = self.rules.get("reference", {})
         changes = []
-        allowed_properties = self._allowed_properties_for(index, ["font_name", "font_size"])
+        allowed_properties = self._allowed_properties_for(
+            index,
+            categories=["references"],
+            fallback=["font_name", "font_size"],
+        )
 
         expected_font = reference_rules.get("font_name", "Times New Roman")
         expected_size = reference_rules.get("font_size", 9)
