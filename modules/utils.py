@@ -313,10 +313,15 @@ def get_paragraph_alignment(paragraph) -> str:
 
 def get_line_spacing(paragraph) -> Optional[float]:
     """Get line spacing value from paragraph"""
-    pf = paragraph.paragraph_format
-    if pf.line_spacing is not None:
-        return pf.line_spacing
-    return None
+    line_spacing = paragraph.paragraph_format.line_spacing
+    if line_spacing is None and paragraph.style is not None:
+        line_spacing = paragraph.style.paragraph_format.line_spacing
+
+    base_style = paragraph.style.base_style if paragraph.style is not None else None
+    if line_spacing is None and base_style is not None:
+        line_spacing = base_style.paragraph_format.line_spacing
+
+    return line_spacing
 
 
 def get_margins(document) -> Dict[str, float]:
