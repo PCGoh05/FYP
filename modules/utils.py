@@ -299,7 +299,16 @@ def get_paragraph_alignment(paragraph) -> str:
         WD_ALIGN_PARAGRAPH.RIGHT: "RIGHT",
         WD_ALIGN_PARAGRAPH.JUSTIFY: "JUSTIFY"
     }
-    return alignment_map.get(paragraph.alignment, "LEFT")
+
+    alignment = paragraph.alignment
+    if alignment is None and paragraph.style is not None:
+        alignment = paragraph.style.paragraph_format.alignment
+
+    base_style = paragraph.style.base_style if paragraph.style is not None else None
+    if alignment is None and base_style is not None:
+        alignment = base_style.paragraph_format.alignment
+
+    return alignment_map.get(alignment, "LEFT")
 
 
 def get_line_spacing(paragraph) -> Optional[float]:
