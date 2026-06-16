@@ -94,6 +94,7 @@ class ManuscriptChecker:
         # Run all checks
         self._check_margins()
         self._check_journal_header()
+        self._check_layout_stability()
         self._check_title()
         self._check_body_text()
         self._check_headings()
@@ -290,6 +291,7 @@ class ManuscriptChecker:
             font_info = cp.font_info
             location = f"Journal Header (Para {cp.index + 1})"
             preview = truncate_text(cp.text, 60)
+            raw_text = self.document.paragraphs[cp.index].text
 
             current_font = font_info.get("font_name")
             if current_font and not is_font_equivalent(current_font, expected_font):
@@ -341,6 +343,47 @@ class ManuscriptChecker:
                     severity="warning",
                     text_preview=preview
                 )
+
+            has_manual_indentation = raw_text.startswith((" ", "\t")) or "\t" in raw_text.strip()
+            if has_manual_indentation:
+                self._add_issue(
+                    category="journal_header",
+                    location=location,
+                    para_index=cp.index,
+                    description="Journal header contains manual tab indentation that can shift layout",
+                    current="Manual tabs/spaces",
+                    expected="No manual indentation before centered journal header text",
+                    severity="warning",
+                    text_preview=preview
+                )
+
+    def _check_layout_stability(self):
+        """Check manual page header spacing patterns that commonly wrap in Word."""
+        for section_index, section in enumerate(self.document.sections):
+            header_parts = [
+                ("Page Header", section.header),
+                ("First Page Header", section.first_page_header),
+                ("Even Page Header", section.even_page_header),
+            ]
+            for label, header in header_parts:
+                for paragraph in header.paragraphs:
+                    text = get_paragraph_text(paragraph)
+                    if not text.strip():
+                        continue
+                    has_unstable_tabs = "\t\t" in text or re.search(r"\t\s{2,}", text)
+                    if not has_unstable_tabs:
+                        continue
+                    self._add_issue(
+                        category="other",
+                        location=f"{label} (Section {section_index + 1})",
+                        para_index=-1,
+                        description="Page header uses multiple manual tabs/spaces that can wrap in Word",
+                        current="Multiple manual tabs/spaces",
+                        expected="Single right-aligned tab stop between left and right header text",
+                        severity="warning",
+                        text_preview=truncate_text(text, 80)
+                    )
+                    break
     
     def _check_body_text(self):
         """Check body text formatting - ENHANCED with tolerance"""

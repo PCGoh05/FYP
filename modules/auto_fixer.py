@@ -5,7 +5,7 @@ Automatically fixes formatting issues while preserving special formatting
 
 from docx import Document
 from docx.shared import Pt, Inches
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from typing import Dict, List, Any, Optional, Tuple
@@ -116,6 +116,8 @@ class AutoFixer:
 
         if "line spacing" in description:
             return "line_spacing"
+        if "manual tab" in description or "manual tabs" in description:
+            return "manual_tabs"
         if "alignment" in description:
             return "alignment"
         if "font size" in description or " size " in f" {description} ":
@@ -140,6 +142,8 @@ class AutoFixer:
             return {"font_name", "font_size"}
         if category == "line_spacing":
             return {"line_spacing"}
+        if category == "other" and "manual tab" in (getattr(issue, "description", "") or "").lower():
+            return {"manual_tabs"}
         return set()
 
     def _should_fix_category(self, index: int, categories: List[str]) -> bool:
@@ -177,6 +181,12 @@ class AutoFixer:
         if not self._has_explicit_issues:
             return True
         return bool(self.issues_by_category.get(category))
+
+    def _category_allows_global_property(self, category: str, property_name: str) -> bool:
+        """Return True when a category-level issue permits a document-level fix."""
+        if not self._has_explicit_issues:
+            return True
+        return property_name in self._global_issue_property_map.get(category, set())
     
     def fix_all(self) -> Tuple[Document, List[ChangeRecord]]:
         """
@@ -193,6 +203,8 @@ class AutoFixer:
         # Fix margins first only when margin issues were detected.
         if self._has_category_issue("margins"):
             self._fix_margins()
+        if self._category_allows_global_property("other", "manual_tabs"):
+            self._fix_page_header_layout()
         
         # Fix paragraphs based on their classification
         for i, para in enumerate(self.document.paragraphs):
@@ -271,6 +283,52 @@ class AutoFixer:
                     evidence="Detected margin issue"
                 )
 
+    def _fix_page_header_layout(self):
+        """Normalize page header tab spacing to reduce Word wrapping."""
+        for section_index, section in enumerate(self.document.sections):
+            headers = [
+                ("Page Header", section.header),
+                ("First Page Header", section.first_page_header),
+                ("Even Page Header", section.even_page_header),
+            ]
+            usable_width = section.page_width - section.left_margin - section.right_margin
+
+            for label, header in headers:
+                for paragraph in header.paragraphs:
+                    original_text = get_paragraph_text(paragraph)
+                    normalized_text = self._normalize_tabbed_header_text(original_text)
+                    if normalized_text == original_text:
+                        continue
+
+                    paragraph.text = normalized_text
+                    try:
+                        tab_stops = paragraph.paragraph_format.tab_stops
+                        tab_stops.clear_all()
+                        tab_stops.add_tab_stop(usable_width, WD_TAB_ALIGNMENT.RIGHT)
+                    except Exception:
+                        pass
+
+                    self._add_change_record(
+                        paragraph_index=-1,
+                        location=f"{label} (Section {section_index + 1})",
+                        change_type="page_header",
+                        property_name="manual_tabs",
+                        current_value=truncate_text(original_text, 80),
+                        target_value=truncate_text(normalized_text, 80),
+                        text_preview=truncate_text(normalized_text, 80),
+                        paragraph_type="document_header",
+                        evidence="Detected page header manual tabs/spaces that may wrap in Word",
+                    )
+
+    def _normalize_tabbed_header_text(self, text: str) -> str:
+        """Collapse unstable tab runs into one left/right tab-separated header line."""
+        if "\t" not in text:
+            return text
+        parts = [re.sub(r"\s+", " ", part).strip() for part in text.split("\t") if part.strip()]
+        if len(parts) < 2:
+            return text
+        return f"{parts[0]}\t{parts[-1]}"
+
     def _add_change_record(
         self,
         paragraph_index: int,
@@ -338,13 +396,28 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["journal_header"],
-            fallback=["font_name", "font_size", "bold", "alignment"],
+            fallback=["font_name", "font_size", "bold", "alignment", "manual_tabs"],
         )
 
         expected_font = header_rules.get("font_name", "Palatino Linotype")
         expected_size = header_rules.get("font_size", 24)
         expected_bold = header_rules.get("bold", True)
         expected_alignment = header_rules.get("alignment", "CENTER")
+
+        original_text = paragraph.text
+        cleaned_text = original_text.strip(" \t")
+        if (
+            self._property_allowed("manual_tabs", allowed_properties)
+            and cleaned_text
+            and cleaned_text != original_text
+        ):
+            paragraph.text = cleaned_text
+            changes.append({
+                "property_name": "manual_tabs",
+                "current_value": "Manual tabs/spaces",
+                "target_value": "No leading/trailing manual tabs/spaces",
+                "evidence": "Journal header contained manual indentation that can shift layout",
+            })
 
         if self._property_allowed("alignment", allowed_properties) and current_alignment != expected_alignment:
             paragraph.alignment = WD_ALIGN_PARAGRAPH(
