@@ -462,11 +462,11 @@ class ParagraphClassifier:
 
     def _starts_with_label(self, text_lower: str, label: str) -> bool:
         """Return True when text begins with a named label."""
-        return bool(re.match(rf"^{label}\s*[-–—:]", text_lower))
+        return bool(re.match(rf"^{label}\s*[-\u2013\u2014:]", text_lower))
 
     def _starts_with_keywords(self, text_lower: str) -> bool:
         """Return True for keyword lines."""
-        return bool(re.match(r"^(keywords?|key\s+words?)\s*[-–—:]", text_lower))
+        return bool(re.match(r"^(keywords?|key\s+words?)\s*[-\u2013\u2014:]", text_lower))
 
     def _create_classification(
         self,

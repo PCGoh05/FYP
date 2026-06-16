@@ -20,7 +20,7 @@ class ReportGenerator:
     """
     Generates formatted comparison reports showing all changes made
     """
-    
+
     # Colors
     RED = RGBColor(204, 0, 0)  # Error/Before
     GREEN = RGBColor(0, 128, 0)  # Correct/After
@@ -30,12 +30,12 @@ class ReportGenerator:
     LIGHT_GREEN = "CCFFCC"
     LIGHT_BLUE = "CCE5FF"
     LIGHT_GRAY = "F0F0F0"
-    
+
     def __init__(self, rules: Dict[str, Any], changes: List[ChangeRecord],
                  check_result: Any = None):
         """
         Initialize report generator
-        
+
         Args:
             rules: Template formatting rules used
             changes: List of changes made during auto-fix
@@ -45,53 +45,53 @@ class ReportGenerator:
         self.changes = changes
         self.check_result = check_result
         self.document = None
-    
+
     def generate_comparison_report(self) -> Document:
         """Generate a detailed comparison report document"""
         self.document = Document()
-        
+
         # Set up document margins
         for section in self.document.sections:
             section.left_margin = Inches(1)
             section.right_margin = Inches(1)
             section.top_margin = Inches(0.75)
             section.bottom_margin = Inches(0.75)
-        
+
         # Add title
         self._add_title()
-        
+
         # Add generation timestamp
         self._add_timestamp()
-        
+
         # Add summary section
         self._add_summary_section()
-        
+
         # Add target format rules
         self._add_rules_section()
-        
+
         # Add compliance score (if available)
         if self.check_result:
             self._add_compliance_section()
-        
+
         # Add detailed changes
         self._add_changes_section()
-        
+
         # Add legend
         self._add_legend()
-        
+
         return self.document
-    
+
     def _add_title(self):
         """Add report title"""
         title = self.document.add_heading("Format Correction Report", level=0)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
+
         # Style the title
         for run in title.runs:
             run.font.size = Pt(24)
             run.font.bold = True
             run.font.color.rgb = self.BLUE
-    
+
     def _add_timestamp(self):
         """Add generation timestamp"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -101,31 +101,31 @@ class ReportGenerator:
         run.font.size = Pt(10)
         run.font.italic = True
         run.font.color.rgb = RGBColor(128, 128, 128)
-        
+
         self.document.add_paragraph()  # Spacing
-    
+
     def _add_summary_section(self):
         """Add summary section with change statistics"""
         self.document.add_heading("Summary", level=1)
-        
+
         # Count changes by category
         changes_by_type = {}
         for change in self.changes:
             change_type = change.change_type
             changes_by_type[change_type] = changes_by_type.get(change_type, 0) + 1
-        
+
         # Create summary table
         table = self.document.add_table(rows=1, cols=2)
         table.style = 'Table Grid'
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        
+
         # Header row
         header_cells = table.rows[0].cells
         header_cells[0].text = "Category"
         header_cells[1].text = "Changes Made"
-        
+
         self._style_header_row(table.rows[0])
-        
+
         # Data rows
         total = 0
         for change_type, count in changes_by_type.items():
@@ -133,34 +133,34 @@ class ReportGenerator:
             row.cells[0].text = change_type.replace("_", " ").title()
             row.cells[1].text = str(count)
             total += count
-        
+
         # Total row
         total_row = table.add_row()
         total_row.cells[0].text = "TOTAL"
         total_row.cells[1].text = str(total)
-        
+
         # Bold total row
         for cell in total_row.cells:
             for para in cell.paragraphs:
                 for run in para.runs:
                     run.font.bold = True
-        
+
         # Set column widths
         for row in table.rows:
             row.cells[0].width = Inches(3)
             row.cells[1].width = Inches(2)
-        
+
         self.document.add_paragraph()  # Spacing
-    
+
     def _add_rules_section(self):
         """Add section showing target format rules"""
         self.document.add_heading("Target Format Rules", level=1)
-        
+
         # Margins
         para = self.document.add_paragraph()
         run = para.add_run("Page Margins: ")
         run.font.bold = True
-        
+
         margins = self.rules.get("margins", {})
         para.add_run(
             f"Left: {margins.get('left', 1.0):.2f}in, "
@@ -168,12 +168,12 @@ class ReportGenerator:
             f"Top: {margins.get('top', 1.0):.2f}in, "
             f"Bottom: {margins.get('bottom', 1.0):.2f}in"
         )
-        
+
         # Title style
         para = self.document.add_paragraph()
         run = para.add_run("Title Style: ")
         run.font.bold = True
-        
+
         title_rules = self.rules.get("title", {})
         para.add_run(
             f"{title_rules.get('font_name', 'Times New Roman')} "
@@ -181,44 +181,44 @@ class ReportGenerator:
             f"{'Bold, ' if title_rules.get('bold') else ''}"
             f"{title_rules.get('alignment', 'CENTER')}"
         )
-        
+
         # Body style
         para = self.document.add_paragraph()
         run = para.add_run("Body Text Style: ")
         run.font.bold = True
-        
+
         body_rules = self.rules.get("body", {})
         para.add_run(
             f"{body_rules.get('font_name', 'Times New Roman')} "
             f"{body_rules.get('font_size', 12)}pt, "
             f"Line spacing: {body_rules.get('line_spacing', 1.5)}"
         )
-        
+
         # Heading style
         para = self.document.add_paragraph()
         run = para.add_run("Heading Style: ")
         run.font.bold = True
-        
+
         heading_rules = self.rules.get("heading", {})
         para.add_run(
             f"{heading_rules.get('font_name', 'Times New Roman')} "
             f"{heading_rules.get('font_size', 14)}pt"
             f"{', Bold' if heading_rules.get('bold') else ''}"
         )
-        
+
         self.document.add_paragraph()  # Spacing
-    
+
     def _add_compliance_section(self):
         """Add compliance score section"""
         self.document.add_heading("Compliance Index", level=1)
-        
+
         score = self.check_result.compliance_score
         total_issues = self.check_result.total_issues
-        
+
         # Score display
         para = self.document.add_paragraph()
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
+
         # Determine color based on score
         if score >= 80:
             color = self.GREEN
@@ -226,12 +226,12 @@ class ReportGenerator:
             color = RGBColor(255, 165, 0)  # Orange
         else:
             color = self.RED
-        
+
         run = para.add_run(f"{score}%")
         run.font.size = Pt(36)
         run.font.bold = True
         run.font.color.rgb = color
-        
+
         # Issues count
         para = self.document.add_paragraph()
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -241,63 +241,63 @@ class ReportGenerator:
             "This index is a user-facing rule-weighted indicator. "
             "FYP accuracy should be reported with Precision, Recall, and F1."
         )
-        
+
         # Issues breakdown
         if self.check_result.issues_by_category:
             para = self.document.add_paragraph()
             para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            
+
             breakdown = []
             for category, issues in self.check_result.issues_by_category.items():
                 if issues:
                     breakdown.append(f"{category.replace('_', ' ').title()}: {len(issues)}")
-            
+
             if breakdown:
                 para.add_run("Issues by category: " + ", ".join(breakdown))
-        
+
         self.document.add_paragraph()  # Spacing
-    
+
     def _add_changes_section(self):
         """Add detailed changes table"""
         self.document.add_heading("Detailed Changes", level=1)
-        
+
         if not self.changes:
             para = self.document.add_paragraph()
             para.add_run("No formatting changes were made.")
             return
-        
+
         # Create changes table
         table = self.document.add_table(rows=1, cols=5)
         table.style = 'Table Grid'
-        
+
         # Header row
         headers = ["#", "Location", "Property", "Current", "Target"]
         header_cells = table.rows[0].cells
         for i, header in enumerate(headers):
             header_cells[i].text = header
-        
+
         self._style_header_row(table.rows[0])
-        
+
         # Data rows
         for i, change in enumerate(self.changes, 1):
             row = table.add_row()
-            
+
             # Number
             row.cells[0].text = str(i)
-            
+
             # Location
             location_cell = row.cells[1]
             location_para = location_cell.paragraphs[0]
             run = location_para.add_run(change.location)
             run.font.size = Pt(9)
-            
+
             if change.text_preview:
                 location_para.add_run("\n")
                 preview_run = location_para.add_run(f'"{change.text_preview}"')
                 preview_run.font.size = Pt(8)
                 preview_run.font.italic = True
                 preview_run.font.color.rgb = RGBColor(128, 128, 128)
-            
+
             # Property
             property_cell = row.cells[2]
             property_para = property_cell.paragraphs[0]
@@ -311,7 +311,7 @@ class ReportGenerator:
             run = before_para.add_run(change.current_value or change.before)
             run.font.color.rgb = self.RED
             run.font.size = Pt(9)
-            
+
             # Target value (green background)
             after_cell = row.cells[4]
             self._set_cell_background(after_cell, self.LIGHT_GREEN)
@@ -319,7 +319,7 @@ class ReportGenerator:
             run = after_para.add_run(change.target_value or change.after)
             run.font.color.rgb = self.GREEN
             run.font.size = Pt(9)
-        
+
         # Set column widths
         for row in table.rows:
             row.cells[0].width = Inches(0.4)
@@ -327,27 +327,27 @@ class ReportGenerator:
             row.cells[2].width = Inches(1.2)
             row.cells[3].width = Inches(1.8)
             row.cells[4].width = Inches(1.8)
-        
+
         self.document.add_paragraph()  # Spacing
-    
+
     def _add_legend(self):
         """Add color legend"""
         self.document.add_heading("Legend", level=2)
-        
+
         # Red = Before/Error
         para = self.document.add_paragraph()
-        run = para.add_run("■ ")
+        run = para.add_run("- ")
         run.font.color.rgb = self.RED
         run.font.size = Pt(14)
         para.add_run("Red: Original (incorrect) formatting")
-        
+
         # Green = After/Correct
         para = self.document.add_paragraph()
-        run = para.add_run("■ ")
+        run = para.add_run("- ")
         run.font.color.rgb = self.GREEN
         run.font.size = Pt(14)
         para.add_run("Green: Corrected formatting")
-    
+
     def _style_header_row(self, row):
         """Style a table header row"""
         for cell in row.cells:
@@ -356,7 +356,7 @@ class ReportGenerator:
                 for run in para.runs:
                     run.font.bold = True
                     run.font.size = Pt(10)
-    
+
     def _set_cell_background(self, cell, color: str):
         """Set background color of a table cell"""
         tc = cell._tc
@@ -364,32 +364,32 @@ class ReportGenerator:
         shd = OxmlElement('w:shd')
         shd.set(qn('w:fill'), color)
         tcPr.append(shd)
-    
+
     def get_report_bytes(self) -> bytes:
         """Get the report document as bytes for download"""
         if not self.document:
             self.generate_comparison_report()
-        
+
         buffer = BytesIO()
         self.document.save(buffer)
         buffer.seek(0)
         return buffer.getvalue()
-    
+
     def generate_html_comparison(self) -> str:
         """Generate HTML comparison view for Streamlit display"""
         html_parts = []
-        
+
         # Header
         html_parts.append("""
         <style>
             .comparison-container { font-family: Arial, sans-serif; }
-            .comparison-header { 
+            .comparison-header {
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px;
             }
             .comparison-table { width: 100%; border-collapse: collapse; }
-            .comparison-table th { 
-                background: #f0f0f0; padding: 12px; text-align: left; 
+            .comparison-table th {
+                background: #f0f0f0; padding: 12px; text-align: left;
                 border: 1px solid #ddd; font-weight: bold;
             }
             .comparison-table td { padding: 12px; border: 1px solid #ddd; }
@@ -397,7 +397,7 @@ class ReportGenerator:
             .after-cell { background: #ccffcc; color: #008000; }
             .location-cell { background: #f9f9f9; }
             .text-preview { font-size: 0.85em; color: #666; font-style: italic; }
-            .score-badge { 
+            .score-badge {
                 display: inline-block; padding: 10px 20px; border-radius: 25px;
                 font-size: 24px; font-weight: bold;
             }
@@ -406,22 +406,22 @@ class ReportGenerator:
             .score-poor { background: #ffcccc; color: #cc0000; }
         </style>
         """)
-        
+
         # Summary section
         total_changes = len(self.changes)
         changes_by_type = {}
         for change in self.changes:
             change_type = change.change_type
             changes_by_type[change_type] = changes_by_type.get(change_type, 0) + 1
-        
+
         html_parts.append(f"""
         <div class="comparison-container">
             <div class="comparison-header">
-                <h2 style="margin: 0;">📋 Format Correction Summary</h2>
+                <h2 style="margin: 0;">Format Correction Summary</h2>
                 <p style="margin: 10px 0 0 0;">Total Changes Made: <strong>{total_changes}</strong></p>
             </div>
         """)
-        
+
         # Score if available
         if self.check_result:
             score = self.check_result.compliance_score
@@ -431,11 +431,11 @@ class ReportGenerator:
                 <span class="score-badge {score_class}">Compliance Index: {score}%</span>
             </div>
             """)
-        
+
         # Changes table
         if self.changes:
             html_parts.append("""
-            <h3>📝 Detailed Changes</h3>
+            <h3>Detailed Changes</h3>
             <table class="comparison-table">
                 <tr>
                     <th style="width: 5%;">#</th>
@@ -445,11 +445,11 @@ class ReportGenerator:
                     <th style="width: 23%;">Target</th>
                 </tr>
             """)
-            
+
             for i, change in enumerate(self.changes, 1):
                 preview_html = f'<br><span class="text-preview">"{change.text_preview}"</span>' \
                     if change.text_preview else ''
-                
+
                 html_parts.append(f"""
                 <tr>
                     <td>{i}</td>
@@ -459,30 +459,30 @@ class ReportGenerator:
                     <td class="after-cell">{change.target_value or change.after}</td>
                 </tr>
                 """)
-            
+
             html_parts.append("</table>")
         else:
             html_parts.append("""
             <p style="text-align: center; color: #008000; font-size: 18px;">
-                ✅ No formatting changes needed - document already compliant!
+                No formatting changes needed - document already compliant.
             </p>
             """)
-        
+
         html_parts.append("</div>")
-        
+
         return "".join(html_parts)
-    
+
     def generate_issues_html(self) -> str:
         """Generate HTML for displaying issues (before fixing)"""
         if not self.check_result:
             return "<p>No check results available</p>"
-        
+
         html_parts = []
-        
+
         html_parts.append("""
         <style>
             .issues-container { font-family: Arial, sans-serif; }
-            .issue-category { 
+            .issue-category {
                 margin: 15px 0; padding: 15px; border-radius: 8px;
                 border-left: 4px solid;
             }
@@ -497,37 +497,37 @@ class ReportGenerator:
         </style>
         <div class="issues-container">
         """)
-        
+
         for category, issues in self.check_result.issues_by_category.items():
             if not issues:
                 continue
-            
+
             # Determine category severity
             has_error = any(i.severity == "error" for i in issues)
             severity_class = "category-error" if has_error else "category-warning"
-            
+
             html_parts.append(f"""
             <div class="issue-category {severity_class}">
                 <h4 style="margin: 0 0 10px 0;">
-                    {'🔴' if has_error else '🟡'} {category.replace('_', ' ').title()} 
+                    {'Error' if has_error else 'Warning'} {category.replace('_', ' ').title()}
                     ({len(issues)} issue{'s' if len(issues) > 1 else ''})
                 </h4>
             """)
-            
+
             for issue in issues:
                 html_parts.append(f"""
                 <div class="issue-item">
                     <div class="issue-header">{issue.location}</div>
                     <div class="issue-detail">{issue.description}</div>
                     <div class="issue-detail">
-                        Current: <span class="current-value">{issue.current_value}</span> | 
+                        Current: <span class="current-value">{issue.current_value}</span> |
                         Expected: <span class="expected-value">{issue.expected_value}</span>
                     </div>
                 </div>
                 """)
-            
+
             html_parts.append("</div>")
-        
+
         html_parts.append("</div>")
-        
+
         return "".join(html_parts)

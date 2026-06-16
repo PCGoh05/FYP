@@ -352,16 +352,16 @@ def format_change_description(before: Dict, after: Dict) -> str:
     changes = []
     
     if before.get("font_name") != after.get("font_name"):
-        changes.append(f"Font: {before.get('font_name', 'Unknown')} → {after.get('font_name')}")
+        changes.append(f"Font: {before.get('font_name', 'Unknown')} -> {after.get('font_name')}")
     
     if before.get("font_size") != after.get("font_size"):
-        changes.append(f"Size: {before.get('font_size', 'Unknown')}pt → {after.get('font_size')}pt")
+        changes.append(f"Size: {before.get('font_size', 'Unknown')}pt -> {after.get('font_size')}pt")
     
     if before.get("bold") != after.get("bold"):
-        changes.append(f"Bold: {before.get('bold')} → {after.get('bold')}")
+        changes.append(f"Bold: {before.get('bold')} -> {after.get('bold')}")
     
     if before.get("alignment") != after.get("alignment"):
-        changes.append(f"Alignment: {before.get('alignment', 'Unknown')} → {after.get('alignment')}")
+        changes.append(f"Alignment: {before.get('alignment', 'Unknown')} -> {after.get('alignment')}")
     
     return "; ".join(changes) if changes else "No changes"
 

@@ -295,8 +295,8 @@ Respond with ONLY the classification type, nothing else."""
     
     def analyze_template_rules(self, paragraphs_info: List[Dict]) -> Dict[str, Any]:
         """
-        Use AI to analyze template paragraphs and extract formatting rules.
-        This is the PRIMARY method for understanding template requirements.
+        Use AI as an optional fallback to suggest missing template rules.
+        Deterministic extraction remains the primary source of rules.
         
         Args:
             paragraphs_info: List of dicts with 'text', 'font', 'size', 'bold', 'italic' info
@@ -340,10 +340,10 @@ PATTERN 1: "(24-Font size, bold Palatino Linotype)" - used for JOURNAL title
 
 PATTERN 2: "(24-Font size, Times New Roman)" - used for PAPER title  
 - Font: Times New Roman
-- Bold: FALSE ❌ (bold is NOT mentioned at all!)
+- Bold: FALSE (bold is NOT mentioned at all!)
 
 PATTERN 3: "(10-Font size, bold, Times New Roman)" - note the comma before bold
-- Bold: TRUE ✅ (", bold," with commas = format instruction)
+- Bold: TRUE (", bold," with commas = format instruction)
 
 KEY RULES:
 - "bold [FontName]" = font variant name, NOT bold formatting
@@ -382,16 +382,11 @@ Only return bold=true if there's ", bold," with commas."""
             
             response = response.strip()
             
-            # DEBUG: Print AI response
-            print(f"[DEBUG] AI Template Analysis Response:")
-            print(f"{response[:500]}...")
-            
             # Try to extract JSON from various formats
             # Method 1: Direct parse
             try:
                 rules = json.loads(response)
                 rules['_ai_extracted'] = True
-                print(f"[DEBUG] AI Extracted Title Rule: {rules.get('title', {})}")
                 return rules
             except json.JSONDecodeError:
                 pass
@@ -408,7 +403,6 @@ Only return bold=true if there's ", bold," with commas."""
                 try:
                     rules = json.loads(response)
                     rules['_ai_extracted'] = True
-                    print(f"[DEBUG] AI Extracted Title Rule: {rules.get('title', {})}")
                     return rules
                 except json.JSONDecodeError:
                     pass
@@ -419,15 +413,12 @@ Only return bold=true if there's ", bold," with commas."""
                 try:
                     rules = json.loads(json_match.group())
                     rules['_ai_extracted'] = True
-                    print(f"[DEBUG] AI Extracted Title Rule: {rules.get('title', {})}")
                     return rules
                 except json.JSONDecodeError:
                     pass
             
-            print(f"[DEBUG] AI failed to return valid JSON")
             return {}
-        except Exception as e:
-            print(f"[DEBUG] AI template analysis error: {e}")
+        except Exception:
             return {}
     
     def classify_paragraphs_batch(self, paragraphs: List[str]) -> List[str]:

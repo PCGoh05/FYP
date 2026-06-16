@@ -83,7 +83,7 @@ JOURNAL_HEADER_PATTERNS = [
     r'doi[:\s]*10\.',
     r'https?://',
     r'www\.',
-    r'©\s*\d{4}',
+    r'\u00a9\s*\d{4}',
     r'copyright',
     r'open\s*access',
     r'received[:\s]*\d',

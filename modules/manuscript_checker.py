@@ -391,7 +391,7 @@ class ManuscriptChecker:
         expected_font = body_rules.get("font_name", "Times New Roman")
         expected_size = body_rules.get("font_size", 12)
         
-        # Font size tolerance (allow ±1.0pt difference for body text)
+        # Font size tolerance (allow +/-1.0pt difference for body text)
         size_tolerance = 1.0
         
         # Common font name variations that are equivalent

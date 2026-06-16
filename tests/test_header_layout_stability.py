@@ -102,6 +102,34 @@ class HeaderLayoutStabilityTest(unittest.TestCase):
                 any(change.property_name == "manual_tabs" for change in changes)
             )
 
+    def test_auto_fixer_preserves_stable_single_tab_page_headers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mixed_headers.docx"
+            _save_unstable_docx(path)
+
+            document = Document(path)
+            document.sections[0].first_page_header.paragraphs[0].text = "Left\tMiddle\tRight"
+            document.save(path)
+
+            checker = ManuscriptChecker(_rules()).load_manuscript(str(path))
+            result = checker.check_all()
+            fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixed_doc, changes = fixer.fix_all()
+
+            self.assertEqual(
+                fixed_doc.sections[0].header.paragraphs[0].text,
+                "Journal of Informatics and Web Engineering\tVol. 3 No. 3 (January 2026)",
+            )
+            self.assertEqual(
+                fixed_doc.sections[0].first_page_header.paragraphs[0].text,
+                "Left\tMiddle\tRight",
+            )
+            changed_locations = [
+                change.location for change in changes if change.property_name == "manual_tabs"
+            ]
+            self.assertNotIn("First Page Header (Section 1)", changed_locations)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -36,13 +36,13 @@ def _parse_instruction_format(text: str) -> Dict[str, Any]:
     result = {}
     
     # Extract font size: look for patterns like "(24-", "(11-Font", "(10 Font"
-    size_match = re.search(r'\((\d+)\s*[-–—]?\s*[Ff]ont', text)
+    size_match = re.search(r'\((\d+)\s*[-\u2013\u2014]?\s*[Ff]ont', text)
     if size_match:
         result["font_size"] = int(size_match.group(1))
     
     # Extract bold: CAREFUL distinction between format instruction vs font variant name
-    # Pattern 1: ", bold," or ", bold)" - bold is a separate format instruction → TRUE
-    # Pattern 2: "bold Palatino Linotype" - bold is part of font variant name → FALSE
+    # Pattern 1: ", bold," or ", bold)" - bold is a separate format instruction -> TRUE
+    # Pattern 2: "bold Palatino Linotype" - bold is part of font variant name -> FALSE
     # 
     # Key rule: If "bold" is followed by a font name (without comma), it's a font variant
     # If "bold" is followed by comma, closing paren, or end of instruction, it's a format instruction
@@ -488,41 +488,6 @@ class TemplateExtractor:
         # Ask AI to analyze only as optional fallback support.
         return self.llm.analyze_template_rules(paragraphs_info)
     
-    def _merge_rules(self, traditional: Dict, ai_rules: Dict) -> Dict:
-        """Merge AI-extracted rules with traditional rules"""
-        merged = traditional.copy()
-        
-        # Map AI rule names to our rule names
-        rule_mapping = {
-            'title': 'title',
-            'heading': 'heading',
-            'body': 'body',
-            'abstract': 'abstract',
-            'reference': 'reference'
-        }
-        
-        for ai_key, our_key in rule_mapping.items():
-            if ai_key in ai_rules and our_key in merged:
-                ai_rule = ai_rules[ai_key]
-                
-                # AI has priority for bold detection (our main problem)
-                if 'bold' in ai_rule:
-                    merged[our_key]['bold'] = ai_rule['bold']
-                
-                # Use AI font if traditional couldn't detect
-                if 'font' in ai_rule and not merged[our_key].get('font_name'):
-                    merged[our_key]['font_name'] = ai_rule['font']
-                
-                # Use AI size if it seems more accurate
-                if 'size' in ai_rule:
-                    ai_size = ai_rule['size']
-                    trad_size = merged[our_key].get('font_size', 0)
-                    # Prefer AI size if traditional is a default value
-                    if trad_size in [10, 12, 14, 24]:  # Common defaults
-                        merged[our_key]['font_size'] = ai_size
-        
-        return merged
-    
     def _extract_margins(self) -> Dict[str, float]:
         """Extract page margins from the template"""
         return get_margins(self.document)
@@ -612,7 +577,7 @@ class TemplateExtractor:
         # Keywords that indicate journal info (volume, issue, etc.)
         journal_info_keywords = [
             'vol.', 'volume', 'issue', 'issn', 'eissn', 'e-issn',
-            'p-issn', 'doi:', 'doi ', 'http', 'www.', '©',
+            'p-issn', 'doi:', 'doi ', 'http', 'www.', '\u00a9',
             'copyright', 'open access', 'received', 'accepted',
             'published', 'article info', 'article history',
             # Note: Do NOT add font names here - they appear in title instructions too!
@@ -1081,78 +1046,6 @@ Answer with ONLY "yes" or "no"."""
         """Get the extracted rules"""
         return self.rules
     
-    def get_rules_summary(self) -> str:
-        """Generate a human-readable summary of the extracted rules"""
-        rules = self.rules
-        
-        summary = []
-        summary = []
-        summary.append(f"=== Extracted Formatting Rules ({self.template_name}) ===\n")
-        
-        # Margins
-        summary.append("📐 Page Margins:")
-        margins = rules.get("margins", {})
-        summary.append(f"   Left: {margins.get('left', 1.0):.2f}in")
-        summary.append(f"   Right: {margins.get('right', 1.0):.2f}in")
-        summary.append(f"   Top: {margins.get('top', 1.0):.2f}in")
-        summary.append(f"   Bottom: {margins.get('bottom', 1.0):.2f}in")
-        
-        # Title
-        summary.append("\n📝 Paper Title Style:")
-        title = rules.get("title", {})
-        summary.append(f"   Font: {title.get('font_name', 'Times New Roman')}")
-        summary.append(f"   Size: {title.get('font_size', 24)}pt")
-        summary.append(f"   Bold: {title.get('bold', True)}")
-        summary.append(f"   Alignment: {title.get('alignment', 'CENTER')}")
-        
-        # Author
-        summary.append("\n👤 Author Names Style:")
-        author = rules.get("author", {})
-        summary.append(f"   Font: {author.get('font_name', 'Times New Roman')}")
-        summary.append(f"   Size: {author.get('font_size', 11)}pt")
-        summary.append(f"   Bold: {author.get('bold', True)}")
-        
-        # Affiliation
-        summary.append("\n🏛️ Affiliation Style:")
-        affiliation = rules.get("affiliation", {})
-        summary.append(f"   Font: {affiliation.get('font_name', 'Times New Roman')}")
-        summary.append(f"   Size: {affiliation.get('font_size', 9)}pt")
-        
-        # Abstract
-        summary.append("\n📋 Abstract Style:")
-        abstract = rules.get("abstract", {})
-        summary.append(f"   Font: {abstract.get('font_name', 'Times New Roman')}")
-        summary.append(f"   Size: {abstract.get('font_size', 9)}pt")
-        
-        # Body
-        summary.append("\n📄 Body Text Style:")
-        body = rules.get("body", {})
-        summary.append(f"   Font: {body.get('font_name', 'Times New Roman')}")
-        summary.append(f"   Size: {body.get('font_size', 10)}pt")
-        summary.append(f"   Line Spacing: {body.get('line_spacing', 1.0)}")
-        
-        # Headings
-        summary.append("\n🔖 Section Heading Style:")
-        heading = rules.get("heading", {})
-        summary.append(f"   Font: {heading.get('font_name', 'Times New Roman')}")
-        summary.append(f"   Size: {heading.get('font_size', 10)}pt")
-        summary.append(f"   Bold: {heading.get('bold', True)}")
-        summary.append(f"   ALL CAPS: {heading.get('all_caps', True)}")
-        
-        # Reference
-        summary.append("\n📚 Reference Style:")
-        reference = rules.get("reference", {})
-        summary.append(f"   Font: {reference.get('font_name', 'Times New Roman')}")
-        summary.append(f"   Size: {reference.get('font_size', 9)}pt")
-        
-        # Layout
-        summary.append("\n📏 Layout:")
-        layout = rules.get("layout", {})
-        summary.append(f"   Columns: {layout.get('columns', 1)}")
-        summary.append(f"   Page Size: {layout.get('page_size', 'A4')}")
-        
-        return "\n".join(summary)
-
     def get_rules_summary(self) -> str:
         """Generate an evidence-based summary of extracted formatting rules."""
         rules = self.rules

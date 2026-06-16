@@ -295,7 +295,9 @@ class AutoFixer:
 
             for label, header in headers:
                 for paragraph in header.paragraphs:
-                    original_text = get_paragraph_text(paragraph)
+                    original_text = paragraph.text
+                    if not self._has_unstable_header_tabs(original_text):
+                        continue
                     normalized_text = self._normalize_tabbed_header_text(original_text)
                     if normalized_text == original_text:
                         continue
@@ -319,6 +321,10 @@ class AutoFixer:
                         paragraph_type="document_header",
                         evidence="Detected page header manual tabs/spaces that may wrap in Word",
                     )
+
+    def _has_unstable_header_tabs(self, text: str) -> bool:
+        """Return True for tab spacing patterns that are likely to wrap in Word."""
+        return "\t\t" in text or bool(re.search(r"\t\s{2,}", text))
 
     def _normalize_tabbed_header_text(self, text: str) -> str:
         """Collapse unstable tab runs into one left/right tab-separated header line."""
