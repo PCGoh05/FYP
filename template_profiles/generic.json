@@ -76,6 +76,7 @@
       "font_name": "Times New Roman",
       "font_size": 14,
       "bold": null,
+      "italic": false,
       "alignment": "CENTER"
     },
     "author": {

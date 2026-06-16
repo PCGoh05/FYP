@@ -461,12 +461,13 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["title"],
-            fallback=["font_name", "font_size", "bold", "alignment"],
+            fallback=["font_name", "font_size", "bold", "italic", "alignment"],
         )
 
         expected_font = title_rules.get("font_name", "Times New Roman")
         expected_size = title_rules.get("font_size", 24)
         expected_bold = title_rules.get("bold", None)
+        expected_italic = title_rules.get("italic", None)
         expected_alignment = title_rules.get("alignment", "CENTER")
 
         if self._property_allowed("alignment", allowed_properties) and current_alignment != expected_alignment:
@@ -487,6 +488,7 @@ class AutoFixer:
                     expected_font,
                     expected_size,
                     expected_bold,
+                    expected_italic,
                     expected_strike=False,
                     allowed_properties=allowed_properties,
                 ))

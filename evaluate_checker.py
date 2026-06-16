@@ -113,7 +113,8 @@ def discover_sample_files(samples_dir: Path, template_path: Path) -> List[Path]:
         if is_word_temp_file(path):
             print(f"Skipping Word temporary file: {path.name}")
             continue
-        if path.name.lower() == template_name:
+        path_name = path.name.lower()
+        if path_name == template_name or "template" in path_name:
             print(f"Skipping template file: {path.name}")
             continue
         files.append(path)

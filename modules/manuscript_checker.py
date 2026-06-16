@@ -215,7 +215,21 @@ class ManuscriptChecker:
                         severity="warning",
                         text_preview=truncate_text(cp.text, 60)
                     )
-                
+
+                expected_italic = title_rules.get("italic")
+                current_italic = font_info.get("italic", False)
+                if expected_italic is not None and current_italic != expected_italic:
+                    self._add_issue(
+                        category="title",
+                        location="Paper Title",
+                        para_index=cp.index,
+                        description="Title italic formatting does not match template",
+                        current="Italic" if current_italic else "Not Italic",
+                        expected="Italic" if expected_italic else "Not Italic",
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 60)
+                    )
+
                 # Check alignment
                 expected_align = title_rules.get("alignment", "CENTER")
                 if alignment != expected_align:

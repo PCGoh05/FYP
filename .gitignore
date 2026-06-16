@@ -27,3 +27,4 @@ Thumbs.db
 *.tmp
 *.temp
 ~$*.docx
+samples/*Template-new*.docx
