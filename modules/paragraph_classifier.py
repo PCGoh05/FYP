@@ -299,6 +299,9 @@ class ParagraphClassifier:
         if self._starts_with_keywords(text_lower):
             return self._create_classification(data, ParagraphType.KEYWORDS_CONTENT, 0.92, "Keywords content")
 
+        if self._is_reference_entry(text, context.get("in_references", False)):
+            return self._create_classification(data, ParagraphType.REFERENCE, 0.86, "Reference entry")
+
         if self._is_author_info(text, text_lower, index, alignment, context):
             return self._create_classification(data, ParagraphType.AUTHOR_INFO, 0.90, "Author information")
 
@@ -307,9 +310,6 @@ class ParagraphClassifier:
 
         if self._is_caption(text_lower):
             return self._create_classification(data, ParagraphType.CAPTION, 0.90, "Caption")
-
-        if self._is_reference_entry(text, context.get("in_references", False)):
-            return self._create_classification(data, ParagraphType.REFERENCE, 0.86, "Reference entry")
 
         if self._is_algorithm(text, text_lower):
             return self._create_classification(data, ParagraphType.ALGORITHM, 0.88, "Algorithm or pseudocode")
@@ -422,7 +422,7 @@ class ParagraphClassifier:
         stripped = text.strip()
         if self._matches_pattern_group("reference", stripped.lower()):
             return True
-        if in_references and len(stripped) > 20:
+        if in_references and stripped.lower() not in {"references", "bibliography", "works cited"}:
             return True
         return False
 
