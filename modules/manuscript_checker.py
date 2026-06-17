@@ -204,7 +204,7 @@ class ManuscriptChecker:
                 
                 # Check bold
                 expected_bold = title_rules.get("bold")
-                current_bold = font_info.get("bold", False)
+                current_bold = bool(font_info.get("bold"))
                 if expected_bold is not None and current_bold != expected_bold:
                     self._add_issue(
                         category="title",
@@ -218,7 +218,7 @@ class ManuscriptChecker:
                     )
 
                 expected_italic = title_rules.get("italic")
-                current_italic = font_info.get("italic", False)
+                current_italic = bool(font_info.get("italic"))
                 if expected_italic is not None and current_italic != expected_italic:
                     self._add_issue(
                         category="title",
@@ -319,7 +319,7 @@ class ManuscriptChecker:
                     text_preview=preview
                 )
 
-            current_bold = font_info.get("bold", False)
+            current_bold = bool(font_info.get("bold"))
             if expected_bold is not None and current_bold != expected_bold:
                 self._add_issue(
                     category="journal_header",

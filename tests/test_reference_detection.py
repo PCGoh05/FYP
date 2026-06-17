@@ -62,6 +62,39 @@ class ReferenceDetectionTest(unittest.TestCase):
         self.assertEqual(reference_count, 1)
         self.assertNotIn("No references found in document", reference_issues)
 
+    def test_reference_section_stops_before_biography_and_appendix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "post_reference_sections.docx"
+            document = Document()
+            document.add_paragraph("Journal of Informatics and")
+            document.add_paragraph("Web Engineering")
+            document.add_paragraph("Vol. 3 No. 3 (January 2026)\teISSN: 2821-370X")
+            document.add_paragraph("A Test Paper Title for Format Validation")
+            document.add_paragraph("Abstract - This is the abstract.")
+            document.add_paragraph("Keywords - checking, template")
+            document.add_paragraph("INTRODUCTION")
+            document.add_paragraph("Body text.")
+            document.add_paragraph("CONCLUSION")
+            document.add_paragraph("Conclusion text.")
+            document.add_paragraph("REFERENCES")
+            document.add_paragraph("[1] Reference text.")
+            document.add_paragraph("BIOGRAPHIES OF AUTHORS")
+            document.add_paragraph("Author biography text.")
+            document.add_paragraph("APPENDIX A: IMPLEMENTATION CODE")
+            document.add_paragraph("import numpy as np")
+            document.save(path)
+
+            checker = ManuscriptChecker(_rules()).load_manuscript(str(path))
+            result = checker.check_all()
+
+            reference_texts = [
+                classification.text
+                for classification in result.classifications
+                if classification.paragraph_type.value == "reference"
+            ]
+
+        self.assertEqual(reference_texts, ["[1] Reference text."])
+
 
 if __name__ == "__main__":
     unittest.main()

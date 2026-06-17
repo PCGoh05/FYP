@@ -299,6 +299,9 @@ class ParagraphClassifier:
         if self._starts_with_keywords(text_lower):
             return self._create_classification(data, ParagraphType.KEYWORDS_CONTENT, 0.92, "Keywords content")
 
+        if context.get("in_references") and self._is_reference_section_terminator(text_lower):
+            return self._create_classification(data, ParagraphType.SECTION_HEADING, 0.90, "Post-reference section heading")
+
         if self._is_reference_entry(text, context.get("in_references", False)):
             return self._create_classification(data, ParagraphType.REFERENCE, 0.86, "Reference entry")
 
@@ -425,6 +428,15 @@ class ParagraphClassifier:
         if in_references and stripped.lower() not in {"references", "bibliography", "works cited"}:
             return True
         return False
+
+    def _is_reference_section_terminator(self, text_lower: str) -> bool:
+        """Return True for headings that end the references section."""
+        normalized = re.sub(r"\s+", " ", text_lower.strip())
+        return (
+            normalized.startswith("appendix")
+            or normalized.startswith("biograph")
+            or normalized in {"acknowledgement", "acknowledgements"}
+        )
 
     def _is_algorithm(self, text: str, text_lower: str) -> bool:
         """Return True for algorithm and pseudocode lines."""
