@@ -24,6 +24,11 @@ FONT_EQUIVALENTS = {
 }
 
 
+def contains_east_asian_text(text: str) -> bool:
+    """Return True when text contains CJK characters."""
+    return bool(re.search(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]", text or ""))
+
+
 def is_font_equivalent(font1: str, font2: str) -> bool:
     """
     Check if two fonts are equivalent (e.g., 'Times New Roman' and 'Times')
@@ -172,10 +177,15 @@ def get_run_font_info(run) -> Dict[str, Any]:
         if font_name is None:
             rFonts = rPr.find(qn('w:rFonts'))
             if rFonts is not None:
-                font_name = (rFonts.get(qn('w:ascii')) or 
-                            rFonts.get(qn('w:hAnsi')) or
-                            rFonts.get(qn('w:eastAsia')) or
-                            rFonts.get(qn('w:cs')))
+                latin_font = (
+                    rFonts.get(qn('w:ascii')) or
+                    rFonts.get(qn('w:hAnsi')) or
+                    rFonts.get(qn('w:cs'))
+                )
+                east_asia_font = rFonts.get(qn('w:eastAsia'))
+                font_name = latin_font
+                if font_name is None and contains_east_asian_text(run.text):
+                    font_name = east_asia_font
         
         # Font size from XML (w:sz is in half-points)
         if font_size is None:
