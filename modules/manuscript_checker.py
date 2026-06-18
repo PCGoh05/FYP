@@ -524,13 +524,13 @@ class ManuscriptChecker:
     
     def _check_headings(self):
         """Check section heading formatting"""
-        heading_rules = self.rules.get("heading", {})
-        expected_font = heading_rules.get("font_name", "Times New Roman")
-        expected_size = heading_rules.get("font_size", 14)
-        expected_bold = heading_rules.get("bold", True)
-        
         for cp in self.classifications:
             if cp.paragraph_type == ParagraphType.SECTION_HEADING:
+                heading_rules = self._heading_rules_for_text(cp.text)
+                expected_font = heading_rules.get("font_name", "Times New Roman")
+                expected_size = heading_rules.get("font_size", 10)
+                expected_bold = heading_rules.get("bold")
+                expected_italic = heading_rules.get("italic")
                 font_info = cp.font_info
                 
                 # Check font
@@ -563,32 +563,51 @@ class ManuscriptChecker:
                 
                 # Check bold - handle None values (None means not bold)
                 current_bold = bool(font_info.get("bold"))
-                expected_bold_val = bool(heading_rules.get("bold", False))
-                if current_bold != expected_bold_val:
+                if expected_bold is not None and current_bold != bool(expected_bold):
                     self._add_issue(
                         category="headings",
                         location=f"Heading: {truncate_text(cp.text, 30)}",
                         para_index=cp.index,
                         description="Heading bold formatting does not match template",
                         current="Bold" if current_bold else "Not Bold",
-                        expected="Bold" if expected_bold_val else "Not Bold",
+                        expected="Bold" if expected_bold else "Not Bold",
+                        severity="warning",
+                        text_preview=cp.text
+                    )
+
+                current_italic = bool(font_info.get("italic"))
+                if expected_italic is not None and current_italic != bool(expected_italic):
+                    self._add_issue(
+                        category="headings",
+                        location=f"Heading: {truncate_text(cp.text, 30)}",
+                        para_index=cp.index,
+                        description="Heading italic formatting does not match template",
+                        current="Italic" if current_italic else "Not Italic",
+                        expected="Italic" if expected_italic else "Not Italic",
                         severity="warning",
                         text_preview=cp.text
                     )
 
                 paragraph = self.document.paragraphs[cp.index]
                 numbering_bold = self._get_numbering_bold(paragraph)
-                if numbering_bold is not None and numbering_bold != expected_bold_val:
+                if expected_bold is not None and numbering_bold is not None and numbering_bold != bool(expected_bold):
                     self._add_issue(
                         category="headings",
                         location=f"Heading Number: {truncate_text(cp.text, 30)}",
                         para_index=cp.index,
                         description="Heading number bold formatting does not match template",
                         current="Bold" if numbering_bold else "Not Bold",
-                        expected="Bold" if expected_bold_val else "Not Bold",
+                        expected="Bold" if expected_bold else "Not Bold",
                         severity="warning",
                         text_preview=cp.text
                     )
+
+    def _heading_rules_for_text(self, text: str) -> Dict[str, Any]:
+        """Return the correct heading rule for main headings or subheadings."""
+        stripped = re.sub(r"\s+", " ", text.strip())
+        if re.match(r"^\d+\.\d+", stripped):
+            return self.rules.get("subheading", self.rules.get("heading", {}))
+        return self.rules.get("heading", {})
     
     def _check_document_structure(self) -> Dict[str, Any]:
         """Check required sections, order, and heading-role confidence."""
@@ -708,20 +727,22 @@ class ManuscriptChecker:
                     break
         else:
             # Check table captions
-            caption_count = sum(
-                1 for cp in self.classifications 
-                if cp.paragraph_type == ParagraphType.CAPTION and
-                re.match(r'^table\s*\d+', cp.text.lower())
-            )
+            table_captions = [
+                cp for cp in self.classifications
+                if cp.paragraph_type == ParagraphType.CAPTION
+                and re.match(r"^table\s*\d+\s*[\.:]", cp.text.lower())
+            ]
+            caption_count = len(table_captions)
+            expected_caption_count = self._count_captionable_tables()
             
-            if caption_count < len(tables):
+            if caption_count < expected_caption_count:
                 self._add_issue(
                     category="tables",
                     location="Table Captions",
                     para_index=-1,
                     description="Some tables may be missing captions",
                     current=f"{caption_count} captions",
-                    expected=f"{len(tables)} captions",
+                    expected=f"{expected_caption_count} captions",
                     severity="warning"
                 )
     
@@ -731,13 +752,10 @@ class ManuscriptChecker:
         figure_captions = [
             cp for cp in self.classifications
             if cp.paragraph_type == ParagraphType.CAPTION and
-            re.match(r'^(figure|fig\.?)\s*\d+', cp.text.lower())
+            re.match(r'^(figure|fig\.?)\s*\d+\s*[\.:]', cp.text.lower())
         ]
         
-        try:
-            image_count = len(self.document.inline_shapes)
-        except Exception:
-            image_count = 0
+        image_count = self._count_body_images_before_back_matter()
         
         if image_count > 0 and len(figure_captions) < image_count:
             self._add_issue(
@@ -795,6 +813,9 @@ class ManuscriptChecker:
         ]
         
         if not references:
+            reference_texts = self._extract_reference_texts_from_body_xml()
+            if reference_texts:
+                return
             self._add_issue(
                 category="references",
                 location="References Section",
@@ -844,7 +865,7 @@ class ManuscriptChecker:
                     severity="warning",
                     text_preview=truncate_text(cp.text, 50)
                 )
-            
+
             if current_size and current_size != expected_size:
                 self._add_issue(
                     category="references",
@@ -856,6 +877,87 @@ class ManuscriptChecker:
                     severity="warning",
                     text_preview=truncate_text(cp.text, 50)
                 )
+
+    def _count_captionable_tables(self) -> int:
+        """Count tables that are likely manuscript tables needing captions."""
+        count = 0
+        for table in self.document.tables:
+            text = "\n".join(cell.text.strip() for row in table.rows for cell in row.cells)
+            normalized = re.sub(r"\s+", " ", text.lower()).strip()
+            first_cell = ""
+            if table.rows and table.rows[0].cells:
+                first_cell = table.rows[0].cells[0].text.strip().lower()
+
+            if not normalized:
+                continue
+            if normalized.startswith("received:") and "published:" in normalized:
+                continue
+            if first_cell.startswith("algorithm"):
+                continue
+            if " is a " in normalized and "research" in normalized and len(table.columns) <= 2:
+                continue
+
+            count += 1
+        return count
+
+    def _count_body_images_before_back_matter(self) -> int:
+        """Count body images while ignoring author photos in biography sections."""
+        count = 0
+        seen_figure_caption = False
+        for child in self.document.element.body.iterchildren():
+            block_text = " ".join(
+                text_node.text or ""
+                for text_node in child.iter()
+                if text_node.tag == qn("w:t")
+            )
+            normalized = re.sub(r"\s+", " ", block_text.lower()).strip()
+            if normalized.startswith(("biographies of authors", "appendix")):
+                break
+            if re.match(r"^(figure|fig\.?)\s*\d+\s*[\.:]", normalized):
+                seen_figure_caption = True
+            if seen_figure_caption:
+                count += sum(1 for node in child.iter() if node.tag == qn("w:drawing"))
+        return count
+
+    def _extract_reference_texts_from_body_xml(self) -> List[str]:
+        """Extract references from body XML, including Word content controls."""
+        chunks = []
+        in_references = False
+
+        for child in self.document.element.body.iterchildren():
+            block_text = "\n".join(
+                text_node.text or ""
+                for text_node in child.iter()
+                if text_node.tag == qn("w:t")
+            )
+            normalized = re.sub(r"\s+", " ", block_text.lower()).strip()
+            if not normalized:
+                continue
+            if normalized.startswith(("biographies of authors", "appendix")):
+                break
+            if normalized.startswith(("references", "bibliography", "works cited")):
+                in_references = True
+                block_text = re.sub(r"^\s*(references|bibliography|works cited)\s*", "", block_text, flags=re.IGNORECASE)
+            if in_references and block_text.strip():
+                chunks.append(block_text)
+
+        reference_text = "\n".join(chunks)
+        markers = list(re.finditer(r"(?m)^\s*\[\d+\]\s*$", reference_text))
+        if markers:
+            references = []
+            for index, marker in enumerate(markers):
+                start = marker.end()
+                end = markers[index + 1].start() if index + 1 < len(markers) else len(reference_text)
+                entry = reference_text[start:end].strip()
+                if entry:
+                    references.append(entry)
+            return references
+
+        return [
+            line.strip()
+            for line in reference_text.splitlines()
+            if "doi" in line.lower() or re.search(r"\b(19|20)\d{2}\b", line)
+        ]
 
     def _get_numbering_level(self, paragraph):
         """Return the numbering level XML element for a numbered paragraph."""

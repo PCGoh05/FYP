@@ -125,7 +125,7 @@ class ProfileLoader:
         if isinstance(fallback_defaults, dict):
             font_name = fallback_defaults.get("font_name")
             if font_name:
-                for category in ["title", "author", "affiliation", "body", "heading", "abstract", "keywords", "caption", "reference"]:
+                for category in ["title", "author", "affiliation", "body", "heading", "subheading", "abstract", "keywords", "caption", "reference"]:
                     if category in rules and isinstance(rules[category], dict):
                         rules[category].setdefault("font_name", font_name)
 

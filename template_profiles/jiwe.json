@@ -98,6 +98,12 @@
       "bold": true,
       "all_caps": true
     },
+    "subheading": {
+      "font_name": "Times New Roman",
+      "font_size": 10,
+      "bold": false,
+      "italic": true
+    },
     "abstract": {
       "font_name": "Times New Roman",
       "font_size": 9

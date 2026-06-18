@@ -50,6 +50,12 @@ DEFAULT_RULES = {
         "bold": True,
         "all_caps": True
     },
+    "subheading": {
+        "font_name": "Times New Roman",
+        "font_size": 10,
+        "bold": False,
+        "italic": True
+    },
     "abstract": {
         "font_name": "Times New Roman",
         "font_size": 9

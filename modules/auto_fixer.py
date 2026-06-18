@@ -584,17 +584,18 @@ class AutoFixer:
 
     def _fix_heading(self, paragraph, index: int):
         """Fix section heading formatting with structured change records."""
-        heading_rules = self.rules.get("heading", {})
+        heading_rules = self._heading_rules_for_text(get_paragraph_text(paragraph))
         changes = []
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["headings"],
-            fallback=["font_name", "font_size", "bold", "number_font_name", "number_font_size", "number_bold"],
+            fallback=["font_name", "font_size", "bold", "italic", "number_font_name", "number_font_size", "number_bold"],
         )
 
         expected_font = heading_rules.get("font_name", "Times New Roman")
-        expected_size = heading_rules.get("font_size", 14)
+        expected_size = heading_rules.get("font_size", 10)
         expected_bold = heading_rules.get("bold", None)
+        expected_italic = heading_rules.get("italic", None)
 
         changes.extend(self._fix_numbering_formatting(
             paragraph,
@@ -611,6 +612,7 @@ class AutoFixer:
                     expected_font,
                     expected_size,
                     expected_bold,
+                    expected_italic,
                     expected_strike=False,
                     allowed_properties=allowed_properties,
                 ))
@@ -624,6 +626,13 @@ class AutoFixer:
                 text_preview=truncate_text(get_paragraph_text(paragraph), 40),
                 paragraph_type=ParagraphType.SECTION_HEADING.value,
             )
+
+    def _heading_rules_for_text(self, text: str) -> Dict[str, Any]:
+        """Return the correct heading rule for main headings or subheadings."""
+        stripped = re.sub(r"\s+", " ", text.strip())
+        if re.match(r"^\d+\.\d+", stripped):
+            return self.rules.get("subheading", self.rules.get("heading", {}))
+        return self.rules.get("heading", {})
 
     def _get_numbering_level(self, paragraph):
         """Return the numbering level XML element for a numbered paragraph."""
