@@ -7,6 +7,7 @@ Main Application Entry Point
 
 import streamlit as st
 import os
+import subprocess
 from io import BytesIO
 from datetime import datetime
 
@@ -27,6 +28,21 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+
+def get_build_commit() -> str:
+    """Return the current Git commit short hash when available."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=True,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return "unknown"
 
 # Load custom CSS
 def load_css():
@@ -232,6 +248,7 @@ def display_sidebar():
             st.markdown(f"""
             **{APP_TITLE}**
             Version: {APP_VERSION}
+            Build: {get_build_commit()}
 
             This tool helps you:
             - Extract formatting rules from journal templates
