@@ -166,40 +166,69 @@ class LLMIntegration:
         if not self._available:
             return self._fallback_explanation(issue)
         
-        prompt = f"""You are an academic writing assistant helping a student fix manuscript formatting issues.
+        prompt = f"""Explain this rule-detected manuscript formatting issue.
 
-Explain this formatting error in a helpful, educational way:
+Important boundaries:
+- Do not decide whether the issue is correct.
+- The rule-based checker already detected this issue.
+- Do not mention AI, model uncertainty, or alternative formatting standards.
+- Do not add new issues.
+- Keep the explanation short and practical.
 
+Issue details:
+Category: {issue.get('category', 'Unknown')}
 Location: {issue.get('location', 'Unknown')}
 Issue: {issue.get('description', 'Formatting error')}
 Current: {issue.get('current_value', 'Unknown')}
 Expected: {issue.get('expected_value', 'Unknown')}
+Severity: {issue.get('severity', 'warning')}
+Text preview: {issue.get('text_preview', '')}
 
-Provide:
-1. A clear explanation of why this matters
-2. How it affects journal submission
-3. A brief tip for avoiding this in the future
+Return exactly this format:
+Problem: one sentence describing the mismatch.
+Why it matters: one sentence explaining journal/template impact.
+How to fix: one sentence with the direct correction.
+Rule used: current value -> expected value.
+Confidence: explain that this is based on deterministic template rules, not an LLM decision."""
 
-Keep the response concise (2-3 sentences)."""
-
-        system_prompt = "You are an expert academic editor helping students format their manuscripts correctly."
+        system_prompt = (
+            "You explain formatting issues found by a rule-based manuscript checker. "
+            "You are concise, concrete, and do not re-judge the detection."
+        )
         
         try:
             response = self.generate(prompt, system_prompt)
-            return response if response else self._fallback_explanation(issue)
+            return response if self._is_structured_explanation(response) else self._fallback_explanation(issue)
         except Exception:
             return self._fallback_explanation(issue)
+
+    def _is_structured_explanation(self, explanation: str) -> bool:
+        """Return True when the explanation follows the required section format."""
+        if not explanation:
+            return False
+        required_headings = [
+            "Problem:",
+            "Why it matters:",
+            "How to fix:",
+            "Rule used:",
+            "Confidence:",
+        ]
+        return all(heading in explanation for heading in required_headings)
     
     def _fallback_explanation(self, issue: Dict[str, Any]) -> str:
         """Fallback explanation when LLM is unavailable"""
         description = issue.get('description', 'Formatting issue')
         current = issue.get('current_value', 'current format')
         expected = issue.get('expected_value', 'expected format')
+        location = issue.get('location', 'the selected location')
+        severity = issue.get('severity', 'warning')
         
         return (
-            f"Your manuscript has {description.lower()}. "
-            f"The current value ({current}) should be changed to {expected} "
-            f"to match the journal template requirements."
+            f"Problem: {location} has this issue: {description}.\n"
+            f"Why it matters: Journal templates require consistent formatting so editors can review submissions quickly.\n"
+            f"How to fix: Change the current value from {current} to {expected}.\n"
+            f"Rule used: {current} -> {expected}.\n"
+            f"Confidence: This is a {severity} from deterministic template rules, not an LLM decision."
         )
     
     def validate_issue(self, issue: Dict[str, Any]) -> Tuple[bool, str]:
