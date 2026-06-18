@@ -564,3 +564,10 @@ def create_llm_integration(api_key: str = None) -> LLMIntegration:
         LLMIntegration instance
     """
     return LLMIntegration(api_key=api_key)
+
+
+def fallback_explain_issue(issue: Dict[str, Any]) -> str:
+    """Return the deterministic explanation used when no LLM is available."""
+    llm = LLMIntegration.__new__(LLMIntegration)
+    llm._available = False
+    return LLMIntegration._fallback_explanation(llm, issue)

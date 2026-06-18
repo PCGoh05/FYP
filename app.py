@@ -17,7 +17,7 @@ from modules.paragraph_classifier import ParagraphClassifier, ParagraphType
 from modules.manuscript_checker import ManuscriptChecker
 from modules.auto_fixer import AutoFixer
 from modules.report_generator import ReportGenerator
-from modules.llm_integration import create_llm_integration
+from modules.llm_integration import create_llm_integration, fallback_explain_issue
 from modules.utils import pdf_to_docx, docx_to_pdf, PDF2DOCX_AVAILABLE, DOCX2PDF_AVAILABLE
 from config import APP_TITLE, APP_VERSION, DEFAULT_RULES, COLORS
 
@@ -43,6 +43,49 @@ def get_build_commit() -> str:
         return result.stdout.strip()
     except Exception:
         return "unknown"
+
+
+def get_server_nvidia_api_key() -> str:
+    """Return a server-managed NVIDIA API key without exposing it in the UI."""
+    secret_candidates = []
+    try:
+        secret_candidates.extend([
+            st.secrets.get("NVIDIA_API_KEY", ""),
+            st.secrets.get("nvidia_api_key", ""),
+        ])
+        llm_secrets = st.secrets.get("llm", {})
+        if isinstance(llm_secrets, dict):
+            secret_candidates.extend([
+                llm_secrets.get("NVIDIA_API_KEY", ""),
+                llm_secrets.get("nvidia_api_key", ""),
+            ])
+    except Exception:
+        pass
+
+    secret_candidates.append(os.environ.get("NVIDIA_API_KEY", ""))
+    return next((key for key in secret_candidates if key), "")
+
+
+def ensure_llm_connection() -> bool:
+    """Connect to the server-managed LLM once when AI explanations are enabled."""
+    if st.session_state.llm and st.session_state.llm.is_available():
+        return True
+    if st.session_state.get("llm_connection_attempted"):
+        return False
+
+    st.session_state.llm_connection_attempted = True
+    api_key = get_server_nvidia_api_key()
+    if not api_key:
+        st.session_state.llm = None
+        return False
+
+    st.session_state.llm = create_llm_integration(api_key=api_key)
+    if st.session_state.llm.is_available():
+        st.session_state.llm_source = "server"
+        return True
+
+    st.session_state.llm = None
+    return False
 
 # Load custom CSS
 def load_css():
@@ -117,6 +160,10 @@ def init_session_state():
         st.session_state.report_bytes = None
     if "llm" not in st.session_state:
         st.session_state.llm = None
+    if "llm_connection_attempted" not in st.session_state:
+        st.session_state.llm_connection_attempted = False
+    if "llm_source" not in st.session_state:
+        st.session_state.llm_source = ""
     if "ai_explanations_enabled" not in st.session_state:
         st.session_state.ai_explanations_enabled = False
     if "manuscript_bytes" not in st.session_state:
@@ -161,40 +208,43 @@ def display_sidebar():
 
             if not ai_enabled:
                 st.session_state.llm = None
+                st.session_state.llm_connection_attempted = False
+                st.session_state.llm_source = ""
                 st.info("AI explanations are disabled. Core checking is rule-based.")
 
             # Show current status
-            if ai_enabled and st.session_state.llm and st.session_state.llm.is_available():
-                st.success("LLM connected through NVIDIA API")
+            if ai_enabled and ensure_llm_connection():
+                st.success("AI explanations are using the server NVIDIA API key.")
                 st.info("AI explanations are enabled. Core checking remains rule-based.")
                 if st.button("Disconnect LLM"):
                     st.session_state.llm = None
+                    st.session_state.llm_connection_attempted = False
+                    st.session_state.llm_source = ""
                     st.session_state.ai_explanations_enabled = False
                     st.rerun()
             elif ai_enabled:
-                st.warning("LLM not connected")
-                st.markdown("""
-                **To enable AI explanations:**
-                1. Get NVIDIA API key at [build.nvidia.com](https://build.nvidia.com)
-                2. Enter the key below
-                """)
-
-                api_key = st.text_input(
-                    "NVIDIA API Key",
-                    type="password",
-                    placeholder="nvapi-xxxxxxxxxxxx",
-                    help="Get API key at build.nvidia.com"
-                )
-                if st.button("Connect to NVIDIA API", type="primary"):
-                    if api_key:
-                        st.session_state.llm = create_llm_integration(api_key=api_key)
-                        if st.session_state.llm.is_available():
-                            st.success("Connected successfully.")
-                            st.rerun()
+                st.warning("Server LLM is unavailable. Rule-based explanations will still be shown.")
+                with st.expander("Developer key override", expanded=False):
+                    st.caption("Optional for local testing only. Normal users do not need to enter an API key.")
+                    api_key = st.text_input(
+                        "NVIDIA API Key",
+                        type="password",
+                        placeholder="nvapi-xxxxxxxxxxxx",
+                        help="Use only when the server-managed key is not configured."
+                    )
+                    if st.button("Connect with override key", type="primary"):
+                        if api_key:
+                            st.session_state.llm = create_llm_integration(api_key=api_key)
+                            st.session_state.llm_connection_attempted = True
+                            if st.session_state.llm.is_available():
+                                st.session_state.llm_source = "override"
+                                st.success("Connected successfully.")
+                                st.rerun()
+                            else:
+                                st.session_state.llm = None
+                                st.error("Connection failed. Check the override key.")
                         else:
-                            st.error("Connection failed. Check your API key.")
-                    else:
-                        st.error("Please enter an API key")
+                            st.error("Please enter an API key")
 
         st.divider()
 
@@ -491,19 +541,21 @@ def display_check_results(result):
                     - Current: `{issue.current_value}` Expected: `{issue.expected_value}`
                     """)
 
-                    # LLM explanation if available
-                    if (
-                        st.session_state.ai_explanations_enabled
-                        and st.session_state.llm
-                        and st.session_state.llm.is_available()
-                    ):
+                    # Optional AI explanation, with deterministic fallback when unavailable.
+                    if st.session_state.ai_explanations_enabled:
                         if st.button(f"Explain", key=f"explain_{category}_{tab_idx}_{issue_idx}_{issue.paragraph_index}"):
-                            explanation = st.session_state.llm.explain_error({
+                            issue_payload = {
+                                "category": category,
                                 "location": issue.location,
                                 "description": issue.description,
                                 "current_value": issue.current_value,
-                                "expected_value": issue.expected_value
-                            })
+                                "expected_value": issue.expected_value,
+                                "severity": issue.severity,
+                            }
+                            if ensure_llm_connection():
+                                explanation = st.session_state.llm.explain_error(issue_payload)
+                            else:
+                                explanation = fallback_explain_issue(issue_payload)
                             st.info(explanation)
 
 

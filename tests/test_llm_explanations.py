@@ -1,6 +1,6 @@
 import unittest
 
-from modules.llm_integration import LLMIntegration
+from modules.llm_integration import LLMIntegration, fallback_explain_issue
 
 
 class CapturingLLM(LLMIntegration):
@@ -52,6 +52,12 @@ class LLMExplanationTest(unittest.TestCase):
         self.assertIn("rule-based checker already detected", llm.last_prompt)
         self.assertIn("Problem:", llm.last_prompt)
         self.assertIn("Confidence:", llm.last_prompt)
+
+    def test_fallback_helper_explains_without_api_key(self):
+        explanation = fallback_explain_issue(_issue())
+
+        self.assertIn("Problem:", explanation)
+        self.assertIn("Rule used: Calibri -> Times New Roman.", explanation)
 
 
 if __name__ == "__main__":
