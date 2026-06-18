@@ -90,6 +90,7 @@
     "body": {
       "font_name": "Times New Roman",
       "font_size": 10,
+      "bold": false,
       "line_spacing": 1.0
     },
     "heading": {
@@ -106,11 +107,13 @@
     },
     "abstract": {
       "font_name": "Times New Roman",
-      "font_size": 9
+      "font_size": 9,
+      "bold": false
     },
     "keywords": {
       "font_name": "Times New Roman",
-      "font_size": 9
+      "font_size": 9,
+      "bold": false
     },
     "caption": {
       "font_name": "Times New Roman",
@@ -119,7 +122,8 @@
     },
     "reference": {
       "font_name": "Times New Roman",
-      "font_size": 9
+      "font_size": 9,
+      "bold": false
     },
     "layout": {
       "columns": 1,

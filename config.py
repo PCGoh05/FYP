@@ -42,6 +42,7 @@ DEFAULT_RULES = {
     "body": {
         "font_name": "Times New Roman",
         "font_size": 10,
+        "bold": False,
         "line_spacing": 1.0
     },
     "heading": {
@@ -58,11 +59,13 @@ DEFAULT_RULES = {
     },
     "abstract": {
         "font_name": "Times New Roman",
-        "font_size": 9
+        "font_size": 9,
+        "bold": False
     },
     "keywords": {
         "font_name": "Times New Roman",
-        "font_size": 9
+        "font_size": 9,
+        "bold": False
     },
     "caption": {
         "font_name": "Times New Roman",
@@ -71,7 +74,8 @@ DEFAULT_RULES = {
     },
     "reference": {
         "font_name": "Times New Roman",
-        "font_size": 9
+        "font_size": 9,
+        "bold": False
     },
     "layout": {
         "columns": 1,

@@ -749,11 +749,12 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["body_text", "line_spacing"],
-            fallback=["font_name", "font_size", "line_spacing"],
+            fallback=["font_name", "font_size", "bold", "line_spacing"],
         )
 
         expected_font = body_rules.get("font_name", "Times New Roman")
         expected_size = body_rules.get("font_size", 12)
+        expected_bold = body_rules.get("bold", None)
 
         for run in paragraph.runs:
             if run.text.strip():
@@ -761,7 +762,7 @@ class AutoFixer:
                     run,
                     expected_font,
                     expected_size,
-                    None,
+                    expected_bold,
                     allowed_properties=allowed_properties,
                 ))
 
@@ -795,11 +796,12 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["body_text", "line_spacing"],
-            fallback=["font_name", "font_size", "line_spacing"],
+            fallback=["font_name", "font_size", "bold", "line_spacing"],
         )
 
         expected_font = abstract_rules.get("font_name", "Times New Roman")
         expected_size = abstract_rules.get("font_size", 9)
+        expected_bold = abstract_rules.get("bold", None)
 
         for run in paragraph.runs:
             if run.text.strip():
@@ -807,7 +809,7 @@ class AutoFixer:
                     run,
                     expected_font,
                     expected_size,
-                    None,
+                    expected_bold,
                     allowed_properties=allowed_properties,
                 ))
 
@@ -841,11 +843,12 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["body_text"],
-            fallback=["font_name", "font_size"],
+            fallback=["font_name", "font_size", "bold"],
         )
 
         expected_font = keywords_rules.get("font_name", "Times New Roman")
         expected_size = keywords_rules.get("font_size", 9)
+        expected_bold = keywords_rules.get("bold", None)
 
         for run in paragraph.runs:
             if run.text.strip():
@@ -853,7 +856,7 @@ class AutoFixer:
                     run,
                     expected_font,
                     expected_size,
-                    None,
+                    expected_bold,
                     allowed_properties=allowed_properties,
                 ))
 
@@ -909,11 +912,12 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["references"],
-            fallback=["font_name", "font_size"],
+            fallback=["font_name", "font_size", "bold"],
         )
 
         expected_font = reference_rules.get("font_name", "Times New Roman")
         expected_size = reference_rules.get("font_size", 9)
+        expected_bold = reference_rules.get("bold", None)
 
         for run in paragraph.runs:
             if run.text.strip():
@@ -921,7 +925,7 @@ class AutoFixer:
                     run,
                     expected_font,
                     expected_size,
-                    None,
+                    expected_bold,
                     allowed_properties=allowed_properties,
                 ))
 

@@ -8,6 +8,7 @@ from docx.oxml.ns import qn
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
 import re
+from difflib import SequenceMatcher
 
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_font_info,
@@ -204,7 +205,7 @@ class ManuscriptChecker:
                 
                 # Check bold
                 expected_bold = title_rules.get("bold")
-                current_bold = bool(font_info.get("bold"))
+                current_bold = self._is_paragraph_mostly_bold(cp.index)
                 if expected_bold is not None and current_bold != expected_bold:
                     self._add_issue(
                         category="title",
@@ -390,6 +391,7 @@ class ManuscriptChecker:
         body_rules = self.rules.get("body", {})
         expected_font = body_rules.get("font_name", "Times New Roman")
         expected_size = body_rules.get("font_size", 12)
+        expected_bold = body_rules.get("bold")
         
         # Font size tolerance (allow +/-1.0pt difference for body text)
         size_tolerance = 1.0
@@ -452,6 +454,21 @@ class ManuscriptChecker:
                             text_preview=truncate_text(cp.text, 50)
                         )
                     issues_found += 1
+
+                current_bold = self._is_paragraph_mostly_bold(cp.index)
+                if expected_bold is not None and current_bold != bool(expected_bold):
+                    if issues_found < max_issues_to_report:
+                        self._add_issue(
+                            category="body_text",
+                            location=f"Paragraph {cp.index + 1}",
+                            para_index=cp.index,
+                            description="Body text bold formatting does not match template",
+                            current="Bold" if current_bold else "Not Bold",
+                            expected="Bold" if expected_bold else "Not Bold",
+                            severity="warning",
+                            text_preview=truncate_text(cp.text, 50)
+                        )
+                    issues_found += 1
         
         # Add summary if many issues
         if issues_found > max_issues_to_report:
@@ -476,6 +493,7 @@ class ManuscriptChecker:
         abstract_rules = self.rules.get("abstract", {})
         expected_font = abstract_rules.get("font_name", "Times New Roman")
         expected_size = abstract_rules.get("font_size", 9)
+        expected_bold = abstract_rules.get("bold")
         size_tolerance = 0.5
         
         for cp in self.classifications:
@@ -495,6 +513,19 @@ class ManuscriptChecker:
                         severity="warning",
                         text_preview=truncate_text(cp.text, 50)
                     )
+
+                current_bold = self._is_paragraph_mostly_bold(cp.index)
+                if expected_bold is not None and current_bold != bool(expected_bold):
+                    self._add_issue(
+                        category="body_text",
+                        location="Abstract",
+                        para_index=cp.index,
+                        description="Abstract bold formatting does not match template",
+                        current="Bold" if current_bold else "Not Bold",
+                        expected="Bold" if expected_bold else "Not Bold",
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 50)
+                    )
     
     def _check_keywords_content(self):
         """Check keywords content formatting"""
@@ -502,6 +533,7 @@ class ManuscriptChecker:
         keywords_rules = self.rules.get("keywords", self.rules.get("abstract", {}))
         expected_font = keywords_rules.get("font_name", "Times New Roman")
         expected_size = keywords_rules.get("font_size", 9)
+        expected_bold = keywords_rules.get("bold")
         size_tolerance = 0.5
         
         for cp in self.classifications:
@@ -518,6 +550,19 @@ class ManuscriptChecker:
                         description="Keywords font size does not match template",
                         current=f"{current_size}pt",
                         expected=f"{expected_size}pt",
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 50)
+                    )
+
+                current_bold = self._is_paragraph_mostly_bold(cp.index)
+                if expected_bold is not None and current_bold != bool(expected_bold):
+                    self._add_issue(
+                        category="body_text",
+                        location="Keywords",
+                        para_index=cp.index,
+                        description="Keywords bold formatting does not match template",
+                        current="Bold" if current_bold else "Not Bold",
+                        expected="Bold" if expected_bold else "Not Bold",
                         severity="warning",
                         text_preview=truncate_text(cp.text, 50)
                     )
@@ -662,6 +707,8 @@ class ManuscriptChecker:
                 } else "weak"
                 mark_section("references", cp, status)
 
+        self._check_required_heading_typos(sections)
+
         for section, details in sections.items():
             if not details["found"]:
                 self._add_issue(
@@ -706,6 +753,44 @@ class ManuscriptChecker:
             "order_correct": order_correct,
             "expected_order": self.required_sections,
         }
+
+    def _check_required_heading_typos(self, sections: Dict[str, Dict[str, Any]]) -> None:
+        """Report likely misspellings of required section headings."""
+        reported_sections = set()
+        for cp in self.classifications:
+            candidate = self._normalize_heading_candidate(cp.text)
+            if not candidate:
+                continue
+            for section in self.required_sections:
+                if sections.get(section, {}).get("found") or section in reported_sections:
+                    continue
+                ratio = SequenceMatcher(None, candidate, section).ratio()
+                if ratio >= 0.82:
+                    reported_sections.add(section)
+                    self._add_issue(
+                        category="structure",
+                        location=f"Possible {section.capitalize()} Heading",
+                        para_index=cp.index,
+                        description="Possible misspelled required section heading",
+                        current=cp.text,
+                        expected=section.upper(),
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 50)
+                    )
+
+    def _normalize_heading_candidate(self, text: str) -> str:
+        """Normalize short heading-like text for typo detection."""
+        stripped = re.sub(r"\s+", " ", text.strip())
+        if not stripped or len(stripped) > 80:
+            return ""
+        if not (stripped.isupper() or re.match(r"^\d+(\.\d+)*\.?\s+\S+", stripped)):
+            return ""
+        stripped = re.sub(r"^\d+(\.\d+)*\.?\s+", "", stripped)
+        stripped = re.sub(r"\([^)]*\)", "", stripped)
+        normalized = re.sub(r"[^a-z ]", "", stripped.lower()).strip()
+        if len(normalized.split()) > 4:
+            return ""
+        return normalized
     
     def _check_tables(self):
         """Check tables in the document"""
@@ -806,6 +891,7 @@ class ManuscriptChecker:
         reference_rules = self.rules.get("reference", {})
         expected_font = reference_rules.get("font_name", "Times New Roman")
         expected_size = reference_rules.get("font_size", 9)
+        expected_bold = reference_rules.get("bold")
         
         references = [
             cp for cp in self.classifications
@@ -877,6 +963,34 @@ class ManuscriptChecker:
                     severity="warning",
                     text_preview=truncate_text(cp.text, 50)
                 )
+
+            current_bold = self._is_paragraph_mostly_bold(cp.index)
+            if expected_bold is not None and current_bold != bool(expected_bold):
+                self._add_issue(
+                    category="references",
+                    location=f"Reference {i + 1}",
+                    para_index=cp.index,
+                    description="Reference bold formatting does not match template",
+                    current="Bold" if current_bold else "Not Bold",
+                    expected="Bold" if expected_bold else "Not Bold",
+                    severity="warning",
+                    text_preview=truncate_text(cp.text, 50)
+                )
+
+    def _is_paragraph_mostly_bold(self, paragraph_index: int) -> bool:
+        """Return True when most visible paragraph text is explicitly bold."""
+        if paragraph_index < 0 or paragraph_index >= len(self.document.paragraphs):
+            return False
+        bold_chars = 0
+        total_chars = 0
+        for run in self.document.paragraphs[paragraph_index].runs:
+            text_length = len(run.text.strip())
+            if not text_length:
+                continue
+            total_chars += text_length
+            if bool(run.font.bold):
+                bold_chars += text_length
+        return total_chars > 0 and (bold_chars / total_chars) >= 0.8
 
     def _count_captionable_tables(self) -> int:
         """Count tables that are likely manuscript tables needing captions."""
