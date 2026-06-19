@@ -5,6 +5,7 @@ from pathlib import Path
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
+from docx.shared import RGBColor
 
 from modules.auto_fixer import AutoFixer
 from modules.manuscript_checker import ManuscriptChecker
@@ -171,6 +172,40 @@ class HeaderLayoutStabilityTest(unittest.TestCase):
                 change.location for change in changes if change.property_name == "manual_tabs"
             ]
             self.assertNotIn("First Page Header (Section 1)", changed_locations)
+
+    def test_auto_fixer_normalizes_page_header_without_losing_run_formatting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "styled_header.docx"
+            _save_unstable_docx(path)
+            document = Document(path)
+            header = document.sections[0].header.paragraphs[0]
+            header.clear()
+            run = header.add_run(
+                "Journal of Informatics and Web Engineering "
+                "\t\t\t\t             Vol. 3 No. 3 (January 2026)"
+            )
+            run.font.name = "Times New Roman"
+            run.font.size = Pt(9)
+            run.font.italic = True
+            run.font.color.rgb = RGBColor(128, 128, 128)
+            document.save(path)
+
+            checker = ManuscriptChecker(_rules()).load_manuscript(str(path))
+            result = checker.check_all()
+            fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixed_doc, _ = fixer.fix_all()
+
+            fixed_header = fixed_doc.sections[0].header.paragraphs[0]
+            visible_runs = [run for run in fixed_header.runs if run.text.strip()]
+            self.assertEqual(
+                fixed_header.text,
+                "Journal of Informatics and Web Engineering\tVol. 3 No. 3 (January 2026)",
+            )
+            self.assertEqual(len(visible_runs), 1)
+            self.assertEqual(visible_runs[0].font.name, "Times New Roman")
+            self.assertEqual(visible_runs[0].font.size.pt, 9)
+            self.assertTrue(visible_runs[0].font.italic)
 
 
 if __name__ == "__main__":

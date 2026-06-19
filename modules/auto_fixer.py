@@ -302,7 +302,7 @@ class AutoFixer:
                     if normalized_text == original_text:
                         continue
 
-                    paragraph.text = normalized_text
+                    self._replace_paragraph_text_preserving_first_run(paragraph, normalized_text)
                     try:
                         tab_stops = paragraph.paragraph_format.tab_stops
                         tab_stops.clear_all()
@@ -364,6 +364,22 @@ class AutoFixer:
             else:
                 run.text = run_text[:-remaining]
                 remaining = 0
+
+    def _replace_paragraph_text_preserving_first_run(self, paragraph, text: str):
+        """Replace paragraph text while preserving the first visible run formatting."""
+        first_index = next(
+            (index for index, run in enumerate(paragraph.runs) if run.text),
+            None,
+        )
+        if first_index is None:
+            paragraph.add_run(text)
+            return
+
+        first_run = paragraph.runs[first_index]
+        first_run.text = text
+        for index, run in enumerate(paragraph.runs):
+            if index != first_index:
+                run.text = ""
 
     def _add_change_record(
         self,
