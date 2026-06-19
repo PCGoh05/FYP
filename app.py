@@ -47,22 +47,23 @@ def get_build_commit() -> str:
 
 def get_server_nvidia_api_key() -> str:
     """Return a server-managed NVIDIA API key without exposing it in the UI."""
+    key_names = [
+        "NVIDIA_API_KEY",
+        "NVIDIA_NIM_API_KEY",
+        "NVIDIA_API_TOKEN",
+        "nvidia_api_key",
+        "nvidia_nim_api_key",
+        "nvidia_api_token",
+    ]
     secret_candidates = []
     try:
-        secret_candidates.extend([
-            st.secrets.get("NVIDIA_API_KEY", ""),
-            st.secrets.get("nvidia_api_key", ""),
-        ])
+        secret_candidates.extend(st.secrets.get(name, "") for name in key_names)
         llm_secrets = st.secrets.get("llm", {})
-        if isinstance(llm_secrets, dict):
-            secret_candidates.extend([
-                llm_secrets.get("NVIDIA_API_KEY", ""),
-                llm_secrets.get("nvidia_api_key", ""),
-            ])
+        secret_candidates.extend(llm_secrets.get(name, "") for name in key_names)
     except Exception:
         pass
 
-    secret_candidates.append(os.environ.get("NVIDIA_API_KEY", ""))
+    secret_candidates.extend(os.environ.get(name, "") for name in key_names)
     return next((key for key in secret_candidates if key), "")
 
 
@@ -223,28 +224,32 @@ def display_sidebar():
                     st.session_state.ai_explanations_enabled = False
                     st.rerun()
             elif ai_enabled:
-                st.warning("Server LLM is unavailable. Rule-based explanations will still be shown.")
-                with st.expander("Developer key override", expanded=False):
-                    st.caption("Optional for local testing only. Normal users do not need to enter an API key.")
-                    api_key = st.text_input(
-                        "NVIDIA API Key",
-                        type="password",
-                        placeholder="nvapi-xxxxxxxxxxxx",
-                        help="Use only when the server-managed key is not configured."
-                    )
-                    if st.button("Connect with override key", type="primary"):
-                        if api_key:
-                            st.session_state.llm = create_llm_integration(api_key=api_key)
-                            st.session_state.llm_connection_attempted = True
-                            if st.session_state.llm.is_available():
-                                st.session_state.llm_source = "override"
-                                st.success("Connected successfully.")
-                                st.rerun()
+                st.warning(
+                    "AI explanation service is not configured on this deployment. "
+                    "Rule-based explanations will still be shown."
+                )
+                if os.environ.get("SHOW_LLM_KEY_OVERRIDE") == "1":
+                    with st.expander("Developer key override", expanded=False):
+                        st.caption("Optional for local testing only. Normal users do not need to enter an API key.")
+                        api_key = st.text_input(
+                            "NVIDIA API Key",
+                            type="password",
+                            placeholder="nvapi-xxxxxxxxxxxx",
+                            help="Use only when the server-managed key is not configured."
+                        )
+                        if st.button("Connect with override key", type="primary"):
+                            if api_key:
+                                st.session_state.llm = create_llm_integration(api_key=api_key)
+                                st.session_state.llm_connection_attempted = True
+                                if st.session_state.llm.is_available():
+                                    st.session_state.llm_source = "override"
+                                    st.success("Connected successfully.")
+                                    st.rerun()
+                                else:
+                                    st.session_state.llm = None
+                                    st.error("Connection failed. Check the override key.")
                             else:
-                                st.session_state.llm = None
-                                st.error("Connection failed. Check the override key.")
-                        else:
-                            st.error("Please enter an API key")
+                                st.error("Please enter an API key")
 
         st.divider()
 
