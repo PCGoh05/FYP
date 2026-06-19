@@ -90,6 +90,15 @@ def load_rules(template_path: Path) -> Dict:
     return extractor.extract_all_rules()
 
 
+def validate_evaluation_inputs(template_path: Path, samples_dir: Path) -> Optional[str]:
+    """Return a readable input error message, or None when inputs are usable."""
+    if not template_path.is_file():
+        return f"Template file not found: {template_path}"
+    if not samples_dir.is_dir():
+        return f"Samples directory not found: {samples_dir}"
+    return None
+
+
 def run_checker(rules: Dict, manuscript_path: Path):
     """Run all checks for one manuscript."""
     checker = ManuscriptChecker(rules)
@@ -322,8 +331,17 @@ def main() -> None:
 
     template_path = Path(args.template)
     samples_dir = Path(args.samples)
+    input_error = validate_evaluation_inputs(template_path, samples_dir)
+    if input_error:
+        print(input_error)
+        print("Provide valid paths with --template and --samples.")
+        return
+
     rules = load_rules(template_path)
     sample_files = discover_sample_files(samples_dir, template_path)
+    if not sample_files:
+        print(f"No usable DOCX samples found in: {samples_dir}")
+        return
 
     if args.export_label_template:
         export_label_template(Path(args.export_label_template), rules, sample_files)
