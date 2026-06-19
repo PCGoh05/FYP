@@ -335,6 +335,36 @@ class AutoFixer:
             return text
         return f"{parts[0]}\t{parts[-1]}"
 
+    def _trim_paragraph_edge_whitespace(self, paragraph):
+        """Trim paragraph edge spaces without replacing runs and losing formatting."""
+        text = paragraph.text
+        leading_count = len(text) - len(text.lstrip(" \t"))
+        trailing_count = len(text) - len(text.rstrip(" \t"))
+
+        remaining = leading_count
+        for run in paragraph.runs:
+            if remaining <= 0:
+                break
+            run_text = run.text
+            if len(run_text) <= remaining:
+                run.text = ""
+                remaining -= len(run_text)
+            else:
+                run.text = run_text[remaining:]
+                remaining = 0
+
+        remaining = trailing_count
+        for run in reversed(paragraph.runs):
+            if remaining <= 0:
+                break
+            run_text = run.text
+            if len(run_text) <= remaining:
+                run.text = ""
+                remaining -= len(run_text)
+            else:
+                run.text = run_text[:-remaining]
+                remaining = 0
+
     def _add_change_record(
         self,
         paragraph_index: int,
@@ -417,7 +447,7 @@ class AutoFixer:
             and cleaned_text
             and cleaned_text != original_text
         ):
-            paragraph.text = cleaned_text
+            self._trim_paragraph_edge_whitespace(paragraph)
             changes.append({
                 "property_name": "manual_tabs",
                 "current_value": "Manual tabs/spaces",

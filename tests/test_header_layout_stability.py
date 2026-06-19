@@ -4,6 +4,7 @@ from pathlib import Path
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Pt
 
 from modules.auto_fixer import AutoFixer
 from modules.manuscript_checker import ManuscriptChecker
@@ -101,6 +102,47 @@ class HeaderLayoutStabilityTest(unittest.TestCase):
             self.assertTrue(
                 any(change.property_name == "manual_tabs" for change in changes)
             )
+
+    def test_auto_fixer_trims_journal_header_spaces_without_losing_run_formatting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "spaced_header.docx"
+            document = Document()
+            header = document.add_paragraph()
+            header.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = header.add_run(" Journal of Informatics and ")
+            run.font.name = "Palatino Linotype"
+            run.font.size = Pt(24)
+            run.font.bold = True
+            second = document.add_paragraph("Web Engineering")
+            second.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            second.runs[0].font.name = "Palatino Linotype"
+            second.runs[0].font.size = Pt(24)
+            second.runs[0].font.bold = True
+            document.add_paragraph("Vol. 3 No. 3 (January 2026)\teISSN: 2821-370X")
+            document.add_paragraph("A Test Paper Title for Format Validation")
+            document.add_paragraph("Abstract - This is an abstract.")
+            document.add_paragraph("Keywords - template, checking")
+            document.add_paragraph("INTRODUCTION")
+            document.add_paragraph("Body text.")
+            document.add_paragraph("CONCLUSION")
+            document.add_paragraph("Conclusion text.")
+            document.add_paragraph("REFERENCES")
+            document.add_paragraph("[1] Reference text.")
+            document.save(path)
+
+            checker = ManuscriptChecker(_rules()).load_manuscript(str(path))
+            result = checker.check_all()
+            fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixed_doc, _ = fixer.fix_all()
+
+            fixed_header = fixed_doc.paragraphs[0]
+            self.assertEqual(fixed_header.text, "Journal of Informatics and")
+            visible_runs = [run for run in fixed_header.runs if run.text.strip()]
+            self.assertEqual(len(visible_runs), 1)
+            self.assertEqual(visible_runs[0].font.name, "Palatino Linotype")
+            self.assertEqual(visible_runs[0].font.size.pt, 24)
+            self.assertTrue(visible_runs[0].font.bold)
 
     def test_auto_fixer_preserves_stable_single_tab_page_headers(self):
         with tempfile.TemporaryDirectory() as tmp:
