@@ -40,6 +40,78 @@ class ChangeRecord:
     evidence: str = ""
 
 
+@dataclass
+class PostFixValidationResult:
+    """Result of checking the corrected document after auto-fix."""
+    is_safe: bool
+    before_issues: int
+    after_issues: int
+    before_score: float
+    after_score: float
+    issue_delta: int
+    score_delta: float
+    new_or_increased_categories: Dict[str, int]
+    message: str
+
+
+def _category_issue_counts(result: Any) -> Dict[str, int]:
+    """Return issue counts per category from a checker result."""
+    issues_by_category = getattr(result, "issues_by_category", {}) or {}
+    return {
+        category: len(issues)
+        for category, issues in issues_by_category.items()
+        if issues
+    }
+
+
+def validate_post_fix_result(before_result: Any, after_result: Any) -> PostFixValidationResult:
+    """Compare pre-fix and post-fix checker results."""
+    before_issues = int(getattr(before_result, "total_issues", 0) or 0)
+    after_issues = int(getattr(after_result, "total_issues", 0) or 0)
+    before_score = float(getattr(before_result, "compliance_score", 0.0) or 0.0)
+    after_score = float(getattr(after_result, "compliance_score", 0.0) or 0.0)
+    issue_delta = after_issues - before_issues
+    score_delta = round(after_score - before_score, 2)
+
+    before_counts = _category_issue_counts(before_result)
+    after_counts = _category_issue_counts(after_result)
+    increased_categories = {
+        category: count - before_counts.get(category, 0)
+        for category, count in after_counts.items()
+        if count > before_counts.get(category, 0)
+    }
+
+    score_dropped = after_score < before_score
+    is_safe = issue_delta <= 0 and not score_dropped
+    if is_safe:
+        message = "Post-fix validation did not increase detected issues."
+    elif issue_delta > 0:
+        message = "Post-fix validation found more issues after auto-fix. Review the corrected document before using it."
+    else:
+        message = "Post-fix validation found a lower compliance index after auto-fix. Review the corrected document before using it."
+
+    return PostFixValidationResult(
+        is_safe=is_safe,
+        before_issues=before_issues,
+        after_issues=after_issues,
+        before_score=before_score,
+        after_score=after_score,
+        issue_delta=issue_delta,
+        score_delta=score_delta,
+        new_or_increased_categories=increased_categories,
+        message=message,
+    )
+
+
+def validate_fixed_document(rules: Dict[str, Any], fixed_doc_bytes: bytes):
+    """Run the checker again on a corrected document."""
+    from .manuscript_checker import ManuscriptChecker
+
+    checker = ManuscriptChecker(rules, None)
+    checker.load_manuscript(BytesIO(fixed_doc_bytes))
+    return checker.check_all()
+
+
 class AutoFixer:
     """
     Automatically fixes formatting issues in a manuscript

@@ -15,7 +15,7 @@ from datetime import datetime
 from modules.template_extractor import TemplateExtractor
 from modules.paragraph_classifier import ParagraphClassifier, ParagraphType
 from modules.manuscript_checker import ManuscriptChecker
-from modules.auto_fixer import AutoFixer
+from modules.auto_fixer import AutoFixer, validate_fixed_document, validate_post_fix_result
 from modules.report_generator import ReportGenerator
 from modules.llm_integration import create_llm_integration, fallback_explain_issue
 from modules.utils import pdf_to_docx, docx_to_pdf, PDF2DOCX_AVAILABLE, DOCX2PDF_AVAILABLE
@@ -159,6 +159,10 @@ def init_session_state():
         st.session_state.fixed_doc_bytes = None
     if "report_bytes" not in st.session_state:
         st.session_state.report_bytes = None
+    if "post_fix_result" not in st.session_state:
+        st.session_state.post_fix_result = None
+    if "post_fix_validation" not in st.session_state:
+        st.session_state.post_fix_validation = None
     if "llm" not in st.session_state:
         st.session_state.llm = None
     if "llm_connection_attempted" not in st.session_state:
@@ -400,6 +404,12 @@ def handle_manuscript_check(uploaded_file):
                 st.session_state.check_result = result
                 st.session_state.classifications = result.classifications
                 st.session_state.manuscript_uploaded = True
+                st.session_state.changes = []
+                st.session_state.fixed_doc_bytes = None
+                st.session_state.highlighted_doc_bytes = None
+                st.session_state.report_bytes = None
+                st.session_state.post_fix_result = None
+                st.session_state.post_fix_validation = None
 
                 return result
 
@@ -588,6 +598,14 @@ def handle_auto_fix():
             st.session_state.fixed_doc_bytes = fixer.get_fixed_document_bytes()
             st.session_state.highlighted_doc_bytes = fixer.get_highlighted_document_bytes()
             st.session_state.output_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            st.session_state.post_fix_result = validate_fixed_document(
+                rules,
+                st.session_state.fixed_doc_bytes,
+            )
+            st.session_state.post_fix_validation = validate_post_fix_result(
+                st.session_state.check_result,
+                st.session_state.post_fix_result,
+            )
 
             # Generate report
             report_gen = ReportGenerator(
@@ -596,7 +614,13 @@ def handle_auto_fix():
             report_gen.generate_comparison_report()
             st.session_state.report_bytes = report_gen.get_report_bytes()
 
-            st.success(f"{len(changes)} formatting fixes applied.")
+            validation = st.session_state.post_fix_validation
+            if validation and validation.is_safe:
+                st.success(f"{len(changes)} formatting fixes applied. {validation.message}")
+            elif validation:
+                st.warning(f"{len(changes)} formatting fixes applied. {validation.message}")
+            else:
+                st.success(f"{len(changes)} formatting fixes applied.")
 
             return changes
 
@@ -650,6 +674,33 @@ def display_comparison_view(changes):
     df = pd.DataFrame(table_data)
     st.dataframe(df, use_container_width=True, hide_index=True)
     st.success(f"Recorded {len(changes)} formatting property changes")
+
+
+def display_post_fix_validation():
+    """Display checker results after auto-fix."""
+    validation = st.session_state.get("post_fix_validation")
+    if not validation:
+        return
+
+    st.subheader("Post-Fix Validation")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Issues Before", validation.before_issues)
+    with col2:
+        st.metric("Issues After", validation.after_issues, delta=validation.issue_delta)
+    with col3:
+        st.metric("Compliance After", f"{validation.after_score}%", delta=validation.score_delta)
+
+    if validation.is_safe:
+        st.success(validation.message)
+    else:
+        st.warning(validation.message)
+        if validation.new_or_increased_categories:
+            category_text = ", ".join(
+                f"{category.replace('_', ' ').title()}: +{count}"
+                for category, count in sorted(validation.new_or_increased_categories.items())
+            )
+            st.caption(f"Increased categories: {category_text}")
 
 
 def display_download_section():
@@ -849,6 +900,7 @@ def main():
         if st.session_state.changes:
             st.divider()
             display_comparison_view(st.session_state.changes)
+            display_post_fix_validation()
 
             # Download section
             st.divider()
