@@ -5,6 +5,29 @@ import modules.auto_fixer as auto_fixer
 
 
 class PostFixValidationTest(unittest.TestCase):
+    def test_summarizes_remaining_post_fix_issues(self):
+        self.assertTrue(hasattr(auto_fixer, "summarize_remaining_issues"))
+
+        result = SimpleNamespace(
+            issues_by_category={
+                "references": [
+                    SimpleNamespace(location="Reference 1", description="Reference font size does not match template"),
+                    SimpleNamespace(location="Reference 2", description="Reference font size does not match template"),
+                ],
+                "body_text": [
+                    SimpleNamespace(location="Paragraph 8", description="Body text font does not match template"),
+                ],
+                "title": [],
+            }
+        )
+
+        summary = auto_fixer.summarize_remaining_issues(result)
+
+        self.assertEqual(summary[0]["Category"], "References")
+        self.assertEqual(summary[0]["Count"], 2)
+        self.assertEqual(summary[0]["First Location"], "Reference 1")
+        self.assertEqual(summary[1]["Category"], "Body Text")
+
     def test_flags_corrected_document_when_issue_count_increases(self):
         self.assertTrue(hasattr(auto_fixer, "validate_post_fix_result"))
 

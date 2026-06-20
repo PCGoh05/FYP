@@ -112,6 +112,23 @@ def validate_fixed_document(rules: Dict[str, Any], fixed_doc_bytes: bytes):
     return checker.check_all()
 
 
+def summarize_remaining_issues(result: Any) -> List[Dict[str, Any]]:
+    """Create a compact table summary of issues remaining after auto-fix."""
+    issues_by_category = getattr(result, "issues_by_category", {}) or {}
+    rows = []
+    for category, issues in issues_by_category.items():
+        if not issues:
+            continue
+        first_issue = issues[0]
+        rows.append({
+            "Category": category.replace("_", " ").title(),
+            "Count": len(issues),
+            "First Location": getattr(first_issue, "location", ""),
+            "First Issue": getattr(first_issue, "description", ""),
+        })
+    return sorted(rows, key=lambda row: (-row["Count"], row["Category"]))
+
+
 class AutoFixer:
     """
     Automatically fixes formatting issues in a manuscript

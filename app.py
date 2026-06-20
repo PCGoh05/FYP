@@ -15,7 +15,12 @@ from datetime import datetime
 from modules.template_extractor import TemplateExtractor
 from modules.paragraph_classifier import ParagraphClassifier, ParagraphType
 from modules.manuscript_checker import ManuscriptChecker
-from modules.auto_fixer import AutoFixer, validate_fixed_document, validate_post_fix_result
+from modules.auto_fixer import (
+    AutoFixer,
+    summarize_remaining_issues,
+    validate_fixed_document,
+    validate_post_fix_result,
+)
 from modules.report_generator import ReportGenerator
 from modules.llm_integration import create_llm_integration, fallback_explain_issue
 from modules.utils import pdf_to_docx, docx_to_pdf, PDF2DOCX_AVAILABLE, DOCX2PDF_AVAILABLE
@@ -701,6 +706,15 @@ def display_post_fix_validation():
                 for category, count in sorted(validation.new_or_increased_categories.items())
             )
             st.caption(f"Increased categories: {category_text}")
+
+    remaining_result = st.session_state.get("post_fix_result")
+    remaining_rows = summarize_remaining_issues(remaining_result) if remaining_result else []
+    if remaining_rows:
+        with st.expander("Remaining Issues After Auto-Fix", expanded=not validation.is_safe):
+            st.dataframe(remaining_rows, use_container_width=True, hide_index=True)
+            st.caption("These issues still need manual review or a more specific journal rule.")
+    else:
+        st.success("No remaining issues were detected after auto-fix.")
 
 
 def display_download_section():
