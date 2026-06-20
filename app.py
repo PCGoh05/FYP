@@ -469,13 +469,12 @@ def display_check_results(result):
         if structure_details else ["abstract", "keywords", "introduction", "conclusion", "references"]
     )
     structure_cols = st.columns(max(1, len(sections)))
-    icons = ["Abstract", "Keywords", "Introduction", "Conclusion", "References"]
 
-    for i, (section, icon) in enumerate(zip(sections, icons)):
+    for i, section in enumerate(sections):
         with structure_cols[i]:
             found = structure.get(section, False)
             status = "Yes" if found else "No"
-            st.markdown(f"**{icon} {section.title()}**")
+            st.markdown(f"**{section.title()}**")
             st.write(status)
 
     if structure_details:

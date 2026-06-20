@@ -247,9 +247,13 @@ class ParagraphClassifier:
         if paragraph_type == ParagraphType.ABSTRACT_CONTENT:
             context["in_abstract"] = True
 
-        if paragraph_type in {ParagraphType.KEYWORDS_LABEL, ParagraphType.KEYWORDS_CONTENT}:
+        if paragraph_type == ParagraphType.KEYWORDS_LABEL:
             context["in_abstract"] = False
             context["in_keywords"] = True
+
+        if paragraph_type == ParagraphType.KEYWORDS_CONTENT:
+            context["in_abstract"] = False
+            context["in_keywords"] = False
 
         if paragraph_type == ParagraphType.SECTION_HEADING:
             context["in_abstract"] = False
@@ -305,11 +309,11 @@ class ParagraphClassifier:
         if self._is_reference_entry(text, context.get("in_references", False)):
             return self._create_classification(data, ParagraphType.REFERENCE, 0.86, "Reference entry")
 
-        if self._is_author_info(text, text_lower, index, alignment, context):
-            return self._create_classification(data, ParagraphType.AUTHOR_INFO, 0.90, "Author information")
-
         if self._is_section_heading(text):
             return self._create_classification(data, ParagraphType.SECTION_HEADING, 0.92, "Section heading")
+
+        if self._is_author_info(text, text_lower, index, alignment, context):
+            return self._create_classification(data, ParagraphType.AUTHOR_INFO, 0.90, "Author information")
 
         if self._is_caption(text_lower):
             return self._create_classification(data, ParagraphType.CAPTION, 0.90, "Caption")
@@ -406,6 +410,13 @@ class ParagraphClassifier:
         heading_words = "|".join(re.escape(term) for term in sorted(section_terms, key=len, reverse=True))
         if re.match(rf"^(\d+(\.\d+)*\.?|[ivxlc]+\.?)\s+({heading_words})$", text_lower):
             return True
+
+        if re.match(r"^\d+\.\d+(\.\d+)*\.?\s+\S", text_lower) and len(text_clean) <= 100:
+            return True
+
+        for term in section_terms:
+            if text_lower.startswith(f"{term} ") and re.search(r"\d+\.\d+", text_lower):
+                return True
 
         if text_clean.isupper() and 4 <= len(text_clean) <= 80:
             return any(word in text_lower for word in section_terms)
