@@ -618,7 +618,11 @@ def handle_auto_fix():
 
             # Generate report
             report_gen = ReportGenerator(
-                rules, changes, st.session_state.check_result
+                rules,
+                changes,
+                st.session_state.check_result,
+                post_fix_validation=st.session_state.post_fix_validation,
+                post_fix_result=st.session_state.post_fix_result,
             )
             report_gen.generate_comparison_report()
             st.session_state.report_bytes = report_gen.get_report_bytes()

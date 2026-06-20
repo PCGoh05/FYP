@@ -13,7 +13,7 @@ from typing import Dict, List, Any, Optional
 from io import BytesIO
 from datetime import datetime
 
-from .auto_fixer import ChangeRecord
+from .auto_fixer import ChangeRecord, summarize_remaining_issues
 
 
 class ReportGenerator:
@@ -31,8 +31,14 @@ class ReportGenerator:
     LIGHT_BLUE = "CCE5FF"
     LIGHT_GRAY = "F0F0F0"
 
-    def __init__(self, rules: Dict[str, Any], changes: List[ChangeRecord],
-                 check_result: Any = None):
+    def __init__(
+        self,
+        rules: Dict[str, Any],
+        changes: List[ChangeRecord],
+        check_result: Any = None,
+        post_fix_validation: Any = None,
+        post_fix_result: Any = None,
+    ):
         """
         Initialize report generator
 
@@ -40,10 +46,14 @@ class ReportGenerator:
             rules: Template formatting rules used
             changes: List of changes made during auto-fix
             check_result: CheckResult object from ManuscriptChecker
+            post_fix_validation: comparison of pre-fix and post-fix checker results
+            post_fix_result: CheckResult object from the corrected document
         """
         self.rules = rules
         self.changes = changes
         self.check_result = check_result
+        self.post_fix_validation = post_fix_validation
+        self.post_fix_result = post_fix_result
         self.document = None
 
     def generate_comparison_report(self) -> Document:
@@ -72,6 +82,10 @@ class ReportGenerator:
         # Add compliance score (if available)
         if self.check_result:
             self._add_compliance_section()
+
+        # Add post-fix validation (if available)
+        if self.post_fix_validation:
+            self._add_post_fix_validation_section()
 
         # Add detailed changes
         self._add_changes_section()
@@ -254,6 +268,45 @@ class ReportGenerator:
 
             if breakdown:
                 para.add_run("Issues by category: " + ", ".join(breakdown))
+
+        self.document.add_paragraph()  # Spacing
+
+    def _add_post_fix_validation_section(self):
+        """Add corrected-document validation details."""
+        validation = self.post_fix_validation
+        self.document.add_heading("Post-Fix Validation", level=1)
+
+        status_para = self.document.add_paragraph()
+        status_run = status_para.add_run("Status: ")
+        status_run.font.bold = True
+        value_run = status_para.add_run("Safe" if validation.is_safe else "Needs Manual Review")
+        value_run.font.color.rgb = self.GREEN if validation.is_safe else self.RED
+        value_run.font.bold = True
+
+        self.document.add_paragraph(f"Issues before auto-fix: {validation.before_issues}")
+        self.document.add_paragraph(f"Issues after auto-fix: {validation.after_issues}")
+        self.document.add_paragraph(f"Compliance before auto-fix: {validation.before_score}%")
+        self.document.add_paragraph(f"Compliance after auto-fix: {validation.after_score}%")
+        self.document.add_paragraph(validation.message)
+
+        remaining_rows = summarize_remaining_issues(self.post_fix_result) if self.post_fix_result else []
+        if remaining_rows:
+            self.document.add_heading("Remaining Issues After Auto-Fix", level=2)
+            table = self.document.add_table(rows=1, cols=4)
+            table.style = 'Table Grid'
+            headers = ["Category", "Count", "First Location", "First Issue"]
+            for index, header in enumerate(headers):
+                table.rows[0].cells[index].text = header
+            self._style_header_row(table.rows[0])
+
+            for remaining in remaining_rows:
+                row = table.add_row()
+                row.cells[0].text = str(remaining["Category"])
+                row.cells[1].text = str(remaining["Count"])
+                row.cells[2].text = str(remaining["First Location"])
+                row.cells[3].text = str(remaining["First Issue"])
+        else:
+            self.document.add_paragraph("No remaining issues were detected after auto-fix.")
 
         self.document.add_paragraph()  # Spacing
 
