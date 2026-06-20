@@ -1085,6 +1085,30 @@ class AutoFixer:
 
         return True
 
+    def _highlight_page_header_change(self, document: Document, change: ChangeRecord) -> bool:
+        """Highlight original page header text for document-level header changes."""
+        if change.change_type != "page_header":
+            return False
+
+        highlighted = False
+        for section in document.sections:
+            headers = [
+                section.header,
+                section.first_page_header,
+                section.even_page_header,
+            ]
+            for header in headers:
+                for paragraph in header.paragraphs:
+                    if not paragraph.text.strip():
+                        continue
+                    if not self._has_unstable_header_tabs(paragraph.text):
+                        continue
+                    for run in paragraph.runs:
+                        if run.text.strip():
+                            run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+                            highlighted = True
+        return highlighted
+
     def get_highlighted_document_bytes(self) -> bytes:
         """
         Get the original document with highlighted changed locations.
@@ -1101,6 +1125,7 @@ class AutoFixer:
         for change in self.changes:
             index = change.paragraph_index
             if index < 0 or index >= len(highlighted_document.paragraphs):
+                self._highlight_page_header_change(highlighted_document, change)
                 continue
 
             paragraph = highlighted_document.paragraphs[index]

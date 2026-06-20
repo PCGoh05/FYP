@@ -1,9 +1,10 @@
 import tempfile
 import unittest
+from io import BytesIO
 from pathlib import Path
 
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
 from docx.shared import Pt
 from docx.shared import RGBColor
 
@@ -206,6 +207,27 @@ class HeaderLayoutStabilityTest(unittest.TestCase):
             self.assertEqual(visible_runs[0].font.name, "Times New Roman")
             self.assertEqual(visible_runs[0].font.size.pt, 9)
             self.assertTrue(visible_runs[0].font.italic)
+
+    def test_highlighted_document_marks_changed_page_header(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "unstable.docx"
+            _save_unstable_docx(path)
+
+            checker = ManuscriptChecker(_rules()).load_manuscript(str(path))
+            result = checker.check_all()
+            fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+
+            highlighted_doc = Document(BytesIO(fixer.get_highlighted_document_bytes()))
+            header_runs = [
+                run
+                for run in highlighted_doc.sections[0].header.paragraphs[0].runs
+                if run.text.strip()
+            ]
+
+            self.assertTrue(header_runs)
+            self.assertEqual(header_runs[0].font.highlight_color, WD_COLOR_INDEX.YELLOW)
 
 
 if __name__ == "__main__":
