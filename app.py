@@ -664,6 +664,10 @@ def display_download_section():
         horizontal=True,
         help="PDF download requires Microsoft Word installed on the server"
     )
+    st.caption(
+        "Corrected document contains applied fixes. Highlighted document keeps the original manuscript "
+        "and marks changed locations in yellow. Detailed report explains what changed."
+    )
 
     output_timestamp = st.session_state.output_timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
     col1, col2, col3 = st.columns(3)
@@ -707,7 +711,7 @@ def display_download_section():
         if st.session_state.highlighted_doc_bytes:
             base_filename = st.session_state.manuscript_filename
             st.download_button(
-                label="Download Original with Highlighted Issues (DOCX)",
+                label="Download Original with Highlighted Changes (DOCX)",
                 data=st.session_state.highlighted_doc_bytes,
                 file_name=f"highlighted_{base_filename}_{output_timestamp}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -715,14 +719,14 @@ def display_download_section():
                 help="Highlights are shown on the original manuscript to indicate locations changed in the corrected document."
             )
         else:
-            st.button("Download Highlighted Original", disabled=True, use_container_width=True)
+            st.button("Download Original with Highlighted Changes", disabled=True, use_container_width=True)
 
     with col3:
         if st.session_state.report_bytes:
             base_filename = st.session_state.manuscript_filename
             if download_format == "DOCX (Word)":
                 st.download_button(
-                    label="Download Comparison Report (DOCX)",
+                    label="Download Detailed Report (DOCX)",
                     data=st.session_state.report_bytes,
                     file_name=f"{base_filename}_report_{output_timestamp}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -749,7 +753,7 @@ def display_download_section():
                 else:
                     st.warning("PDF conversion not available (install docx2pdf)")
         else:
-            st.button("Download Comparison Report", disabled=True, use_container_width=True)
+            st.button("Download Detailed Report", disabled=True, use_container_width=True)
 
 
 def main():
