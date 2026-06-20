@@ -123,7 +123,8 @@
     "reference": {
       "font_name": "Times New Roman",
       "font_size": 9,
-      "bold": false
+      "bold": false,
+      "publication_italic_required": true
     },
     "layout": {
       "columns": 1,

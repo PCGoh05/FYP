@@ -892,6 +892,9 @@ class ManuscriptChecker:
         expected_font = reference_rules.get("font_name", "Times New Roman")
         expected_size = reference_rules.get("font_size", 9)
         expected_bold = reference_rules.get("bold")
+        publication_italic_required = reference_rules.get("publication_italic_required")
+        if publication_italic_required is None:
+            publication_italic_required = self.profile.get("name", "").lower() == "jiwe"
         
         references = [
             cp for cp in self.classifications
@@ -977,6 +980,22 @@ class ManuscriptChecker:
                     text_preview=truncate_text(cp.text, 50)
                 )
 
+            if (
+                publication_italic_required
+                and self._reference_likely_has_publication_source(cp.text)
+                and not self._paragraph_has_italic_text(cp.index)
+            ):
+                self._add_issue(
+                    category="references",
+                    location=f"Reference {i + 1}",
+                    para_index=cp.index,
+                    description="Reference publication source may need italic formatting",
+                    current="No italic publication source segment detected",
+                    expected="Italic journal, conference, book, or proceedings source segment",
+                    severity="warning",
+                    text_preview=truncate_text(cp.text, 50)
+                )
+
     def _is_paragraph_mostly_bold(self, paragraph_index: int) -> bool:
         """Return True when most visible paragraph text is explicitly bold."""
         if paragraph_index < 0 or paragraph_index >= len(self.document.paragraphs):
@@ -991,6 +1010,50 @@ class ManuscriptChecker:
             if bool(run.font.bold):
                 bold_chars += text_length
         return total_chars > 0 and (bold_chars / total_chars) >= 0.8
+
+    def _paragraph_has_italic_text(self, paragraph_index: int) -> bool:
+        """Return True when a paragraph contains any explicitly italic visible text."""
+        if paragraph_index < 0 or paragraph_index >= len(self.document.paragraphs):
+            return False
+        for run in self.document.paragraphs[paragraph_index].runs:
+            if run.text.strip() and bool(run.font.italic):
+                return True
+        return False
+
+    def _reference_likely_has_publication_source(self, text: str) -> bool:
+        """Return True for references likely to contain an italic publication source."""
+        normalized = re.sub(r"\s+", " ", text or "").strip()
+        if len(normalized) < 80:
+            return False
+
+        lower_text = normalized.lower()
+        source_keywords = (
+            "journal",
+            "proceedings",
+            "conference",
+            "transactions",
+            "communications",
+            "informatics",
+            "engineering",
+            "springer",
+            "elsevier",
+            "ieee",
+            "acm",
+        )
+        detail_patterns = (
+            r"\bvol\.",
+            r"\bvolume\b",
+            r"\bno\.",
+            r"\bpp\.",
+            r"\bdoi\b",
+            r"\(\d{4}\)",
+            r"\".+?\"",
+            r"“.+?”",
+        )
+
+        has_source_keyword = any(keyword in lower_text for keyword in source_keywords)
+        has_bibliographic_detail = any(re.search(pattern, normalized, re.IGNORECASE) for pattern in detail_patterns)
+        return has_source_keyword and has_bibliographic_detail
 
     def _count_captionable_tables(self) -> int:
         """Count tables that are likely manuscript tables needing captions."""
