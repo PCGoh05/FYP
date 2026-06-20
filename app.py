@@ -8,6 +8,7 @@ Main Application Entry Point
 import streamlit as st
 import os
 import subprocess
+import traceback
 from io import BytesIO
 from datetime import datetime
 
@@ -198,6 +199,13 @@ def display_header():
     """, unsafe_allow_html=True)
 
 
+def display_exception(summary: str, error: Exception):
+    """Display a user-safe error with optional technical details."""
+    st.error(f"{summary}: {str(error)}")
+    with st.expander("Technical details", expanded=False):
+        st.code(traceback.format_exc())
+
+
 def display_sidebar():
     """Display sidebar with template rules and settings"""
     with st.sidebar:
@@ -361,9 +369,7 @@ def handle_template_upload(uploaded_file):
                     st.text(extractor.get_rules_summary())
 
         except Exception as e:
-            st.error(f"Error extracting template rules: {str(e)}")
-            import traceback
-            st.code(traceback.format_exc())
+            display_exception("Error extracting template rules", e)
 
 
 def handle_manuscript_check(uploaded_file):
@@ -419,9 +425,7 @@ def handle_manuscript_check(uploaded_file):
                 return result
 
         except Exception as e:
-            st.error(f"Error checking manuscript: {str(e)}")
-            import traceback
-            st.error(traceback.format_exc())
+            display_exception("Error checking manuscript", e)
 
     return None
 
@@ -630,9 +634,7 @@ def handle_auto_fix():
             return changes
 
     except Exception as e:
-        st.error(f"Error during auto-fix: {str(e)}")
-        import traceback
-        st.error(traceback.format_exc())
+        display_exception("Error during auto-fix", e)
 
     return None
 
