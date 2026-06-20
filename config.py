@@ -75,7 +75,8 @@ DEFAULT_RULES = {
     "reference": {
         "font_name": "Times New Roman",
         "font_size": 9,
-        "bold": False
+        "bold": False,
+        "publication_italic_required": True
     },
     "layout": {
         "columns": 1,
