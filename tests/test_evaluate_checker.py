@@ -2,10 +2,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from evaluate_checker import validate_evaluation_inputs
+from evaluate_checker import console_safe, validate_evaluation_inputs
 
 
 class EvaluateCheckerInputValidationTest(unittest.TestCase):
+    def test_console_safe_replaces_unprintable_characters(self):
+        text = console_safe("A\u2009B", encoding="cp1252")
+
+        self.assertEqual(text, "A?B")
+
     def test_missing_template_returns_clear_message(self):
         with tempfile.TemporaryDirectory() as tmp:
             template_path = Path(tmp) / "missing_template.docx"

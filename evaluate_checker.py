@@ -28,6 +28,7 @@ Label schema:
 
 import argparse
 import json
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
@@ -40,6 +41,13 @@ IssueKey = Tuple[str, str, str]
 ParagraphKey = Tuple[int, str]
 FileIssueKey = Tuple[str, str, str, str]
 FileParagraphKey = Tuple[str, int, str]
+
+
+def console_safe(value: object, encoding: Optional[str] = None) -> str:
+    """Return text that can be printed safely on the active console."""
+    text = str(value)
+    target_encoding = encoding or getattr(sys.stdout, "encoding", None) or "utf-8"
+    return text.encode(target_encoding, errors="replace").decode(target_encoding, errors="replace")
 
 
 def normalize_text(value: object) -> str:
@@ -229,15 +237,15 @@ def print_smoke_summary(file_name: str, result) -> None:
         if cp.text
     ][:10]
 
-    print(f"\nFILE: {file_name}")
-    print(f"Score: {result.compliance_score}%")
-    print(f"Issues: {result.total_issues}")
-    print(f"Issue categories: {categories}")
-    print(f"Paragraph classifications: {paragraph_counts}")
-    print(f"Structure: {result.document_structure}")
+    print(console_safe(f"\nFILE: {file_name}"))
+    print(console_safe(f"Score: {result.compliance_score}%"))
+    print(console_safe(f"Issues: {result.total_issues}"))
+    print(console_safe(f"Issue categories: {categories}"))
+    print(console_safe(f"Paragraph classifications: {paragraph_counts}"))
+    print(console_safe(f"Structure: {result.document_structure}"))
     print("First classified paragraphs:")
     for index, paragraph_type, preview in first_items:
-        print(f"  [{index:03d}] {paragraph_type:18s} {preview}")
+        print(console_safe(f"  [{index:03d}] {paragraph_type:18s} {preview}"))
 
 
 def result_to_label_entry(result) -> Dict:
