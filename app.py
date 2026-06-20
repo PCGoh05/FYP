@@ -897,13 +897,14 @@ def main():
 
         with col1:
             st.write("""
-            Click the button below to automatically fix all formatting issues.
+            Click the button below to automatically fix supported formatting issues.
             The system will:
             - Fix page margins
             - Correct title formatting
             - Adjust body text font and size
             - Fix heading styles
             - Preserve special formatting (italic, underline, subscript, etc.)
+            - Re-check the corrected document and list any remaining issues
             """)
 
         with col2:
