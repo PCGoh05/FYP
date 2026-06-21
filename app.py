@@ -6,6 +6,7 @@ Main Application Entry Point
 """
 
 import streamlit as st
+import inspect
 import os
 import subprocess
 import traceback
@@ -582,6 +583,36 @@ def display_check_results(result):
                             st.info(explanation)
 
 
+def build_report_generator(
+    rules,
+    changes,
+    check_result,
+    post_fix_validation=None,
+    post_fix_result=None,
+    generator_cls=ReportGenerator,
+):
+    """Create a report generator while tolerating older constructor signatures."""
+    optional_kwargs = {
+        "post_fix_validation": post_fix_validation,
+        "post_fix_result": post_fix_result,
+    }
+    signature = inspect.signature(generator_cls.__init__)
+    supports_kwargs = any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    )
+    supported_kwargs = (
+        optional_kwargs
+        if supports_kwargs
+        else {
+            key: value
+            for key, value in optional_kwargs.items()
+            if key in signature.parameters
+        }
+    )
+    return generator_cls(rules, changes, check_result, **supported_kwargs)
+
+
 def handle_auto_fix():
     """Handle auto-fix process"""
     if not st.session_state.manuscript_bytes:
@@ -617,7 +648,7 @@ def handle_auto_fix():
             )
 
             # Generate report
-            report_gen = ReportGenerator(
+            report_gen = build_report_generator(
                 rules,
                 changes,
                 st.session_state.check_result,
