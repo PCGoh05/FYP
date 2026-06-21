@@ -3,19 +3,16 @@ Template Extractor Module
 Extracts formatting rules from journal templates automatically
 """
 
-from docx import Document
-from docx.shared import Inches, Pt
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from collections import Counter
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, Optional
 import re
 
 from .profile_loader import ProfileLoader
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_font_info,
     get_paragraph_alignment, get_margins, get_line_spacing,
-    count_columns, is_empty_paragraph, get_run_font_info
+    count_columns, get_run_font_info
 )
 from config import DEFAULT_RULES, SECTION_HEADING_PATTERNS
 

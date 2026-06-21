@@ -5,7 +5,7 @@ Provides optional explanation and report-assistance features through NVIDIA API.
 
 import os
 import re
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -231,97 +231,6 @@ Confidence: explain that this is based on deterministic template rules, not an L
             f"Confidence: This is a {severity} from deterministic template rules, not an LLM decision."
         )
     
-    def validate_issue(self, issue: Dict[str, Any]) -> Tuple[bool, str]:
-        """
-        Use LLM to validate if a detected issue really needs correction.
-        This helps reduce false positives.
-        
-        Args:
-            issue: Dictionary with issue details
-            
-        Returns:
-            Tuple of (should_fix, reason)
-        """
-        if not self._available:
-            return True, "LLM not available for validation"
-        
-        prompt = f"""Is this formatting issue significant enough to require correction in an academic manuscript?
-
-Issue: {issue.get('description', 'Unknown')}
-Current: {issue.get('current_value', 'Unknown')}
-Expected: {issue.get('expected_value', 'Unknown')}
-Location: {issue.get('location', 'Unknown')}
-
-Consider:
-1. Is this a critical formatting requirement for journal submission?
-2. Are there acceptable font variations (e.g., Times New Roman vs Times)?
-3. Would this cause rejection by the journal editor?
-
-Respond with: YES (needs correction) or NO (acceptable variation)
-Brief reason:"""
-
-        system_prompt = "You are an academic journal formatting expert. Be strict about formatting requirements."
-        
-        try:
-            response = self.generate(prompt, system_prompt)
-            needs_fix = 'yes' in response.lower().split('\n')[0].lower()
-            return needs_fix, response.strip()
-        except Exception:
-            return True, "Validation failed, assuming correction needed"
-    
-    def classify_paragraph(self, text: str, context: str = "") -> str:
-        """
-        Use LLM to classify a paragraph when rules are uncertain
-        
-        Args:
-            text: Paragraph text
-            context: Optional context about paragraph position
-            
-        Returns:
-            Classification string
-        """
-        if not self._available:
-            return "unknown"
-        
-        prompt = f"""Classify this paragraph from an academic paper.
-
-Paragraph: "{text[:500]}"
-{f"Context: {context}" if context else ""}
-
-Classification options (respond with ONLY one of these):
-- journal_header (journal name, volume, ISSN, DOI)
-- paper_title (the main title of the paper)
-- author_info (author names, affiliations, emails)
-- abstract_label (just the word "Abstract")
-- keywords_label (just the word "Keywords")
-- section_heading (like "Introduction", "Methodology", etc.)
-- body (regular paragraph text)
-- abstract_content (the abstract text itself)
-- keywords_content (the keywords list)
-- caption (figure or table caption)
-- reference (bibliography entry)
-
-Respond with ONLY the classification type, nothing else."""
-
-        try:
-            response = self.generate(prompt)
-            response = response.strip().lower().replace(" ", "_")
-            
-            valid_types = [
-                "journal_header", "paper_title", "author_info",
-                "abstract_label", "keywords_label", "section_heading",
-                "body", "abstract_content", "keywords_content",
-                "caption", "reference"
-            ]
-            
-            for valid_type in valid_types:
-                if valid_type in response:
-                    return valid_type
-            
-            return "unknown"
-        except Exception:
-            return "unknown"
-    
     def analyze_template_rules(self, paragraphs_info: List[Dict]) -> Dict[str, Any]:
         """
         Use AI as an optional fallback to suggest missing template rules.
@@ -450,109 +359,6 @@ Only return bold=true if there's ", bold," with commas."""
         except Exception:
             return {}
     
-    def classify_paragraphs_batch(self, paragraphs: List[str]) -> List[str]:
-        """
-        Classify multiple paragraphs in a single API call for efficiency.
-        
-        Args:
-            paragraphs: List of paragraph texts
-            
-        Returns:
-            List of classification strings
-        """
-        if not self._available:
-            return ["unknown"] * len(paragraphs)
-        
-        # Format paragraphs with indices
-        formatted = []
-        for i, text in enumerate(paragraphs[:30]):  # Limit to 30 paragraphs per call
-            preview = text[:100].replace('\n', ' ')
-            formatted.append(f"{i+1}. \"{preview}\"")
-        
-        prompt = f"""Classify each paragraph from this academic paper.
-
-PARAGRAPHS:
-{chr(10).join(formatted)}
-
-CLASSIFICATION TYPES:
-- journal_header (journal name, volume, dates, ISSN)
-- paper_title (the main title)
-- author_info (author names, affiliations)
-- abstract_content (abstract text)
-- keywords_content (keywords list)
-- section_heading (like INTRODUCTION, METHODOLOGY)
-- body (regular paragraphs)
-- caption (figure/table captions)
-- reference (bibliography entries)
-
-Return ONLY a JSON array with classifications in order, like:
-["paper_title", "author_info", "abstract_content", "section_heading", "body", ...]
-
-IMPORTANT: Return ONLY the JSON array, nothing else. Must have exactly {len(paragraphs[:30])} items."""
-
-        system_prompt = "You are an expert at classifying academic paper content. Be accurate and consistent."
-        
-        try:
-            response = self.generate(prompt, system_prompt)
-            import json
-            response = response.strip()
-            if response.startswith('```'):
-                lines = response.split('\n')
-                response = '\n'.join(lines[1:-1] if lines[-1] == '```' else lines[1:])
-            
-            classifications = json.loads(response)
-            
-            # Ensure we have enough classifications
-            while len(classifications) < len(paragraphs):
-                classifications.append("body")
-            
-            return classifications[:len(paragraphs)]
-        except Exception:
-            return ["unknown"] * len(paragraphs)
-    
-    def validate_correction(self, original_format: str, proposed_format: str, 
-                          paragraph_text: str, paragraph_type: str) -> Tuple[bool, str]:
-        """
-        Validate if a proposed formatting correction is appropriate.
-        
-        Args:
-            original_format: Description of original formatting
-            proposed_format: Description of proposed formatting
-            paragraph_text: The paragraph text
-            paragraph_type: The classified type of paragraph
-            
-        Returns:
-            Tuple of (should_apply, reason)
-        """
-        if not self._available:
-            return True, "AI validation unavailable"
-        
-        prompt = f"""Should this formatting correction be applied?
-
-PARAGRAPH TYPE: {paragraph_type}
-TEXT: "{paragraph_text[:100]}..."
-CURRENT FORMAT: {original_format}
-PROPOSED FORMAT: {proposed_format}
-
-Consider:
-1. Is the paragraph classified correctly?
-2. Is the proposed format appropriate for this content?
-3. Would this correction improve the manuscript?
-
-Respond with EXACTLY this format:
-DECISION: YES or NO
-REASON: (brief explanation)"""
-
-        system_prompt = "You are an academic formatting expert. Be strict but fair."
-        
-        try:
-            response = self.generate(prompt, system_prompt)
-            decision = "yes" in response.lower().split('\n')[0].lower()
-            return decision, response.strip()
-        except Exception:
-            return True, "Validation failed, applying correction"
-
-
 def create_llm_integration(api_key: str = None) -> LLMIntegration:
     """
     Factory function to create LLM integration

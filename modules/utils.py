@@ -3,7 +3,7 @@ Utility functions for the Academic Manuscript Format Checker
 """
 
 from docx import Document
-from docx.shared import Inches, Pt, Twips
+from docx.shared import Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from collections import Counter
@@ -11,7 +11,6 @@ import re
 from typing import Dict, List, Tuple, Any, Optional
 import os
 import tempfile
-from io import BytesIO
 
 
 # Font equivalence groups - fonts that are considered equivalent

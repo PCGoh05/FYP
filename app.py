@@ -15,7 +15,6 @@ from datetime import datetime
 
 # Import modules
 from modules.template_extractor import TemplateExtractor
-from modules.paragraph_classifier import ParagraphClassifier, ParagraphType
 from modules.manuscript_checker import ManuscriptChecker
 from modules.auto_fixer import (
     AutoFixer,
@@ -26,7 +25,7 @@ from modules.auto_fixer import (
 from modules.report_generator import ReportGenerator
 from modules.llm_integration import create_llm_integration, fallback_explain_issue
 from modules.utils import pdf_to_docx, docx_to_pdf, PDF2DOCX_AVAILABLE, DOCX2PDF_AVAILABLE
-from config import APP_TITLE, APP_VERSION, DEFAULT_RULES, COLORS
+from config import APP_TITLE, APP_VERSION, DEFAULT_RULES
 
 # Page configuration
 st.set_page_config(

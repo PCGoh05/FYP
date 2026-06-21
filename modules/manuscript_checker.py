@@ -3,21 +3,19 @@ Manuscript Checker Module
 Checks manuscript formatting against template rules
 """
 
-from docx import Document
 from docx.oxml.ns import qn
-from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass, field
+from typing import Dict, List, Any, Optional
+from dataclasses import dataclass
 import re
 from difflib import SequenceMatcher
 
 from .utils import (
-    load_document, get_paragraph_text, get_paragraph_font_info,
-    get_paragraph_alignment, get_margins, get_line_spacing,
+    load_document, get_paragraph_text, get_margins, get_line_spacing,
     detect_reference_style, calculate_compliance_score,
     truncate_text, is_font_equivalent
 )
 from .paragraph_classifier import ParagraphClassifier, ParagraphType, ClassifiedParagraph
-from config import REQUIRED_SECTIONS, CAPTION_PATTERNS
+from config import REQUIRED_SECTIONS
 
 
 @dataclass
