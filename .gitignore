@@ -28,3 +28,4 @@ Thumbs.db
 *.temp
 ~$*.docx
 samples/*Template-new*.docx
+evaluation_results/
