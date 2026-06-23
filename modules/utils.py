@@ -10,6 +10,9 @@ from collections import Counter
 import re
 from typing import Dict, List, Tuple, Any, Optional
 import os
+import platform
+import shutil
+import subprocess
 import tempfile
 
 
@@ -71,6 +74,41 @@ except ImportError:
     DOCX2PDF_AVAILABLE = False
 
 
+def resolve_docx_to_pdf_backend(
+    system_name: Optional[str] = None,
+    docx2pdf_available: Optional[bool] = None,
+    executable_finder=shutil.which,
+) -> Optional[str]:
+    """Return the supported DOCX-to-PDF backend for the current environment."""
+    system = system_name or platform.system()
+    has_docx2pdf = DOCX2PDF_AVAILABLE if docx2pdf_available is None else docx2pdf_available
+
+    if executable_finder("soffice") or executable_finder("libreoffice"):
+        return "libreoffice"
+
+    if has_docx2pdf and system in {"Windows", "Darwin"}:
+        return "docx2pdf"
+
+    return None
+
+
+def is_docx_to_pdf_supported() -> bool:
+    """Return whether DOCX-to-PDF conversion can run on this machine."""
+    return resolve_docx_to_pdf_backend() is not None
+
+
+def get_docx_to_pdf_status() -> str:
+    """Return a user-facing DOCX-to-PDF conversion status."""
+    backend = resolve_docx_to_pdf_backend()
+    if backend == "libreoffice":
+        return "PDF Download Supported through LibreOffice"
+    if backend == "docx2pdf":
+        return "PDF Download Supported through Microsoft Word"
+    if platform.system() == "Linux":
+        return "PDF Download not available on this server. Install LibreOffice or download DOCX instead."
+    return "PDF Download not available. Install Microsoft Word or LibreOffice."
+
+
 def pdf_to_docx(pdf_bytes: bytes) -> bytes:
     """Convert PDF bytes to DOCX bytes"""
     if not PDF2DOCX_AVAILABLE:
@@ -104,34 +142,42 @@ def pdf_to_docx(pdf_bytes: bytes) -> bytes:
 
 def docx_to_pdf(docx_bytes: bytes) -> bytes:
     """Convert DOCX bytes to PDF bytes"""
-    if not DOCX2PDF_AVAILABLE:
-        raise ImportError("docx2pdf library not installed. Run: pip install docx2pdf")
-    
-    # Create temp files
-    with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as docx_temp:
-        docx_temp.write(docx_bytes)
-        docx_path = docx_temp.name
-    
-    pdf_path = docx_path.replace('.docx', '.pdf')
-    
-    try:
-        # Convert DOCX to PDF (requires Microsoft Word installed)
-        docx2pdf_convert(docx_path, pdf_path)
-        
-        # Read the PDF file
-        with open(pdf_path, 'rb') as f:
-            pdf_bytes = f.read()
-        
-        return pdf_bytes
-    finally:
-        # Word can keep temporary files locked briefly after conversion.
-        # Cleanup must not turn a successful PDF conversion into a user-facing failure.
-        for temp_path in (docx_path, pdf_path):
-            try:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-            except PermissionError:
-                pass
+    backend = resolve_docx_to_pdf_backend()
+    if not backend:
+        raise RuntimeError(get_docx_to_pdf_status())
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        docx_path = os.path.join(temp_dir, "input.docx")
+        pdf_path = os.path.join(temp_dir, "input.pdf")
+        with open(docx_path, "wb") as docx_file:
+            docx_file.write(docx_bytes)
+
+        if backend == "libreoffice":
+            executable = shutil.which("soffice") or shutil.which("libreoffice")
+            command = [
+                executable,
+                "--headless",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                temp_dir,
+                docx_path,
+            ]
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=90,
+                check=False,
+            )
+            if result.returncode != 0 or not os.path.exists(pdf_path):
+                details = (result.stderr or result.stdout or "Unknown LibreOffice conversion error").strip()
+                raise RuntimeError(f"PDF conversion failed through LibreOffice: {details}")
+        else:
+            docx2pdf_convert(docx_path, pdf_path)
+
+        with open(pdf_path, "rb") as pdf_file:
+            return pdf_file.read()
 
 
 def load_document(file_path_or_bytes) -> Document:

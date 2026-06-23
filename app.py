@@ -24,7 +24,13 @@ from modules.auto_fixer import (
 )
 from modules.report_generator import ReportGenerator
 from modules.llm_integration import create_llm_integration, fallback_explain_issue
-from modules.utils import pdf_to_docx, docx_to_pdf, PDF2DOCX_AVAILABLE, DOCX2PDF_AVAILABLE
+from modules.utils import (
+    pdf_to_docx,
+    docx_to_pdf,
+    PDF2DOCX_AVAILABLE,
+    get_docx_to_pdf_status,
+    is_docx_to_pdf_supported,
+)
 from config import APP_TITLE, APP_VERSION, DEFAULT_RULES
 
 # Page configuration
@@ -756,13 +762,15 @@ def display_post_fix_validation():
 def display_download_section():
     """Display download buttons for output files"""
     st.header("Download Results")
+    pdf_download_supported = is_docx_to_pdf_supported()
 
     # Format selection
+    available_formats = ["DOCX (Word)", "PDF"] if pdf_download_supported else ["DOCX (Word)"]
     download_format = st.radio(
         "Select download format:",
-        ["DOCX (Word)", "PDF"],
+        available_formats,
         horizontal=True,
-        help="PDF download requires Microsoft Word installed on the server"
+        help=get_docx_to_pdf_status()
     )
     st.caption(
         "Corrected document contains applied fixes. Highlighted document keeps the original manuscript "
@@ -786,9 +794,9 @@ def display_download_section():
                 )
             else:
                 # PDF download
-                if DOCX2PDF_AVAILABLE:
+                if pdf_download_supported:
                     if st.button("Convert and Download as PDF", use_container_width=True, key="download_corrected_pdf"):
-                        with st.spinner("Converting to PDF... (requires MS Word)"):
+                        with st.spinner("Converting to PDF..."):
                             try:
                                 pdf_bytes = docx_to_pdf(st.session_state.fixed_doc_bytes)
                                 st.download_button(
@@ -801,9 +809,9 @@ def display_download_section():
                                 )
                             except Exception as e:
                                 st.error(f"PDF conversion failed: {str(e)}")
-                                st.info("Make sure Microsoft Word is installed on the system")
+                                st.info(get_docx_to_pdf_status())
                 else:
-                    st.warning("PDF conversion not available (install docx2pdf)")
+                    st.warning(get_docx_to_pdf_status())
         else:
             st.button("Download Corrected Document", disabled=True, use_container_width=True)
 
@@ -834,9 +842,9 @@ def display_download_section():
                 )
             else:
                 # PDF download
-                if DOCX2PDF_AVAILABLE:
+                if pdf_download_supported:
                     if st.button("Convert and Download Report as PDF", use_container_width=True, key="download_report_pdf"):
-                        with st.spinner("Converting to PDF... (requires MS Word)"):
+                        with st.spinner("Converting to PDF..."):
                             try:
                                 pdf_bytes = docx_to_pdf(st.session_state.report_bytes)
                                 st.download_button(
@@ -849,9 +857,9 @@ def display_download_section():
                                 )
                             except Exception as e:
                                 st.error(f"PDF conversion failed: {str(e)}")
-                                st.info("Make sure Microsoft Word is installed on the system")
+                                st.info(get_docx_to_pdf_status())
                 else:
-                    st.warning("PDF conversion not available (install docx2pdf)")
+                    st.warning(get_docx_to_pdf_status())
         else:
             st.button("Download Detailed Report", disabled=True, use_container_width=True)
 
@@ -873,10 +881,10 @@ def main():
         else:
             st.warning("PDF Upload not available (install pdf2docx)")
     with col_info2:
-        if DOCX2PDF_AVAILABLE:
-            st.success("PDF Download Supported")
+        if is_docx_to_pdf_supported():
+            st.success(get_docx_to_pdf_status())
         else:
-            st.warning("PDF Download not available (install docx2pdf)")
+            st.warning(get_docx_to_pdf_status())
 
     col1, col2 = st.columns(2)
 
