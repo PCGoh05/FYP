@@ -93,7 +93,8 @@
     "body": {
       "font_name": "Times New Roman",
       "font_size": 12,
-      "line_spacing": 1.0
+      "line_spacing": 1.0,
+      "alignment": null
     },
     "heading": {
       "font_name": "Times New Roman",
@@ -103,7 +104,10 @@
     },
     "abstract": {
       "font_name": "Times New Roman",
-      "font_size": 10
+      "font_size": 10,
+      "alignment": null,
+      "min_words": null,
+      "max_words": null
     },
     "keywords": {
       "font_name": "Times New Roman",
@@ -116,7 +120,10 @@
     },
     "reference": {
       "font_name": "Times New Roman",
-      "font_size": 10
+      "font_size": 10,
+      "alignment": null,
+      "line_spacing": null,
+      "publication_italic_required": false
     },
     "layout": {
       "columns": 1,

@@ -43,7 +43,8 @@ DEFAULT_RULES = {
         "font_name": "Times New Roman",
         "font_size": 10,
         "bold": False,
-        "line_spacing": 1.0
+        "line_spacing": 1.0,
+        "alignment": "JUSTIFY"
     },
     "heading": {
         "font_name": "Times New Roman",
@@ -60,7 +61,10 @@ DEFAULT_RULES = {
     "abstract": {
         "font_name": "Times New Roman",
         "font_size": 9,
-        "bold": False
+        "bold": False,
+        "alignment": "JUSTIFY",
+        "min_words": 200,
+        "max_words": 300
     },
     "keywords": {
         "font_name": "Times New Roman",
@@ -76,6 +80,8 @@ DEFAULT_RULES = {
         "font_name": "Times New Roman",
         "font_size": 9,
         "bold": False,
+        "alignment": "JUSTIFY",
+        "line_spacing": 1.0,
         "publication_italic_required": True
     },
     "layout": {

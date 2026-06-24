@@ -87,6 +87,32 @@ def _parse_instruction_format(text: str) -> Dict[str, Any]:
     return result
 
 
+def _parse_word_limits(text: str) -> Dict[str, int]:
+    """Extract explicit minimum and maximum word limits from instruction text."""
+    normalized = re.sub(r"\s+", " ", text.lower())
+    range_match = re.search(
+        r"(?:between\s+)?(\d+)\s*(?:-|\u2013|\u2014|to)\s*(\d+)\s+words?",
+        normalized,
+    )
+    if range_match:
+        return {
+            "min_words": int(range_match.group(1)),
+            "max_words": int(range_match.group(2)),
+        }
+
+    limits = {}
+    minimum_match = re.search(r"(?:at least|minimum(?: of)?)\s+(\d+)\s+words?", normalized)
+    maximum_match = re.search(
+        r"(?:not exceed|no more than|maximum(?: of)?|up to)\s+(\d+)\s+words?",
+        normalized,
+    )
+    if minimum_match:
+        limits["min_words"] = int(minimum_match.group(1))
+    if maximum_match:
+        limits["max_words"] = int(maximum_match.group(1))
+    return limits
+
+
 class TemplateExtractor:
     """Extract formatting rules from a journal template document"""
     
@@ -743,6 +769,7 @@ Answer with ONLY "yes" or "no"."""
         font_names = []
         font_sizes = []
         line_spacings = []
+        alignments = []
         
         # Analyze ALL runs in body paragraphs to get accurate font info
         for para in self.document.paragraphs[5:]:
@@ -779,12 +806,15 @@ Answer with ONLY "yes" or "no"."""
             spacing = get_line_spacing(para)
             if spacing:
                 line_spacings.append(spacing)
+            if para.alignment is not None:
+                alignments.append(get_paragraph_alignment(para))
         
         # Get most common values
         body_style = {
             "font_name": Counter(font_names).most_common(1)[0][0] if font_names else self._profile_default("body", DEFAULT_RULES["body"]).get("font_name", "Times New Roman"),
             "font_size": Counter(font_sizes).most_common(1)[0][0] if font_sizes else self._profile_default("body", DEFAULT_RULES["body"]).get("font_size", 10),
-            "line_spacing": Counter(line_spacings).most_common(1)[0][0] if line_spacings else self._profile_default("body", DEFAULT_RULES["body"]).get("line_spacing", 1.0)
+            "line_spacing": Counter(line_spacings).most_common(1)[0][0] if line_spacings else self._profile_default("body", DEFAULT_RULES["body"]).get("line_spacing", 1.0),
+            "alignment": Counter(alignments).most_common(1)[0][0] if alignments else self._profile_default("body", DEFAULT_RULES["body"]).get("alignment"),
         }
         
         return body_style
@@ -872,12 +902,19 @@ Answer with ONLY "yes" or "no"."""
     def _extract_abstract_style(self) -> Dict[str, Any]:
         """Extract abstract text style"""
         in_abstract = False
+        abstract_style = self._profile_default(
+            "abstract",
+            DEFAULT_RULES.get("abstract", {"font_name": "Times New Roman", "font_size": 9}),
+        ).copy()
         
         for para in self.document.paragraphs:
             text = get_paragraph_text(para)
             
             if text.lower().startswith("abstract"):
                 in_abstract = True
+                abstract_style.update(_parse_word_limits(text))
+                if para.alignment is not None:
+                    abstract_style["alignment"] = get_paragraph_alignment(para)
                 # Check if abstract text is on same line
                 if len(text) > 20 and "-" in text:
                     # Format: "Abstract - content..."
@@ -885,22 +922,35 @@ Answer with ONLY "yes" or "no"."""
                         if run.text.strip() and len(run.text) > 10:
                             run_info = get_run_font_info(run)
                             if run_info.get("font_size"):
-                                return {
-                                    "font_name": run_info.get("font_name", "Times New Roman"),
-                                    "font_size": run_info.get("font_size", 9)
-                                }
+                                abstract_style["font_name"] = run_info.get(
+                                    "font_name",
+                                    abstract_style.get("font_name", "Times New Roman"),
+                                )
+                                abstract_style["font_size"] = run_info.get(
+                                    "font_size",
+                                    abstract_style.get("font_size", 9),
+                                )
+                                return abstract_style
                 continue
             
             if in_abstract and text and len(text) > 50:
+                abstract_style.update(_parse_word_limits(text))
+                if para.alignment is not None:
+                    abstract_style["alignment"] = get_paragraph_alignment(para)
                 # Get font info from runs for accuracy
                 for run in para.runs:
                     if run.text.strip() and len(run.text) > 10:
                         run_info = get_run_font_info(run)
                         if run_info.get("font_size"):
-                            return {
-                                "font_name": run_info.get("font_name", "Times New Roman"),
-                                "font_size": run_info.get("font_size", 9)
-                            }
+                            abstract_style["font_name"] = run_info.get(
+                                "font_name",
+                                abstract_style.get("font_name", "Times New Roman"),
+                            )
+                            abstract_style["font_size"] = run_info.get(
+                                "font_size",
+                                abstract_style.get("font_size", 9),
+                            )
+                            return abstract_style
             
             # Stop if we hit another section
             if in_abstract and any(
@@ -909,7 +959,7 @@ Answer with ONLY "yes" or "no"."""
             ):
                 break
         
-        return self._profile_default("abstract", DEFAULT_RULES.get("abstract", {"font_name": "Times New Roman", "font_size": 9}))
+        return abstract_style
     
     def _extract_caption_style(self) -> Dict[str, Any]:
         """Extract figure/table caption style"""
@@ -980,6 +1030,8 @@ Answer with ONLY "yes" or "no"."""
         in_references = False
         ref_fonts = []
         ref_sizes = []
+        ref_alignments = []
+        ref_line_spacings = []
         
         for para in self.document.paragraphs:
             text = get_paragraph_text(para)
@@ -1005,11 +1057,21 @@ Answer with ONLY "yes" or "no"."""
                             ref_fonts.append(run_info["font_name"])
                         if run_info.get("font_size"):
                             ref_sizes.append(run_info["font_size"])
+
+                if re.match(r"^\s*(?:\[\d+\]|\d+\.)", text):
+                    if para.alignment is not None:
+                        ref_alignments.append(get_paragraph_alignment(para))
+                    spacing = get_line_spacing(para)
+                    if spacing:
+                        ref_line_spacings.append(spacing)
         
-        if ref_fonts or ref_sizes:
+        if ref_fonts or ref_sizes or ref_alignments or ref_line_spacings:
+            default_rule = self._profile_default("reference", DEFAULT_RULES["reference"])
             return {
-                "font_name": Counter(ref_fonts).most_common(1)[0][0] if ref_fonts else self._profile_default("reference", DEFAULT_RULES["reference"]).get("font_name", "Times New Roman"),
-                "font_size": Counter(ref_sizes).most_common(1)[0][0] if ref_sizes else self._profile_default("reference", DEFAULT_RULES["reference"]).get("font_size", 9)
+                "font_name": Counter(ref_fonts).most_common(1)[0][0] if ref_fonts else default_rule.get("font_name", "Times New Roman"),
+                "font_size": Counter(ref_sizes).most_common(1)[0][0] if ref_sizes else default_rule.get("font_size", 9),
+                "alignment": Counter(ref_alignments).most_common(1)[0][0] if ref_alignments else default_rule.get("alignment"),
+                "line_spacing": Counter(ref_line_spacings).most_common(1)[0][0] if ref_line_spacings else default_rule.get("line_spacing"),
             }
         
         return self._profile_default("reference", DEFAULT_RULES.get("reference", {"font_name": "Times New Roman", "font_size": 9}))

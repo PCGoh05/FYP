@@ -884,12 +884,13 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["body_text", "line_spacing"],
-            fallback=["font_name", "font_size", "bold", "line_spacing"],
+            fallback=["font_name", "font_size", "bold", "line_spacing", "alignment"],
         )
 
         expected_font = body_rules.get("font_name", "Times New Roman")
         expected_size = body_rules.get("font_size", 12)
         expected_bold = body_rules.get("bold", None)
+        expected_alignment = body_rules.get("alignment")
 
         for run in paragraph.runs:
             if run.text.strip():
@@ -914,6 +915,22 @@ class AutoFixer:
                     "evidence": "Paragraph line spacing did not match target rule",
                 })
 
+        current_alignment = get_paragraph_alignment(paragraph)
+        if (
+            expected_alignment
+            and self._property_allowed("alignment", allowed_properties)
+            and current_alignment != expected_alignment
+        ):
+            paragraph.alignment = WD_ALIGN_PARAGRAPH(
+                ALIGNMENT_REVERSE_MAP.get(expected_alignment, 3)
+            )
+            changes.append({
+                "property_name": "alignment",
+                "current_value": current_alignment,
+                "target_value": expected_alignment,
+                "evidence": "Body text alignment did not match target rule",
+            })
+
         if changes:
             self._add_property_changes(
                 paragraph_index=index,
@@ -931,12 +948,13 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["body_text", "line_spacing"],
-            fallback=["font_name", "font_size", "bold", "line_spacing"],
+            fallback=["font_name", "font_size", "bold", "line_spacing", "alignment"],
         )
 
         expected_font = abstract_rules.get("font_name", "Times New Roman")
         expected_size = abstract_rules.get("font_size", 9)
         expected_bold = abstract_rules.get("bold", None)
+        expected_alignment = abstract_rules.get("alignment")
 
         for run in paragraph.runs:
             if run.text.strip():
@@ -960,6 +978,22 @@ class AutoFixer:
                     "target_value": str(expected_spacing),
                     "evidence": "Abstract line spacing did not match target rule",
                 })
+
+        current_alignment = get_paragraph_alignment(paragraph)
+        if (
+            expected_alignment
+            and self._property_allowed("alignment", allowed_properties)
+            and current_alignment != expected_alignment
+        ):
+            paragraph.alignment = WD_ALIGN_PARAGRAPH(
+                ALIGNMENT_REVERSE_MAP.get(expected_alignment, 3)
+            )
+            changes.append({
+                "property_name": "alignment",
+                "current_value": current_alignment,
+                "target_value": expected_alignment,
+                "evidence": "Abstract alignment did not match target rule",
+            })
 
         if changes:
             self._add_property_changes(
@@ -1047,12 +1081,14 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["references"],
-            fallback=["font_name", "font_size", "bold"],
+            fallback=["font_name", "font_size", "bold", "alignment", "line_spacing"],
         )
 
         expected_font = reference_rules.get("font_name", "Times New Roman")
         expected_size = reference_rules.get("font_size", 9)
         expected_bold = reference_rules.get("bold", None)
+        expected_alignment = reference_rules.get("alignment")
+        expected_line_spacing = reference_rules.get("line_spacing")
 
         for run in paragraph.runs:
             if run.text.strip():
@@ -1063,6 +1099,37 @@ class AutoFixer:
                     expected_bold,
                     allowed_properties=allowed_properties,
                 ))
+
+        current_alignment = get_paragraph_alignment(paragraph)
+        if (
+            expected_alignment
+            and self._property_allowed("alignment", allowed_properties)
+            and current_alignment != expected_alignment
+        ):
+            paragraph.alignment = WD_ALIGN_PARAGRAPH(
+                ALIGNMENT_REVERSE_MAP.get(expected_alignment, 3)
+            )
+            changes.append({
+                "property_name": "alignment",
+                "current_value": current_alignment,
+                "target_value": expected_alignment,
+                "evidence": "Reference alignment did not match target rule",
+            })
+
+        if (
+            expected_line_spacing is not None
+            and self._property_allowed("line_spacing", allowed_properties)
+        ):
+            current_line_spacing = paragraph.paragraph_format.line_spacing
+            effective_line_spacing = 1.0 if current_line_spacing is None else float(current_line_spacing)
+            if abs(effective_line_spacing - float(expected_line_spacing)) > 0.05:
+                paragraph.paragraph_format.line_spacing = expected_line_spacing
+                changes.append({
+                    "property_name": "line_spacing",
+                    "current_value": str(current_line_spacing) if current_line_spacing is not None else "(inherited)",
+                    "target_value": str(expected_line_spacing),
+                    "evidence": "Reference line spacing did not match target rule",
+                })
 
         if changes:
             self._add_property_changes(

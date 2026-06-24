@@ -10,7 +10,7 @@ import re
 from difflib import SequenceMatcher
 
 from .utils import (
-    load_document, get_paragraph_text, get_margins, get_line_spacing,
+    load_document, get_paragraph_text, get_paragraph_alignment, get_margins, get_line_spacing,
     detect_reference_style, calculate_compliance_score,
     truncate_text, is_font_equivalent
 )
@@ -390,6 +390,7 @@ class ManuscriptChecker:
         expected_font = body_rules.get("font_name", "Times New Roman")
         expected_size = body_rules.get("font_size", 12)
         expected_bold = body_rules.get("bold")
+        expected_alignment = body_rules.get("alignment")
         
         # Font size tolerance (allow +/-1.0pt difference for body text)
         size_tolerance = 1.0
@@ -416,6 +417,7 @@ class ManuscriptChecker:
         
         issues_found = 0
         max_issues_to_report = 10  # Limit to avoid too many issues
+        alignment_mismatches = []
         
         for cp in self.classifications:
             if cp.paragraph_type == ParagraphType.BODY:
@@ -467,6 +469,21 @@ class ManuscriptChecker:
                             text_preview=truncate_text(cp.text, 50)
                         )
                     issues_found += 1
+
+                if expected_alignment and cp.alignment != expected_alignment:
+                    alignment_mismatches.append(cp)
+
+        if alignment_mismatches:
+            self._add_issue(
+                category="body_text",
+                location="Body Paragraphs",
+                para_index=-1,
+                description="Body text alignment does not match template",
+                current=f"{len(alignment_mismatches)} non-{expected_alignment.lower()} paragraphs",
+                expected=expected_alignment,
+                severity="warning",
+                text_preview=truncate_text(alignment_mismatches[0].text, 50)
+            )
         
         # Add summary if many issues
         if issues_found > max_issues_to_report:
@@ -492,38 +509,97 @@ class ManuscriptChecker:
         expected_font = abstract_rules.get("font_name", "Times New Roman")
         expected_size = abstract_rules.get("font_size", 9)
         expected_bold = abstract_rules.get("bold")
+        expected_alignment = abstract_rules.get("alignment")
+        minimum_words = abstract_rules.get("min_words")
+        maximum_words = abstract_rules.get("max_words")
         size_tolerance = 0.5
-        
-        for cp in self.classifications:
-            if cp.paragraph_type == ParagraphType.ABSTRACT_CONTENT:
-                font_info = cp.font_info
-                
-                # Check font size
-                current_size = font_info.get("font_size")
-                if current_size and abs(current_size - expected_size) > size_tolerance:
-                    self._add_issue(
-                        category="body_text",
-                        location="Abstract",
-                        para_index=cp.index,
-                        description="Abstract font size does not match template",
-                        current=f"{current_size}pt",
-                        expected=f"{expected_size}pt",
-                        severity="warning",
-                        text_preview=truncate_text(cp.text, 50)
-                    )
 
-                current_bold = self._is_paragraph_mostly_bold(cp.index)
-                if expected_bold is not None and current_bold != bool(expected_bold):
-                    self._add_issue(
-                        category="body_text",
-                        location="Abstract",
-                        para_index=cp.index,
-                        description="Abstract bold formatting does not match template",
-                        current="Bold" if current_bold else "Not Bold",
-                        expected="Bold" if expected_bold else "Not Bold",
-                        severity="warning",
-                        text_preview=truncate_text(cp.text, 50)
-                    )
+        abstract_paragraphs = [
+            cp for cp in self.classifications
+            if cp.paragraph_type == ParagraphType.ABSTRACT_CONTENT
+        ]
+        for cp in abstract_paragraphs:
+            font_info = cp.font_info
+
+            current_font = font_info.get("font_name")
+            if current_font and not is_font_equivalent(current_font, expected_font):
+                self._add_issue(
+                    category="body_text",
+                    location="Abstract",
+                    para_index=cp.index,
+                    description="Abstract font does not match template",
+                    current=current_font,
+                    expected=expected_font,
+                    severity="warning",
+                    text_preview=truncate_text(cp.text, 50)
+                )
+
+            if expected_alignment and cp.alignment != expected_alignment:
+                self._add_issue(
+                    category="body_text",
+                    location="Abstract",
+                    para_index=cp.index,
+                    description="Abstract alignment does not match template",
+                    current=cp.alignment,
+                    expected=expected_alignment,
+                    severity="warning",
+                    text_preview=truncate_text(cp.text, 50)
+                )
+
+            current_size = font_info.get("font_size")
+            if current_size and abs(current_size - expected_size) > size_tolerance:
+                self._add_issue(
+                    category="body_text",
+                    location="Abstract",
+                    para_index=cp.index,
+                    description="Abstract font size does not match template",
+                    current=f"{current_size}pt",
+                    expected=f"{expected_size}pt",
+                    severity="warning",
+                    text_preview=truncate_text(cp.text, 50)
+                )
+
+            current_bold = self._is_paragraph_mostly_bold(cp.index)
+            if expected_bold is not None and current_bold != bool(expected_bold):
+                self._add_issue(
+                    category="body_text",
+                    location="Abstract",
+                    para_index=cp.index,
+                    description="Abstract bold formatting does not match template",
+                    current="Bold" if current_bold else "Not Bold",
+                    expected="Bold" if expected_bold else "Not Bold",
+                    severity="warning",
+                    text_preview=truncate_text(cp.text, 50)
+                )
+
+        if abstract_paragraphs and (minimum_words is not None or maximum_words is not None):
+            abstract_text = " ".join(cp.text for cp in abstract_paragraphs)
+            abstract_text = re.sub(
+                r"^\s*abstract\s*(?:-|\u2013|\u2014|:)?\s*",
+                "",
+                abstract_text,
+                flags=re.IGNORECASE,
+            )
+            word_count = len(re.findall(r"\b[\w]+(?:[-'][\w]+)*\b", abstract_text))
+            below_minimum = minimum_words is not None and word_count < int(minimum_words)
+            above_maximum = maximum_words is not None and word_count > int(maximum_words)
+            if below_minimum or above_maximum:
+                if minimum_words is not None and maximum_words is not None:
+                    expected_range = f"{minimum_words}-{maximum_words} words"
+                elif minimum_words is not None:
+                    expected_range = f"At least {minimum_words} words"
+                else:
+                    expected_range = f"No more than {maximum_words} words"
+                self._add_issue(
+                    category="body_text",
+                    location="Abstract",
+                    para_index=abstract_paragraphs[0].index,
+                    description="Abstract word count is outside the template limit",
+                    current=f"{word_count} words",
+                    expected=expected_range,
+                    severity="warning",
+                    text_preview=truncate_text(abstract_text, 50)
+                )
     
     def _check_keywords_content(self):
         """Check keywords content formatting"""
@@ -890,6 +966,8 @@ class ManuscriptChecker:
         expected_font = reference_rules.get("font_name", "Times New Roman")
         expected_size = reference_rules.get("font_size", 9)
         expected_bold = reference_rules.get("bold")
+        expected_alignment = reference_rules.get("alignment")
+        expected_line_spacing = reference_rules.get("line_spacing")
         publication_italic_required = reference_rules.get("publication_italic_required")
         if publication_italic_required is None:
             publication_italic_required = self.profile.get("name", "").lower() == "jiwe"
@@ -937,6 +1015,8 @@ class ManuscriptChecker:
             )
         
         # Check font formatting for every reference entry.
+        alignment_mismatches = []
+        line_spacing_mismatches = []
         for i, cp in enumerate(references):
             current_font = cp.font_info.get("font_name")
             current_size = cp.font_info.get("font_size")
@@ -978,6 +1058,15 @@ class ManuscriptChecker:
                     text_preview=truncate_text(cp.text, 50)
                 )
 
+            if expected_alignment and cp.alignment != expected_alignment:
+                alignment_mismatches.append(cp)
+
+            if expected_line_spacing is not None:
+                current_line_spacing = get_line_spacing(self.document.paragraphs[cp.index])
+                effective_line_spacing = 1.0 if current_line_spacing is None else float(current_line_spacing)
+                if abs(effective_line_spacing - float(expected_line_spacing)) > 0.05:
+                    line_spacing_mismatches.append(cp)
+
             if (
                 publication_italic_required
                 and self._reference_likely_has_publication_source(cp.text)
@@ -993,6 +1082,30 @@ class ManuscriptChecker:
                     severity="warning",
                     text_preview=truncate_text(cp.text, 50)
                 )
+
+        if alignment_mismatches:
+            self._add_issue(
+                category="references",
+                location="Reference Entries",
+                para_index=-1,
+                description="Reference alignment does not match template",
+                current=f"{len(alignment_mismatches)} non-{expected_alignment.lower()} references",
+                expected=expected_alignment,
+                severity="warning",
+                text_preview=truncate_text(alignment_mismatches[0].text, 50)
+            )
+
+        if line_spacing_mismatches:
+            self._add_issue(
+                category="references",
+                location="Reference Entries",
+                para_index=-1,
+                description="Reference line spacing does not match template",
+                current=f"{len(line_spacing_mismatches)} references use another spacing",
+                expected=str(expected_line_spacing),
+                severity="warning",
+                text_preview=truncate_text(line_spacing_mismatches[0].text, 50)
+            )
 
     def _is_paragraph_mostly_bold(self, paragraph_index: int) -> bool:
         """Return True when most visible paragraph text is explicitly bold."""

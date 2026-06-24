@@ -91,7 +91,8 @@
       "font_name": "Times New Roman",
       "font_size": 10,
       "bold": false,
-      "line_spacing": 1.0
+      "line_spacing": 1.0,
+      "alignment": "JUSTIFY"
     },
     "heading": {
       "font_name": "Times New Roman",
@@ -108,7 +109,10 @@
     "abstract": {
       "font_name": "Times New Roman",
       "font_size": 9,
-      "bold": false
+      "bold": false,
+      "alignment": "JUSTIFY",
+      "min_words": 200,
+      "max_words": 300
     },
     "keywords": {
       "font_name": "Times New Roman",
@@ -124,6 +128,8 @@
       "font_name": "Times New Roman",
       "font_size": 9,
       "bold": false,
+      "alignment": "JUSTIFY",
+      "line_spacing": 1.0,
       "publication_italic_required": true
     },
     "layout": {
