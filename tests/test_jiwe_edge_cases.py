@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from io import BytesIO
 from pathlib import Path
 
 from docx import Document
@@ -8,7 +9,9 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt
 
+from modules.auto_fixer import AutoFixer
 from modules.manuscript_checker import ManuscriptChecker
+from modules.utils import get_paragraph_font_info, get_sdt_reference_paragraphs
 
 
 def _rules():
@@ -32,7 +35,13 @@ def _rules():
         "heading": {"font_name": "Times New Roman", "font_size": 10, "bold": True},
         "subheading": {"font_name": "Times New Roman", "font_size": 10, "bold": False, "italic": True},
         "references": {"font_name": "Times New Roman", "font_size": 9},
-        "reference": {"font_name": "Times New Roman", "font_size": 9},
+        "reference": {
+            "font_name": "Times New Roman",
+            "font_size": 9,
+            "bold": False,
+            "alignment": "JUSTIFY",
+            "line_spacing": 1.0,
+        },
         "caption": {"font_name": "Times New Roman", "font_size": 10},
     }
 
@@ -52,11 +61,31 @@ def _add_minimal_front_matter(document):
     document.add_paragraph("Body text.")
 
 
-def _append_sdt_paragraph(document, text):
+def _append_sdt_paragraph(
+    document,
+    text,
+    font_name="Calibri",
+    font_size=11,
+    alignment="CENTER",
+):
     sdt = OxmlElement("w:sdt")
     content = OxmlElement("w:sdtContent")
     paragraph = OxmlElement("w:p")
+    paragraph_properties = OxmlElement("w:pPr")
+    justification = OxmlElement("w:jc")
+    justification.set(qn("w:val"), alignment.lower())
+    paragraph_properties.append(justification)
+    paragraph.append(paragraph_properties)
     run = OxmlElement("w:r")
+    run_properties = OxmlElement("w:rPr")
+    fonts = OxmlElement("w:rFonts")
+    fonts.set(qn("w:ascii"), font_name)
+    fonts.set(qn("w:hAnsi"), font_name)
+    size = OxmlElement("w:sz")
+    size.set(qn("w:val"), str(int(font_size * 2)))
+    run_properties.append(fonts)
+    run_properties.append(size)
+    run.append(run_properties)
     text_node = OxmlElement("w:t")
     text_node.set(qn("xml:space"), "preserve")
     text_node.text = text
@@ -115,6 +144,39 @@ class JiweEdgeCasesTest(unittest.TestCase):
             ]
 
         self.assertNotIn("No references found in document", reference_issues)
+        self.assertIn("Reference font does not match template", reference_issues)
+        self.assertIn("Reference font size does not match template", reference_issues)
+        self.assertIn("Reference alignment does not match template", reference_issues)
+
+    def test_auto_fixer_formats_references_inside_word_content_controls(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sdt_reference_fix.docx"
+            document = Document()
+            _add_minimal_front_matter(document)
+            document.add_paragraph("CONCLUSION")
+            document.add_paragraph("Conclusion text.")
+            document.add_paragraph("REFERENCES")
+            _append_sdt_paragraph(document, "[1]")
+            _append_sdt_paragraph(document, "A. Author, Article title, Journal of Testing, 2025.")
+            document.add_paragraph("BIOGRAPHIES OF AUTHORS")
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+            references = get_sdt_reference_paragraphs(fixed)
+
+        self.assertEqual([paragraph.text for paragraph in references], [
+            "[1]",
+            "A. Author, Article title, Journal of Testing, 2025.",
+        ])
+        for paragraph in references:
+            font_info = get_paragraph_font_info(paragraph)
+            self.assertEqual(font_info["font_name"], "Times New Roman")
+            self.assertEqual(font_info["font_size"], 9)
+            self.assertEqual(paragraph.alignment, WD_ALIGN_PARAGRAPH.JUSTIFY)
 
 
 if __name__ == "__main__":

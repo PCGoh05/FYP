@@ -6,6 +6,7 @@ from docx import Document
 from docx.shared import Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
 from collections import Counter
 import re
 from typing import Dict, List, Tuple, Any, Optional
@@ -364,6 +365,40 @@ def get_paragraph_alignment(paragraph) -> str:
         alignment = base_style.paragraph_format.alignment
 
     return alignment_map.get(alignment, "LEFT")
+
+
+def get_sdt_reference_paragraphs(document) -> List[Paragraph]:
+    """Return reference paragraphs stored inside Word content controls."""
+    references = []
+    in_references = False
+    body = document.element.body
+
+    for child in body.iterchildren():
+        is_content_control = child.tag == qn("w:sdt")
+        if child.tag == qn("w:p"):
+            paragraphs = [Paragraph(child, document._body)]
+        elif is_content_control:
+            paragraphs = [
+                Paragraph(node, document._body)
+                for node in child.iter(qn("w:p"))
+            ]
+        else:
+            paragraphs = []
+
+        for paragraph in paragraphs:
+            text = get_paragraph_text(paragraph).strip()
+            normalized = re.sub(r"\s+", " ", text.lower())
+            if normalized.startswith(("references", "bibliography", "works cited")):
+                in_references = True
+                continue
+            if in_references and normalized.startswith(
+                ("biographies of authors", "author biography", "appendix")
+            ):
+                return references
+            if in_references and is_content_control and text:
+                references.append(paragraph)
+
+    return references
 
 
 def get_line_spacing(paragraph) -> Optional[float]:

@@ -16,7 +16,7 @@ from io import BytesIO
 
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_alignment, truncate_text,
-    is_font_equivalent, get_run_font_info
+    is_font_equivalent, get_run_font_info, get_sdt_reference_paragraphs
 )
 from .paragraph_classifier import (
     ParagraphType, ClassifiedParagraph
@@ -329,6 +329,9 @@ class AutoFixer:
             elif para_type == ParagraphType.REFERENCE:
                 if self._should_fix_category(i, ["references"]):
                     self._fix_reference(para, i)
+
+        if self._has_category_issue("references"):
+            self._fix_sdt_references()
         
         return self.document, self.changes
 
@@ -1074,7 +1077,7 @@ class AutoFixer:
                 paragraph_type=ParagraphType.CAPTION.value,
             )
 
-    def _fix_reference(self, paragraph, index: int):
+    def _fix_reference(self, paragraph, index: int, location: str = "Reference"):
         """Fix reference formatting with structured change records."""
         reference_rules = self.rules.get("reference", {})
         changes = []
@@ -1134,11 +1137,20 @@ class AutoFixer:
         if changes:
             self._add_property_changes(
                 paragraph_index=index,
-                location="Reference",
+                location=location,
                 change_type="reference",
                 details=changes,
                 text_preview=truncate_text(get_paragraph_text(paragraph), 40),
                 paragraph_type=ParagraphType.REFERENCE.value,
+            )
+
+    def _fix_sdt_references(self):
+        """Fix reference paragraphs stored inside Word content controls."""
+        for index, paragraph in enumerate(get_sdt_reference_paragraphs(self.document), start=1):
+            self._fix_reference(
+                paragraph,
+                -1,
+                location=f"Reference Content Control {index}",
             )
 
     def get_fixed_document_bytes(self) -> bytes:

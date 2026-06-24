@@ -10,7 +10,8 @@ import re
 from difflib import SequenceMatcher
 
 from .utils import (
-    load_document, get_paragraph_text, get_paragraph_alignment, get_margins, get_line_spacing,
+    load_document, get_paragraph_text, get_paragraph_alignment, get_paragraph_font_info,
+    get_sdt_reference_paragraphs, get_margins, get_line_spacing,
     detect_reference_style, calculate_compliance_score,
     truncate_text, is_font_equivalent
 )
@@ -978,8 +979,17 @@ class ManuscriptChecker:
         ]
         
         if not references:
-            reference_texts = self._extract_reference_texts_from_body_xml()
-            if reference_texts:
+            sdt_references = get_sdt_reference_paragraphs(self.document)
+            if sdt_references:
+                self._check_sdt_references(
+                    sdt_references,
+                    expected_font,
+                    expected_size,
+                    expected_bold,
+                    expected_alignment,
+                    expected_line_spacing,
+                    publication_italic_required,
+                )
                 return
             self._add_issue(
                 category="references",
@@ -1105,6 +1115,118 @@ class ManuscriptChecker:
                 expected=str(expected_line_spacing),
                 severity="warning",
                 text_preview=truncate_text(line_spacing_mismatches[0].text, 50)
+            )
+
+    def _check_sdt_references(
+        self,
+        references,
+        expected_font,
+        expected_size,
+        expected_bold,
+        expected_alignment,
+        expected_line_spacing,
+        publication_italic_required,
+    ):
+        """Check references stored inside Word content controls."""
+        alignment_mismatches = []
+        line_spacing_mismatches = []
+
+        for index, paragraph in enumerate(references):
+            text = get_paragraph_text(paragraph)
+            font_info = get_paragraph_font_info(paragraph)
+            current_font = font_info.get("font_name")
+            current_size = font_info.get("font_size")
+            current_bold = bool(font_info.get("bold"))
+
+            if current_font and not is_font_equivalent(current_font, expected_font):
+                self._add_issue(
+                    category="references",
+                    location=f"Reference Content Control {index + 1}",
+                    para_index=-1,
+                    description="Reference font does not match template",
+                    current=current_font,
+                    expected=expected_font,
+                    severity="warning",
+                    text_preview=truncate_text(text, 50),
+                )
+
+            if current_size and current_size != expected_size:
+                self._add_issue(
+                    category="references",
+                    location=f"Reference Content Control {index + 1}",
+                    para_index=-1,
+                    description="Reference font size does not match template",
+                    current=f"{current_size}pt",
+                    expected=f"{expected_size}pt",
+                    severity="warning",
+                    text_preview=truncate_text(text, 50),
+                )
+
+            if expected_bold is not None and current_bold != bool(expected_bold):
+                self._add_issue(
+                    category="references",
+                    location=f"Reference Content Control {index + 1}",
+                    para_index=-1,
+                    description="Reference bold formatting does not match template",
+                    current="Bold" if current_bold else "Not Bold",
+                    expected="Bold" if expected_bold else "Not Bold",
+                    severity="warning",
+                    text_preview=truncate_text(text, 50),
+                )
+
+            current_alignment = get_paragraph_alignment(paragraph)
+            if expected_alignment and current_alignment != expected_alignment:
+                alignment_mismatches.append(paragraph)
+
+            if expected_line_spacing is not None:
+                current_spacing = get_line_spacing(paragraph)
+                effective_spacing = 1.0 if current_spacing is None else float(current_spacing)
+                if abs(effective_spacing - float(expected_line_spacing)) > 0.05:
+                    line_spacing_mismatches.append(paragraph)
+
+            has_italic = any(
+                bool(run.font.italic)
+                for run in paragraph.runs
+                if run.text.strip()
+            )
+            if (
+                publication_italic_required
+                and self._reference_likely_has_publication_source(text)
+                and not has_italic
+            ):
+                self._add_issue(
+                    category="references",
+                    location=f"Reference Content Control {index + 1}",
+                    para_index=-1,
+                    description="Reference publication source may need italic formatting",
+                    current="No italic publication source segment detected",
+                    expected="Italic journal, conference, book, or proceedings source segment",
+                    severity="warning",
+                    text_preview=truncate_text(text, 50),
+                )
+
+        if alignment_mismatches:
+            self._add_issue(
+                category="references",
+                location="Reference Content Controls",
+                para_index=-1,
+                description="Reference alignment does not match template",
+                current=f"{len(alignment_mismatches)} non-{expected_alignment.lower()} reference paragraphs",
+                expected=expected_alignment,
+                severity="warning",
+                text_preview=truncate_text(get_paragraph_text(alignment_mismatches[0]), 50),
+            )
+
+        if line_spacing_mismatches:
+            self._add_issue(
+                category="references",
+                location="Reference Content Controls",
+                para_index=-1,
+                description="Reference line spacing does not match template",
+                current=f"{len(line_spacing_mismatches)} references use another spacing",
+                expected=str(expected_line_spacing),
+                severity="warning",
+                text_preview=truncate_text(get_paragraph_text(line_spacing_mismatches[0]), 50),
             )
 
     def _is_paragraph_mostly_bold(self, paragraph_index: int) -> bool:
