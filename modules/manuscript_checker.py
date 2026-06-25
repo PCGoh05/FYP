@@ -106,6 +106,7 @@ class ManuscriptChecker:
         structure = self._check_document_structure()
         self._check_tables()
         self._check_figures()
+        self._check_equations()
         self._check_references()
         self._check_line_spacing()
         
@@ -1416,6 +1417,156 @@ class ManuscriptChecker:
                 severity="warning",
                 text_preview=truncate_text(line_spacing_mismatches[0].text, 50)
             )
+
+    def _check_equations(self) -> None:
+        """Check display-equation numbering and explicit equation citations."""
+        equation_numbers = []
+        unnumbered_count = 0
+        citation_numbers = set()
+        in_references = False
+        paragraphs = [
+            paragraph
+            for paragraph in self.document.element.body.iter()
+            if paragraph.tag == qn("w:p")
+        ]
+
+        for index, paragraph in enumerate(paragraphs):
+            text = self._get_equation_paragraph_text(paragraph)
+            normalized = re.sub(r"\s+", " ", text).strip()
+            lower_text = normalized.lower()
+            if lower_text.startswith(("references", "bibliography", "works cited")):
+                in_references = True
+
+            has_display_math = any(
+                node.tag == qn("m:oMathPara")
+                for node in paragraph.iter()
+            )
+            has_math = any(
+                node.tag == qn("m:oMath")
+                for node in paragraph.iter()
+            )
+            if has_math:
+                math_text = "".join(
+                    text_node.text or ""
+                    for text_node in paragraph.iter()
+                    if text_node.tag == qn("m:t")
+                )
+                number = self._extract_equation_label(math_text)
+                if number is None:
+                    number = self._extract_equation_label(normalized)
+                if number is None and has_display_math:
+                    row = paragraph.getparent()
+                    while row is not None and row.tag not in {qn("w:tr"), qn("w:body")}:
+                        row = row.getparent()
+                    if row is not None and row.tag == qn("w:tr"):
+                        row_text = "".join(
+                            text_node.text or ""
+                            for text_node in row.iter()
+                            if text_node.tag in {qn("w:t"), qn("m:t")}
+                        )
+                        number = self._extract_equation_label(row_text)
+                if number is None and has_display_math:
+                    for adjacent_index in (index - 1, index + 1):
+                        if not 0 <= adjacent_index < len(paragraphs):
+                            continue
+                        if any(
+                            node.tag == qn("m:oMath")
+                            for node in paragraphs[adjacent_index].iter()
+                        ):
+                            continue
+                        adjacent_text = self._get_equation_paragraph_text(
+                            paragraphs[adjacent_index]
+                        )
+                        adjacent_match = re.fullmatch(
+                            r"\s*\((\d+)\)\s*",
+                            adjacent_text,
+                        )
+                        if adjacent_match:
+                            number = int(adjacent_match.group(1))
+                            break
+                if number is not None:
+                    equation_numbers.append(number)
+                elif has_display_math:
+                    unnumbered_count += 1
+
+            if not in_references:
+                citation_numbers.update(self._extract_equation_citation_numbers(normalized))
+
+        if unnumbered_count and equation_numbers and citation_numbers:
+            self._add_issue(
+                category="other",
+                location="Equation Numbering",
+                para_index=-1,
+                description="Display equation may be missing a number",
+                current=f"{unnumbered_count} unnumbered display equations",
+                expected="Numbered display equations such as (1), (2), and (3)",
+                severity="warning",
+            )
+
+        equation_numbers = list(dict.fromkeys(equation_numbers))
+        expected_numbers = list(range(1, len(equation_numbers) + 1))
+        if equation_numbers and equation_numbers != expected_numbers:
+            self._add_issue(
+                category="other",
+                location="Equation Numbering",
+                para_index=-1,
+                description="Equation numbering is not continuous",
+                current=", ".join(f"({number})" for number in equation_numbers),
+                expected=", ".join(f"({number})" for number in expected_numbers),
+                severity="warning",
+            )
+
+        missing_equations = sorted(citation_numbers - set(equation_numbers))
+        if equation_numbers and missing_equations:
+            self._add_issue(
+                category="other",
+                location="Equation Citations",
+                para_index=-1,
+                description="Equation citation has no matching equation",
+                current=", ".join(f"({number})" for number in missing_equations),
+                expected="Every explicit equation citation matches a numbered equation",
+                severity="error",
+            )
+
+    @staticmethod
+    def _get_equation_paragraph_text(paragraph) -> str:
+        """Return visible Word and OMML text from a paragraph."""
+        return "".join(
+            text_node.text or ""
+            for text_node in paragraph.iter()
+            if text_node.tag in {qn("w:t"), qn("m:t")}
+        )
+
+    @staticmethod
+    def _extract_equation_label(text: str) -> Optional[int]:
+        """Extract a trailing equation label such as (3) or Word's #3 form."""
+        match = re.search(r"#\s*(\d+)", text)
+        if match:
+            return int(match.group(1))
+        match = re.search(r"^\s*\((\d+)\)|\((\d+)\)\s*$", text)
+        if not match:
+            return None
+        return int(match.group(1) or match.group(2))
+
+    @staticmethod
+    def _extract_equation_citation_numbers(text: str) -> set:
+        """Extract numbers from explicit Equation or Eq. citations."""
+        numbers = set()
+        range_pattern = (
+            r"\b(?:equations?|eqs?\.?)\s*\(?(\d+)\)?"
+            r"\s*[-\u2013\u2014]\s*\(?(\d+)\)?"
+        )
+        for match in re.finditer(range_pattern, text, re.IGNORECASE):
+            start, end = int(match.group(1)), int(match.group(2))
+            if start <= end:
+                numbers.update(range(start, end + 1))
+
+        single_pattern = r"\b(?:equations?|eqs?\.?)\s*\(?(\d+)\)?"
+        numbers.update(
+            int(match.group(1))
+            for match in re.finditer(single_pattern, text, re.IGNORECASE)
+        )
+        return numbers
 
     def _check_sdt_references(
         self,
