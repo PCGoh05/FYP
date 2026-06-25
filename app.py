@@ -131,6 +131,48 @@ def resolve_pre_fix_guidance(payload, llm, cache):
         cache.pop(next(iter(cache)))
     return guidance, cache_key, source
 
+
+def build_post_fix_guidance_payload(
+    before_result,
+    after_result,
+    changes,
+    validation,
+    rules,
+):
+    """Build privacy-limited post-fix guidance input."""
+    return ReviewGuidanceBuilder().build_post_fix_payload(
+        before_result,
+        after_result,
+        changes,
+        validation,
+        rules,
+    )
+
+
+def resolve_post_fix_guidance(payload, llm, cache):
+    """Return cached AI-enhanced or deterministic post-fix guidance."""
+    builder = ReviewGuidanceBuilder()
+    cache_key = builder.cache_key(payload, "post-fix")
+    if cache_key in cache:
+        cached = cache[cache_key]
+        return cached["text"], cache_key, cached["source"]
+
+    if llm and llm.is_available():
+        guidance = llm.generate_post_fix_summary(payload)
+        source = (
+            "AI-enhanced guidance"
+            if llm.is_available()
+            else "Rule-based guidance"
+        )
+    else:
+        guidance = builder.build_post_fix_fallback(payload)
+        source = "Rule-based guidance"
+
+    cache[cache_key] = {"text": guidance, "source": source}
+    while len(cache) > 20:
+        cache.pop(next(iter(cache)))
+    return guidance, cache_key, source
+
 # Load custom CSS
 def load_css():
     css_path = os.path.join(os.path.dirname(__file__), "assets", "styles.css")
@@ -234,6 +276,8 @@ def init_session_state():
         st.session_state.post_fix_guidance = ""
     if "post_fix_guidance_key" not in st.session_state:
         st.session_state.post_fix_guidance_key = ""
+    if "post_fix_guidance_source" not in st.session_state:
+        st.session_state.post_fix_guidance_source = ""
 
 
 def display_header():
@@ -475,6 +519,7 @@ def handle_manuscript_check(uploaded_file):
                 st.session_state.pre_fix_guidance_source = ""
                 st.session_state.post_fix_guidance = ""
                 st.session_state.post_fix_guidance_key = ""
+                st.session_state.post_fix_guidance_source = ""
 
                 return result
 
@@ -712,6 +757,10 @@ def handle_auto_fix():
         st.warning("Please upload a manuscript first")
         return
 
+    st.session_state.post_fix_guidance = ""
+    st.session_state.post_fix_guidance_key = ""
+    st.session_state.post_fix_guidance_source = ""
+
     try:
         with st.spinner("Applying formatting fixes..."):
             rules = st.session_state.template_rules or DEFAULT_RULES
@@ -845,6 +894,41 @@ def display_post_fix_validation():
             st.caption("These issues still need manual review or a more specific journal rule.")
     else:
         st.success("No remaining issues were detected after auto-fix.")
+
+    st.caption(
+        "The explanation uses recorded changes and the post-fix rule check. "
+        "It does not inspect or approve manuscript content."
+    )
+    if st.button("Explain Fix Results", key="explain_fix_results"):
+        payload = build_post_fix_guidance_payload(
+            st.session_state.get("check_result"),
+            remaining_result,
+            st.session_state.get("changes", []),
+            validation,
+            st.session_state.template_rules or DEFAULT_RULES,
+        )
+        llm = None
+        if (
+            st.session_state.ai_explanations_enabled
+            and ensure_llm_connection()
+        ):
+            llm = st.session_state.llm
+        with st.spinner("Preparing post-fix guidance..."):
+            guidance, cache_key, source = resolve_post_fix_guidance(
+                payload,
+                llm,
+                st.session_state.review_guidance_cache,
+            )
+        st.session_state.post_fix_guidance = guidance
+        st.session_state.post_fix_guidance_key = cache_key
+        st.session_state.post_fix_guidance_source = source
+
+    if st.session_state.post_fix_guidance:
+        st.caption(st.session_state.post_fix_guidance_source)
+        with st.container(border=True):
+            st.markdown(
+                st.session_state.post_fix_guidance.replace("\n", "  \n")
+            )
 
 
 def display_download_section():

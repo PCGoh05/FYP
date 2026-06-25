@@ -56,6 +56,64 @@ class ReviewGuidanceBuilder:
             "groups": groups[:self.MAX_GROUPS],
         }
 
+    def build_post_fix_payload(
+        self,
+        before_result: Any,
+        after_result: Any,
+        changes: Iterable[Any],
+        validation: Any,
+        rules: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Build a compact payload from deterministic post-fix results."""
+        profile = rules.get("_profile", {}) if isinstance(rules, dict) else {}
+        change_counts: Dict[tuple, int] = {}
+        for change in changes or []:
+            key = (
+                str(getattr(change, "change_type", "formatting") or "formatting"),
+                str(getattr(change, "property_name", "formatting") or "formatting"),
+            )
+            change_counts[key] = change_counts.get(key, 0) + 1
+
+        change_groups = [
+            {"type": key[0], "property": key[1], "count": count}
+            for key, count in sorted(
+                change_counts.items(),
+                key=lambda item: (-item[1], item[0][0], item[0][1]),
+            )
+        ]
+        remaining_groups = self._group_issues(
+            getattr(after_result, "issues_by_category", {}) or {}
+        )
+        increased = getattr(
+            validation,
+            "new_or_increased_categories",
+            {},
+        ) or {}
+        return {
+            "profile": profile.get("name", "Generic"),
+            "issues_before": int(
+                getattr(
+                    validation,
+                    "before_issues",
+                    getattr(before_result, "total_issues", 0),
+                ) or 0
+            ),
+            "issues_after": int(
+                getattr(
+                    validation,
+                    "after_issues",
+                    getattr(after_result, "total_issues", 0),
+                ) or 0
+            ),
+            "safe": bool(getattr(validation, "is_safe", False)),
+            "change_groups": change_groups,
+            "remaining_groups": remaining_groups[:self.MAX_GROUPS],
+            "increased_categories": {
+                str(category): int(count)
+                for category, count in sorted(increased.items())
+            },
+        }
+
     def _group_issues(
         self,
         issues_by_category: Dict[str, Iterable[Any]],

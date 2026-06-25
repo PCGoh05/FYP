@@ -3,7 +3,9 @@ from types import SimpleNamespace
 
 from app import (
     build_pre_fix_guidance_payload,
+    build_post_fix_guidance_payload,
     resolve_pre_fix_guidance,
+    resolve_post_fix_guidance,
 )
 
 
@@ -18,6 +20,10 @@ class FakeLLM:
     def generate_review_guidance(self, payload):
         self.calls += 1
         return "AI guidance"
+
+    def generate_post_fix_summary(self, payload):
+        self.calls += 1
+        return "AI post-fix guidance"
 
 
 def _result():
@@ -72,6 +78,40 @@ class ReviewGuidanceAppTest(unittest.TestCase):
 
         self.assertEqual(first, second)
         self.assertEqual(first[0], "AI guidance")
+        self.assertEqual(first[2], "AI-enhanced guidance")
+        self.assertEqual(llm.calls, 1)
+
+    def test_resolves_and_caches_post_fix_guidance(self):
+        before = _result()
+        after = SimpleNamespace(
+            total_issues=0,
+            compliance_score=100.0,
+            issues_by_category={},
+        )
+        changes = [
+            SimpleNamespace(change_type="body", property_name="font_name")
+        ]
+        validation = SimpleNamespace(
+            is_safe=True,
+            before_issues=1,
+            after_issues=0,
+            new_or_increased_categories={},
+        )
+        payload = build_post_fix_guidance_payload(
+            before,
+            after,
+            changes,
+            validation,
+            {"_profile": {"name": "JIWE"}},
+        )
+        llm = FakeLLM()
+        cache = {}
+
+        first = resolve_post_fix_guidance(payload, llm, cache)
+        second = resolve_post_fix_guidance(payload, llm, cache)
+
+        self.assertEqual(first, second)
+        self.assertEqual(first[0], "AI post-fix guidance")
         self.assertEqual(first[2], "AI-enhanced guidance")
         self.assertEqual(llm.calls, 1)
 

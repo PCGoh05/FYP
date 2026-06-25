@@ -161,6 +161,87 @@ class ReviewGuidanceBuilderTest(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertNotEqual(first, changed)
 
+    def test_builds_post_fix_payload_from_actual_result_shapes(self):
+        before = _result({
+            "body_text": [
+                _issue("body_text", "Body text font does not match template"),
+                _issue("body_text", "Body text font does not match template"),
+            ],
+            "references": [
+                _issue("references", "Reference numbering is not continuous"),
+            ],
+        }, score=82.0)
+        after = _result({
+            "references": [
+                _issue("references", "Reference numbering is not continuous"),
+            ],
+        }, score=94.0)
+        changes = [
+            SimpleNamespace(change_type="body", property_name="font_name"),
+            SimpleNamespace(change_type="body", property_name="font_name"),
+        ]
+        validation = SimpleNamespace(
+            is_safe=True,
+            before_issues=3,
+            after_issues=1,
+            new_or_increased_categories={},
+        )
+
+        payload = ReviewGuidanceBuilder().build_post_fix_payload(
+            before,
+            after,
+            changes,
+            validation,
+            {"_profile": {"name": "JIWE"}},
+        )
+
+        self.assertEqual(payload["issues_before"], 3)
+        self.assertEqual(payload["issues_after"], 1)
+        self.assertTrue(payload["safe"])
+        self.assertEqual(payload["change_groups"][0]["count"], 2)
+        self.assertEqual(
+            payload["remaining_groups"][0]["description"],
+            "Reference numbering is not continuous",
+        )
+
+    def test_post_fix_payload_excludes_change_previews_and_private_text(self):
+        before = _result({})
+        after = _result({
+            "author_info": [
+                _issue(
+                    "author_info",
+                    "Author information requires manual review",
+                    current="jane@example.com 0000-0002-1825-0097",
+                    preview="Full private manuscript paragraph.",
+                )
+            ]
+        })
+        change = SimpleNamespace(
+            change_type="author_info",
+            property_name="alignment",
+            text_preview="jane@example.com Full private manuscript paragraph.",
+            current_value="0000-0002-1825-0097",
+        )
+        validation = SimpleNamespace(
+            is_safe=False,
+            before_issues=0,
+            after_issues=1,
+            new_or_increased_categories={"author_info": 1},
+        )
+
+        payload = ReviewGuidanceBuilder().build_post_fix_payload(
+            before,
+            after,
+            [change],
+            validation,
+            {},
+        )
+        serialized = str(payload)
+
+        self.assertNotIn("jane@example.com", serialized)
+        self.assertNotIn("0000-0002-1825-0097", serialized)
+        self.assertNotIn("Full private manuscript paragraph", serialized)
+
 
 if __name__ == "__main__":
     unittest.main()
