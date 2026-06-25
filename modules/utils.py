@@ -503,12 +503,31 @@ def clean_text_for_comparison(text: str) -> str:
     return text.strip()
 
 
+def classify_author_info_role(text: str) -> str:
+    """Classify a front-matter author-information paragraph by its role."""
+    normalized = re.sub(r"\s+", " ", text.lower()).strip()
+    if (
+        "corresponding author" in normalized
+        or "orcid" in normalized
+        or re.search(r"[\w.+-]+@[\w.-]+\.[a-z]{2,}", normalized)
+    ):
+        return "corresponding_author"
+    if re.search(
+        r"\b(university|universiti|faculty|department|school|college|institute|"
+        r"centre|center|laboratory|address|jalan|street|campus)\b",
+        normalized,
+    ):
+        return "affiliation"
+    return "author"
+
+
 def calculate_compliance_score(issues: Dict[str, List]) -> float:
     """Calculate overall compliance score based on issues found"""
     weights = {
         "margins": 10,
         "journal_header": 5,
         "title": 15,
+        "author_info": 10,
         "body_text": 20,
         "headings": 10,
         "structure": 15,

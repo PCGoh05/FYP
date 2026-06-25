@@ -39,6 +39,15 @@ DEFAULT_RULES = {
         "font_size": 9,
         "alignment": "CENTER"
     },
+    "corresponding_author": {
+        "font_name": "Times New Roman",
+        "font_size": 9,
+        "bold": False,
+        "italic": True,
+        "alignment": "CENTER",
+        "email_required": True,
+        "orcid_required": True
+    },
     "body": {
         "font_name": "Times New Roman",
         "font_size": 10,

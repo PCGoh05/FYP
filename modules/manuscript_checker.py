@@ -13,7 +13,7 @@ from .utils import (
     load_document, get_paragraph_text, get_paragraph_alignment, get_paragraph_font_info,
     get_sdt_reference_paragraphs, get_margins, get_line_spacing,
     detect_reference_style, calculate_compliance_score,
-    truncate_text, is_font_equivalent
+    truncate_text, is_font_equivalent, classify_author_info_role
 )
 from .paragraph_classifier import ParagraphClassifier, ParagraphType, ClassifiedParagraph
 from config import REQUIRED_SECTIONS
@@ -54,6 +54,7 @@ class ManuscriptChecker:
         "margins",
         "journal_header",
         "title",
+        "author_info",
         "body_text",
         "headings",
         "structure",
@@ -96,6 +97,7 @@ class ManuscriptChecker:
         self._check_journal_header()
         self._check_layout_stability()
         self._check_title()
+        self._check_author_info()
         self._check_body_text()
         self._check_headings()
         structure = self._check_document_structure()
@@ -384,6 +386,89 @@ class ManuscriptChecker:
                         text_preview=truncate_text(text, 80)
                     )
                     break
+
+    def _check_author_info(self):
+        """Check author names, affiliations, and corresponding-author details."""
+        abstract_indices = [
+            cp.index for cp in self.classifications
+            if cp.paragraph_type in {ParagraphType.ABSTRACT_LABEL, ParagraphType.ABSTRACT_CONTENT}
+        ]
+        front_matter_end = min(abstract_indices) if abstract_indices else 25
+        author_paragraphs = [
+            cp for cp in self.classifications
+            if cp.paragraph_type == ParagraphType.AUTHOR_INFO and cp.index < front_matter_end
+        ]
+
+        for cp in author_paragraphs:
+            role = classify_author_info_role(cp.text)
+            rules = self.rules.get(role, self.rules.get("author", {}))
+            expected_font = rules.get("font_name")
+            expected_size = rules.get("font_size")
+            expected_bold = rules.get("bold")
+            expected_italic = rules.get("italic")
+            expected_alignment = rules.get("alignment")
+            mismatches = []
+
+            current_font = cp.font_info.get("font_name")
+            if expected_font and current_font and not is_font_equivalent(current_font, expected_font):
+                mismatches.append(f"font {current_font}")
+            current_size = cp.font_info.get("font_size")
+            if expected_size is not None and current_size and abs(current_size - expected_size) > 0.5:
+                mismatches.append(f"size {current_size}pt")
+            current_bold = self._is_paragraph_mostly_bold(cp.index)
+            if expected_bold is not None and current_bold != bool(expected_bold):
+                mismatches.append("bold" if current_bold else "not bold")
+            current_italic = bool(cp.font_info.get("italic"))
+            if expected_italic is not None and current_italic != bool(expected_italic):
+                mismatches.append("italic" if current_italic else "not italic")
+            if expected_alignment and cp.alignment != expected_alignment:
+                mismatches.append(f"alignment {cp.alignment}")
+
+            if mismatches:
+                role_label = {
+                    "author": "Author name",
+                    "affiliation": "Affiliation",
+                    "corresponding_author": "Corresponding author",
+                }[role]
+                self._add_issue(
+                    category="author_info",
+                    location=role_label,
+                    para_index=cp.index,
+                    description=f"{role_label} formatting does not match template",
+                    current=", ".join(mismatches),
+                    expected=f"{expected_font or 'Template font'}, {expected_size or 'template'}pt",
+                    severity="warning",
+                    text_preview=truncate_text(cp.text, 60),
+                )
+
+            if role == "corresponding_author":
+                valid_email = re.search(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", cp.text)
+                valid_orcid = re.search(
+                    r"\b\d{4}-\d{4}-\d{4}-\d{3}[\dXx]\b",
+                    cp.text,
+                )
+                if rules.get("email_required") and not valid_email:
+                    self._add_issue(
+                        category="author_info",
+                        location="Corresponding Author",
+                        para_index=cp.index,
+                        description="Corresponding author email is missing or invalid",
+                        current="No valid email detected",
+                        expected="A valid corresponding-author email address",
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 60),
+                    )
+                if rules.get("orcid_required") and not valid_orcid:
+                    self._add_issue(
+                        category="author_info",
+                        location="Corresponding Author",
+                        para_index=cp.index,
+                        description="Corresponding author ORCID is missing or invalid",
+                        current="No valid ORCID detected",
+                        expected="ORCID format: 0000-0000-0000-0000",
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 60),
+                    )
     
     def _check_body_text(self):
         """Check body text formatting - ENHANCED with tolerance"""

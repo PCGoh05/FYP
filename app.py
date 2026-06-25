@@ -522,7 +522,7 @@ def display_check_results(result):
     st.subheader("Issues by Category")
 
     tabs = st.tabs([
-        "All Issues", "Margins", "Journal Header", "Title", "Body Text",
+        "All Issues", "Margins", "Journal Header", "Title", "Author Info", "Body Text",
         "Headings", "Structure", "References"
     ])
 
@@ -550,10 +550,11 @@ def display_check_results(result):
         1: "margins",
         2: "journal_header",
         3: "title",
-        4: "body_text",
-        5: "headings",
-        6: "structure",
-        7: "references"
+        4: "author_info",
+        5: "body_text",
+        6: "headings",
+        7: "structure",
+        8: "references"
     }
 
     for tab_idx, category in category_map.items():

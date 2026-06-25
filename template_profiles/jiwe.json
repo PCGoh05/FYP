@@ -87,6 +87,15 @@
       "font_size": 9,
       "alignment": "CENTER"
     },
+    "corresponding_author": {
+      "font_name": "Times New Roman",
+      "font_size": 9,
+      "bold": false,
+      "italic": true,
+      "alignment": "CENTER",
+      "email_required": true,
+      "orcid_required": true
+    },
     "body": {
       "font_name": "Times New Roman",
       "font_size": 10,

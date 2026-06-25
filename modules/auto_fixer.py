@@ -16,7 +16,8 @@ from io import BytesIO
 
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_alignment, truncate_text,
-    is_font_equivalent, get_run_font_info, get_sdt_reference_paragraphs
+    is_font_equivalent, get_run_font_info, get_sdt_reference_paragraphs,
+    classify_author_info_role
 )
 from .paragraph_classifier import (
     ParagraphType, ClassifiedParagraph
@@ -299,7 +300,12 @@ class AutoFixer:
         for i, para in enumerate(self.document.paragraphs):
             classification = self._classification_map.get(i)
             
-            if not classification or not classification.should_fix:
+            if not classification:
+                continue
+            if (
+                not classification.should_fix
+                and classification.paragraph_type != ParagraphType.AUTHOR_INFO
+            ):
                 continue
             
             para_type = classification.paragraph_type
@@ -311,6 +317,9 @@ class AutoFixer:
             elif para_type == ParagraphType.PAPER_TITLE:
                 if self._should_fix_category(i, ["title"]):
                     self._fix_title(para, i)
+            elif para_type == ParagraphType.AUTHOR_INFO:
+                if self._should_fix_category(i, ["author_info"]):
+                    self._fix_author_info(para, i)
             elif para_type == ParagraphType.SECTION_HEADING:
                 if self._should_fix_category(i, ["headings"]):
                     self._fix_heading(para, i)
@@ -718,6 +727,54 @@ class AutoFixer:
                 details=changes,
                 text_preview=truncate_text(get_paragraph_text(paragraph), 50),
                 paragraph_type=ParagraphType.PAPER_TITLE.value,
+            )
+
+    def _fix_author_info(self, paragraph, index: int):
+        """Fix front-matter author information without changing its text."""
+        role = classify_author_info_role(get_paragraph_text(paragraph))
+        rules = self.rules.get(role, self.rules.get("author", {}))
+        allowed_properties = self._allowed_properties_for(
+            index,
+            categories=["author_info"],
+            fallback=["font_name", "font_size", "bold", "italic", "alignment"],
+        )
+        changes = []
+        for run in paragraph.runs:
+            if run.text.strip():
+                changes.extend(self._fix_run_formatting(
+                    run,
+                    rules.get("font_name"),
+                    rules.get("font_size"),
+                    rules.get("bold"),
+                    rules.get("italic"),
+                    allowed_properties=allowed_properties,
+                ))
+
+        expected_alignment = rules.get("alignment")
+        current_alignment = get_paragraph_alignment(paragraph)
+        if (
+            expected_alignment
+            and self._property_allowed("alignment", allowed_properties)
+            and current_alignment != expected_alignment
+        ):
+            paragraph.alignment = WD_ALIGN_PARAGRAPH(
+                ALIGNMENT_REVERSE_MAP.get(expected_alignment, 1)
+            )
+            changes.append({
+                "property_name": "alignment",
+                "current_value": current_alignment,
+                "target_value": expected_alignment,
+                "evidence": "Author-information alignment did not match target rule",
+            })
+
+        if changes:
+            self._add_property_changes(
+                paragraph_index=index,
+                location=role.replace("_", " ").title(),
+                change_type="author_info",
+                details=changes,
+                text_preview=truncate_text(get_paragraph_text(paragraph), 50),
+                paragraph_type=ParagraphType.AUTHOR_INFO.value,
             )
 
     def _fix_heading(self, paragraph, index: int):
