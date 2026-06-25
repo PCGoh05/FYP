@@ -73,7 +73,11 @@ DEFAULT_RULES = {
         "bold": False,
         "alignment": "JUSTIFY",
         "min_words": 200,
-        "max_words": 300
+        "max_words": 300,
+        "one_paragraph": True,
+        "prohibit_equations": True,
+        "prohibit_tables": True,
+        "prohibit_citations": True
     },
     "keywords": {
         "font_name": "Times New Roman",

@@ -640,6 +640,10 @@ class ManuscriptChecker:
         expected_alignment = abstract_rules.get("alignment")
         minimum_words = abstract_rules.get("min_words")
         maximum_words = abstract_rules.get("max_words")
+        one_paragraph = abstract_rules.get("one_paragraph")
+        prohibit_equations = abstract_rules.get("prohibit_equations")
+        prohibit_tables = abstract_rules.get("prohibit_tables")
+        prohibit_citations = abstract_rules.get("prohibit_citations")
         size_tolerance = 0.5
 
         abstract_paragraphs = [
@@ -727,6 +731,66 @@ class ManuscriptChecker:
                     expected=expected_range,
                     severity="warning",
                     text_preview=truncate_text(abstract_text, 50)
+                )
+
+        if one_paragraph and len(abstract_paragraphs) > 1:
+            self._add_issue(
+                category="body_text",
+                location="Abstract",
+                para_index=abstract_paragraphs[0].index,
+                description="Abstract must be written as one paragraph",
+                current=f"{len(abstract_paragraphs)} paragraphs",
+                expected="One paragraph",
+                severity="warning",
+                text_preview=truncate_text(" ".join(cp.text for cp in abstract_paragraphs), 50),
+            )
+
+        if abstract_paragraphs:
+            abstract_text = " ".join(cp.text for cp in abstract_paragraphs)
+            first_index = abstract_paragraphs[0].index
+            if prohibit_citations and (
+                re.search(r"\[\d+(?:\s*[-,]\s*\d+)*\]", abstract_text)
+                or re.search(r"\([A-Z][A-Za-z-]+(?:\s+et\s+al\.)?,?\s+(?:19|20)\d{2}\)", abstract_text)
+            ):
+                self._add_issue(
+                    category="body_text",
+                    location="Abstract",
+                    para_index=first_index,
+                    description="Abstract contains citation or reference markers",
+                    current="Citation marker detected",
+                    expected="No references or citations in the abstract",
+                    severity="warning",
+                    text_preview=truncate_text(abstract_text, 50),
+                )
+
+            has_math_xml = any(
+                self.document.paragraphs[cp.index]._p.find(".//" + qn("m:oMath")) is not None
+                or self.document.paragraphs[cp.index]._p.find(".//" + qn("m:oMathPara")) is not None
+                for cp in abstract_paragraphs
+            )
+            has_equation_text = bool(re.search(r"\b[\w]+\s*[=<>]\s*[\w]+", abstract_text))
+            if prohibit_equations and (has_math_xml or has_equation_text):
+                self._add_issue(
+                    category="body_text",
+                    location="Abstract",
+                    para_index=first_index,
+                    description="Abstract contains equation-like content",
+                    current="Equation or formula detected",
+                    expected="No mathematical equations in the abstract",
+                    severity="warning",
+                    text_preview=truncate_text(abstract_text, 50),
+                )
+
+            if prohibit_tables and re.search(r"\b(?:table|figure|fig\.)\s*\d+", abstract_text, re.IGNORECASE):
+                self._add_issue(
+                    category="body_text",
+                    location="Abstract",
+                    para_index=first_index,
+                    description="Abstract contains table or figure material",
+                    current="Table or figure reference detected",
+                    expected="No tabular or figure material in the abstract",
+                    severity="warning",
+                    text_preview=truncate_text(abstract_text, 50),
                 )
     
     def _check_keywords_content(self):

@@ -121,7 +121,11 @@
       "bold": false,
       "alignment": "JUSTIFY",
       "min_words": 200,
-      "max_words": 300
+      "max_words": 300,
+      "one_paragraph": true,
+      "prohibit_equations": true,
+      "prohibit_tables": true,
+      "prohibit_citations": true
     },
     "keywords": {
       "font_name": "Times New Roman",

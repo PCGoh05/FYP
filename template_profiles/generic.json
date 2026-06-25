@@ -116,7 +116,11 @@
       "font_size": 10,
       "alignment": null,
       "min_words": null,
-      "max_words": null
+      "max_words": null,
+      "one_paragraph": null,
+      "prohibit_equations": null,
+      "prohibit_tables": null,
+      "prohibit_citations": null
     },
     "keywords": {
       "font_name": "Times New Roman",
