@@ -92,12 +92,13 @@ def _save_manuscript(path: Path):
     _add_paragraph(document, "CONCLUSION", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
     _add_paragraph(document, "Conclusion text for the manuscript.", 10, WD_ALIGN_PARAGRAPH.JUSTIFY)
     _add_paragraph(document, "REFERENCES", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
-    _add_paragraph(
+    reference = _add_paragraph(
         document,
         "[1] A. Author, \"Article title,\" Journal of Testing, vol. 1, no. 1, pp. 1-5, 2026.",
         9,
         WD_ALIGN_PARAGRAPH.LEFT,
     )
+    reference.paragraph_format.line_spacing = 1.0
     document.save(path)
 
 

@@ -402,7 +402,7 @@ def get_sdt_reference_paragraphs(document) -> List[Paragraph]:
 
 
 def get_line_spacing(paragraph) -> Optional[float]:
-    """Get line spacing value from paragraph"""
+    """Get effective line spacing from direct, style, or document defaults."""
     line_spacing = paragraph.paragraph_format.line_spacing
     if line_spacing is None and paragraph.style is not None:
         line_spacing = paragraph.style.paragraph_format.line_spacing
@@ -410,6 +410,23 @@ def get_line_spacing(paragraph) -> Optional[float]:
     base_style = paragraph.style.base_style if paragraph.style is not None else None
     if line_spacing is None and base_style is not None:
         line_spacing = base_style.paragraph_format.line_spacing
+
+    if line_spacing is None:
+        document = getattr(paragraph.part, "document", None)
+        styles = document.styles.element if document is not None else None
+        doc_defaults = styles.find(qn("w:docDefaults")) if styles is not None else None
+        spacing = (
+            doc_defaults.find(
+                f"{qn('w:pPrDefault')}/{qn('w:pPr')}/{qn('w:spacing')}"
+            )
+            if doc_defaults is not None
+            else None
+        )
+        if spacing is not None:
+            line_value = spacing.get(qn("w:line"))
+            line_rule = spacing.get(qn("w:lineRule"), "auto")
+            if line_value and line_rule == "auto":
+                line_spacing = int(line_value) / 240
 
     return line_spacing
 

@@ -12,6 +12,7 @@ from .profile_loader import ProfileLoader
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_font_info,
     get_paragraph_alignment, get_margins, get_line_spacing,
+    get_sdt_reference_paragraphs,
     count_columns, get_run_font_info
 )
 from config import DEFAULT_RULES, SECTION_HEADING_PATTERNS
@@ -288,11 +289,11 @@ class TemplateExtractor:
         """Return True when the template contains a reference section or entries."""
         for paragraph in self.document.paragraphs:
             text = get_paragraph_text(paragraph).strip().lower()
-            if text in {"references", "bibliography", "works cited"}:
+            if text.startswith(("references", "bibliography", "works cited")):
                 return True
             if re.match(r"^\[\d+\]", text):
                 return True
-        return False
+        return bool(get_sdt_reference_paragraphs(self.document))
 
     def _has_journal_header_evidence(self) -> bool:
         """Return True when journal header formatting evidence exists in the template."""
@@ -1099,6 +1100,18 @@ Answer with ONLY "yes" or "no"."""
                     if spacing:
                         ref_line_spacings.append(spacing)
         
+        content_control_references = get_sdt_reference_paragraphs(self.document)
+        for para in content_control_references:
+            font_info = get_paragraph_font_info(para)
+            if font_info.get("font_name"):
+                ref_fonts.append(font_info["font_name"])
+            if font_info.get("font_size"):
+                ref_sizes.append(font_info["font_size"])
+            ref_alignments.append(get_paragraph_alignment(para))
+            spacing = get_line_spacing(para)
+            if spacing is not None:
+                ref_line_spacings.append(spacing)
+
         if ref_fonts or ref_sizes or ref_alignments or ref_line_spacings:
             default_rule = self._profile_default("reference", DEFAULT_RULES["reference"])
             return {
