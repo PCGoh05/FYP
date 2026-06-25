@@ -98,7 +98,8 @@ DEFAULT_RULES = {
     },
     "layout": {
         "columns": 1,
-        "page_size": "Letter"
+        "page_size": "Letter",
+        "orientation": "PORTRAIT"
     }
 }
 

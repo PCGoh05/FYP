@@ -5,6 +5,7 @@ Automatically fixes formatting issues while preserving special formatting
 
 from docx import Document
 from docx.shared import Pt, Inches
+from docx.enum.section import WD_ORIENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -289,6 +290,9 @@ class AutoFixer:
             raise ValueError("No document loaded. Call load_manuscript() first.")
         
         self.changes = []
+
+        if self._has_category_issue("layout"):
+            self._fix_layout()
         
         # Fix margins first only when margin issues were detected.
         if self._has_category_issue("margins"):
@@ -383,6 +387,51 @@ class AutoFixer:
                     paragraph_type="document",
                     evidence="Detected margin issue"
                 )
+
+    def _fix_layout(self):
+        """Fix page size, orientation, and column count."""
+        rules = self.rules.get("layout", {})
+        page_sizes = {
+            "Letter": (8.5, 11.0),
+            "A4": (8.27, 11.69),
+        }
+        expected_page_size = rules.get("page_size")
+        expected_orientation = rules.get("orientation")
+        expected_columns = rules.get("columns")
+
+        for section_index, section in enumerate(self.document.sections):
+            if expected_page_size in page_sizes:
+                width, height = page_sizes[expected_page_size]
+                if expected_orientation == "LANDSCAPE":
+                    width, height = height, width
+                section.page_width = Inches(width)
+                section.page_height = Inches(height)
+
+            if expected_orientation:
+                section.orientation = (
+                    WD_ORIENT.LANDSCAPE
+                    if expected_orientation == "LANDSCAPE"
+                    else WD_ORIENT.PORTRAIT
+                )
+
+            if expected_columns is not None:
+                cols = section._sectPr.find(qn("w:cols"))
+                if cols is None:
+                    cols = OxmlElement("w:cols")
+                    section._sectPr.append(cols)
+                cols.set(qn("w:num"), str(int(expected_columns)))
+
+        self._add_change_record(
+            paragraph_index=-1,
+            location="Page Layout",
+            change_type="layout",
+            text_preview="",
+            property_name="layout",
+            current_value="Non-matching layout",
+            target_value=f"{expected_page_size}, {expected_orientation}, {expected_columns} column(s)",
+            paragraph_type="document",
+            evidence="Detected page layout did not match target rules",
+        )
 
     def _fix_page_header_layout(self):
         """Normalize page header tab spacing to reduce Word wrapping."""

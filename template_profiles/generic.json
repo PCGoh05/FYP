@@ -139,7 +139,8 @@
     },
     "layout": {
       "columns": 1,
-      "page_size": "A4"
+      "page_size": "A4",
+      "orientation": null
     }
   }
 }

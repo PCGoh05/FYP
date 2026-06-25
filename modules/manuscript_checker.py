@@ -12,7 +12,7 @@ from difflib import SequenceMatcher
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_alignment, get_paragraph_font_info,
     get_sdt_reference_paragraphs, get_margins, get_line_spacing,
-    detect_reference_style, calculate_compliance_score,
+    detect_reference_style, calculate_compliance_score, count_columns,
     truncate_text, is_font_equivalent, classify_author_info_role
 )
 from .paragraph_classifier import ParagraphClassifier, ParagraphType, ClassifiedParagraph
@@ -52,6 +52,7 @@ class ManuscriptChecker:
     
     CATEGORIES = [
         "margins",
+        "layout",
         "journal_header",
         "title",
         "author_info",
@@ -94,6 +95,7 @@ class ManuscriptChecker:
         
         # Run all checks
         self._check_margins()
+        self._check_layout()
         self._check_journal_header()
         self._check_layout_stability()
         self._check_title()
@@ -469,6 +471,46 @@ class ManuscriptChecker:
                         severity="warning",
                         text_preview=truncate_text(cp.text, 60),
                     )
+
+    def _check_layout(self):
+        """Check page size, orientation, and column count."""
+        layout_rules = self.rules.get("layout", {})
+        expected_page_size = layout_rules.get("page_size")
+        expected_orientation = layout_rules.get("orientation")
+        expected_columns = layout_rules.get("columns")
+        section = self.document.sections[0]
+        width = section.page_width.inches
+        height = section.page_height.inches
+        short_side, long_side = sorted((width, height))
+
+        if abs(short_side - 8.27) < 0.1 and abs(long_side - 11.69) < 0.1:
+            current_page_size = "A4"
+        elif abs(short_side - 8.5) < 0.1 and abs(long_side - 11.0) < 0.1:
+            current_page_size = "Letter"
+        else:
+            current_page_size = f"{width:.2f}x{height:.2f}"
+
+        current_orientation = "LANDSCAPE" if width > height else "PORTRAIT"
+        current_columns = count_columns(self.document)
+
+        if expected_page_size and current_page_size != expected_page_size:
+            self._add_issue(
+                "layout", "Page Layout", -1,
+                "Page size does not match template",
+                current_page_size, expected_page_size, "error",
+            )
+        if expected_orientation and current_orientation != expected_orientation:
+            self._add_issue(
+                "layout", "Page Layout", -1,
+                "Page orientation does not match template",
+                current_orientation, expected_orientation, "warning",
+            )
+        if expected_columns is not None and current_columns != int(expected_columns):
+            self._add_issue(
+                "layout", "Page Layout", -1,
+                "Column count does not match template",
+                str(current_columns), str(expected_columns), "warning",
+            )
     
     def _check_body_text(self):
         """Check body text formatting - ENHANCED with tolerance"""

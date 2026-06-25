@@ -1119,20 +1119,25 @@ Answer with ONLY "yes" or "no"."""
             section = self.document.sections[0]
             width = section.page_width.inches if section.page_width else 8.5
             height = section.page_height.inches if section.page_height else 11
+            short_side, long_side = sorted((width, height))
             
             # Determine page size
-            if abs(width - 8.27) < 0.1 and abs(height - 11.69) < 0.1:
+            if abs(short_side - 8.27) < 0.1 and abs(long_side - 11.69) < 0.1:
                 page_size = "A4"
-            elif abs(width - 8.5) < 0.1 and abs(height - 11) < 0.1:
+            elif abs(short_side - 8.5) < 0.1 and abs(long_side - 11) < 0.1:
                 page_size = "Letter"
             else:
                 page_size = f"{width:.2f}x{height:.2f}"
+            orientation = "LANDSCAPE" if width > height else "PORTRAIT"
         except Exception:
-            page_size = self._profile_default("layout", DEFAULT_RULES["layout"]).get("page_size", "A4")
+            default_layout = self._profile_default("layout", DEFAULT_RULES["layout"])
+            page_size = default_layout.get("page_size", "A4")
+            orientation = default_layout.get("orientation")
         
         return {
             "columns": columns,
-            "page_size": page_size
+            "page_size": page_size,
+            "orientation": orientation,
         }
     
     def get_rules(self) -> Dict[str, Any]:
