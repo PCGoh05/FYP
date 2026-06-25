@@ -105,6 +105,7 @@ class ProfileLoader:
         normalized.setdefault("name", profile_name.title())
         normalized.setdefault("description", "Academic manuscript profile")
         normalized.setdefault("required_sections", REQUIRED_SECTIONS)
+        normalized.setdefault("required_declarations", [])
         normalized.setdefault("heading_patterns", [])
         normalized.setdefault("classification_patterns", {})
         normalized.setdefault("rule_weights", {})

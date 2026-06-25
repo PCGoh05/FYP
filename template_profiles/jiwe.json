@@ -17,6 +17,12 @@
     "conclusion",
     "references"
   ],
+  "required_declarations": [
+    "funding_statement",
+    "author_contributions",
+    "conflict_of_interests",
+    "data_availability"
+  ],
   "classification_patterns": {
     "journal_header": [
       "journal\\s+of\\s+informatics",

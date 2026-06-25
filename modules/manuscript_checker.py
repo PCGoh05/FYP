@@ -76,6 +76,7 @@ class ManuscriptChecker:
         self.issues: Dict[str, List[FormatIssue]] = {cat: [] for cat in self.CATEGORIES}
         self.classifications: List[ClassifiedParagraph] = []
         self.required_sections = self.profile.get("required_sections", REQUIRED_SECTIONS)
+        self.required_declarations = self.profile.get("required_declarations", [])
     
     def load_manuscript(self, file_path_or_bytes):
         """Load the manuscript to check"""
@@ -1030,6 +1031,7 @@ class ManuscriptChecker:
                 mark_section("references", cp, status)
 
         self._check_required_heading_typos(sections)
+        declarations = self._check_required_declarations()
 
         for section, details in sections.items():
             if not details["found"]:
@@ -1072,9 +1074,54 @@ class ManuscriptChecker:
 
         return {
             "sections": sections,
+            "declarations": declarations,
             "order_correct": order_correct,
             "expected_order": self.required_sections,
         }
+
+    def _check_required_declarations(self) -> Dict[str, Dict[str, Any]]:
+        """Check mandatory JIWE declaration headings without generating content."""
+        aliases = {
+            "funding_statement": ("funding statement", "funding"),
+            "author_contributions": ("author contributions", "authors contributions"),
+            "conflict_of_interests": (
+                "conflict of interests",
+                "conflict of interest",
+                "competing interests",
+            ),
+            "data_availability": ("data availability", "data availability statement"),
+        }
+        results = {}
+        normalized_paragraphs = []
+        for cp in self.classifications:
+            text = re.sub(r"\([^)]*\)", "", cp.text)
+            text = re.sub(r"^\d+(?:\.\d+)*\.?\s+", "", text)
+            normalized = re.sub(r"[^a-z ]", " ", text.lower())
+            normalized = re.sub(r"\s+", " ", normalized).strip()
+            normalized_paragraphs.append((cp, normalized))
+
+        for declaration in self.required_declarations:
+            found = None
+            for cp, normalized in normalized_paragraphs:
+                if normalized in aliases.get(declaration, (declaration.replace("_", " "),)):
+                    found = cp
+                    break
+            results[declaration] = {
+                "found": found is not None,
+                "index": found.index if found else None,
+            }
+            if found is None:
+                label = declaration.replace("_", " ").title()
+                self._add_issue(
+                    category="structure",
+                    location="Declaration Sections",
+                    para_index=-1,
+                    description=f"Missing required declaration section: {label}",
+                    current="Not Found",
+                    expected=label,
+                    severity="warning",
+                )
+        return results
 
     def _check_required_heading_typos(self, sections: Dict[str, Dict[str, Any]]) -> None:
         """Report likely misspellings of required section headings."""

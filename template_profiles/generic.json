@@ -17,6 +17,7 @@
     "conclusion",
     "references"
   ],
+  "required_declarations": [],
   "classification_patterns": {
     "journal_header": [
       "journal\\s+of",
