@@ -5,6 +5,7 @@ Provides optional explanation and report-assistance features through NVIDIA API.
 
 import os
 import re
+import json
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,6 +54,7 @@ except ImportError:
     OPENAI_AVAILABLE = False
 
 from config import LLM_CONFIG
+from .review_guidance import ReviewGuidanceBuilder
 
 
 @dataclass
@@ -101,12 +103,6 @@ class LLMIntegration:
                     timeout=self.timeout_seconds,
                     max_retries=0
                 )
-                # Verify the API key by making a simple test call
-                self._client.chat.completions.create(
-                    model=self.model,
-                    messages=[{"role": "user", "content": "test"}],
-                    max_tokens=1
-                )
                 self._available = True
             except Exception:
                 self._client = None
@@ -151,6 +147,7 @@ class LLMIntegration:
             content = response.choices[0].message.content
             return content.strip() if content else ""
         except Exception:
+            self._available = False
             return ""
     
     def explain_error(self, issue: Dict[str, Any]) -> str:
@@ -229,6 +226,89 @@ Confidence: explain that this is based on deterministic template rules, not an L
             f"How to fix: Change the current value from {current} to {expected}.\n"
             f"Rule used: {current} -> {expected}.\n"
             f"Confidence: This is a {severity} from deterministic template rules, not an LLM decision."
+        )
+
+    def generate_review_guidance(self, payload: Dict[str, Any]) -> str:
+        """Explain grouped pre-fix results without changing their meaning."""
+        builder = ReviewGuidanceBuilder()
+        fallback = builder.build_pre_fix_fallback(payload)
+        if not self._available:
+            return fallback
+
+        prompt = (
+            "Organize the following rule-detected manuscript issues into practical "
+            "review guidance.\n\n"
+            "Important boundaries:\n"
+            "- Do not add, remove, validate, or contradict issues.\n"
+            "- Do not infer manuscript content that is not present in the payload.\n"
+            "- Do not change priorities or auto-fix capability.\n"
+            "- Keep the response concise and actionable.\n\n"
+            "Return exactly these headings:\n"
+            "Priority issues:\n"
+            "Quick fixes:\n"
+            "Manual review:\n"
+            "Suggested order:\n"
+            "Limitations:\n\n"
+            f"Structured rule results:\n{json.dumps(payload, ensure_ascii=True)}"
+        )
+        system_prompt = (
+            "You explain results produced by deterministic rules. You do not detect "
+            "new issues or change compliance decisions. Do not recommend acceptance or rejection."
+        )
+        response = self.generate(prompt, system_prompt)
+        required = [
+            "Priority issues:",
+            "Quick fixes:",
+            "Manual review:",
+            "Suggested order:",
+            "Limitations:",
+        ]
+        return response if self._has_required_headings(response, required) else fallback
+
+    def generate_post_fix_summary(self, payload: Dict[str, Any]) -> str:
+        """Explain applied fixes and remaining rule-detected issues."""
+        builder = ReviewGuidanceBuilder()
+        fallback = builder.build_post_fix_fallback(payload)
+        if not self._available:
+            return fallback
+
+        prompt = (
+            "Explain the following deterministic post-fix results.\n\n"
+            "Important boundaries:\n"
+            "- You must not reinterpret change records, checker results, or safety status.\n"
+            "- Do not add new issues or claim that a manuscript is publication-ready.\n"
+            "- Explain why manual-review items were not changed automatically.\n\n"
+            "Return exactly these headings:\n"
+            "Fixed automatically:\n"
+            "Remaining issues:\n"
+            "Why they remain:\n"
+            "Next review steps:\n"
+            "Safety status:\n\n"
+            f"Structured post-fix results:\n{json.dumps(payload, ensure_ascii=True)}"
+        )
+        system_prompt = (
+            "You explain post-fix results produced by deterministic rules. "
+            "You do not alter safety status or recommend acceptance or rejection."
+        )
+        response = self.generate(prompt, system_prompt)
+        required = [
+            "Fixed automatically:",
+            "Remaining issues:",
+            "Why they remain:",
+            "Next review steps:",
+            "Safety status:",
+        ]
+        return response if self._has_required_headings(response, required) else fallback
+
+    @staticmethod
+    def _has_required_headings(
+        response: str,
+        required_headings: List[str],
+    ) -> bool:
+        """Return True only for complete structured guidance."""
+        return bool(response) and all(
+            heading in response
+            for heading in required_headings
         )
     
     def analyze_template_rules(self, paragraphs_info: List[Dict]) -> Dict[str, Any]:

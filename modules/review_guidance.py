@@ -155,6 +155,57 @@ class ReviewGuidanceBuilder:
         )
         return "\n".join(lines)
 
+    def build_post_fix_fallback(self, payload: Dict[str, Any]) -> str:
+        """Return useful post-fix guidance without an API."""
+        change_groups = payload.get("change_groups", [])
+        remaining_groups = payload.get("remaining_groups", [])
+
+        lines = ["Fixed automatically:"]
+        if change_groups:
+            for group in change_groups:
+                change_type = str(group.get("type", "formatting")).replace("_", " ")
+                property_name = str(
+                    group.get("property", "formatting")
+                ).replace("_", " ")
+                lines.append(
+                    f"- {change_type.title()}: {property_name} "
+                    f"({int(group.get('count', 0))} changes)"
+                )
+        else:
+            lines.append("- No automatic changes were recorded.")
+
+        lines.append("")
+        lines.append("Remaining issues:")
+        lines.extend(self._format_groups(remaining_groups))
+        lines.append("")
+        lines.append("Why they remain:")
+        lines.extend(
+            self._format_groups(remaining_groups, include_reason=True)
+        )
+        lines.append("")
+        lines.append("Next review steps:")
+        if remaining_groups:
+            lines.append(
+                "- Review unresolved errors first, then manually inspect "
+                "citations, equations, figures, tables, and missing content."
+            )
+        else:
+            lines.append(
+                "- Perform a final visual review before submission."
+            )
+        lines.append("")
+        lines.append("Safety status:")
+        if payload.get("safe"):
+            lines.append(
+                "- Post-fix validation did not increase detected issues."
+            )
+        else:
+            lines.append(
+                "- Post-fix validation found a possible regression. "
+                "Review the corrected document before use."
+            )
+        return "\n".join(lines)
+
     @staticmethod
     def cache_key(payload: Dict[str, Any], guidance_type: str) -> str:
         """Return a stable cache key for a structured payload."""
