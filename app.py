@@ -24,6 +24,7 @@ from modules.auto_fixer import (
 )
 from modules.report_generator import ReportGenerator
 from modules.llm_integration import create_llm_integration, fallback_explain_issue
+from modules.review_guidance import ReviewGuidanceBuilder
 from modules.utils import (
     pdf_to_docx,
     docx_to_pdf,
@@ -99,6 +100,36 @@ def ensure_llm_connection() -> bool:
 
     st.session_state.llm = None
     return False
+
+
+def build_pre_fix_guidance_payload(result, rules):
+    """Build privacy-limited pre-fix guidance input."""
+    return ReviewGuidanceBuilder().build_pre_fix_payload(result, rules)
+
+
+def resolve_pre_fix_guidance(payload, llm, cache):
+    """Return cached AI-enhanced or deterministic pre-fix guidance."""
+    builder = ReviewGuidanceBuilder()
+    cache_key = builder.cache_key(payload, "pre-fix")
+    if cache_key in cache:
+        cached = cache[cache_key]
+        return cached["text"], cache_key, cached["source"]
+
+    if llm and llm.is_available():
+        guidance = llm.generate_review_guidance(payload)
+        source = (
+            "AI-enhanced guidance"
+            if llm.is_available()
+            else "Rule-based guidance"
+        )
+    else:
+        guidance = builder.build_pre_fix_fallback(payload)
+        source = "Rule-based guidance"
+
+    cache[cache_key] = {"text": guidance, "source": source}
+    while len(cache) > 20:
+        cache.pop(next(iter(cache)))
+    return guidance, cache_key, source
 
 # Load custom CSS
 def load_css():
@@ -191,6 +222,18 @@ def init_session_state():
         st.session_state.highlighted_doc_bytes = None
     if "output_timestamp" not in st.session_state:
         st.session_state.output_timestamp = ""
+    if "review_guidance_cache" not in st.session_state:
+        st.session_state.review_guidance_cache = {}
+    if "pre_fix_guidance" not in st.session_state:
+        st.session_state.pre_fix_guidance = ""
+    if "pre_fix_guidance_key" not in st.session_state:
+        st.session_state.pre_fix_guidance_key = ""
+    if "pre_fix_guidance_source" not in st.session_state:
+        st.session_state.pre_fix_guidance_source = ""
+    if "post_fix_guidance" not in st.session_state:
+        st.session_state.post_fix_guidance = ""
+    if "post_fix_guidance_key" not in st.session_state:
+        st.session_state.post_fix_guidance_key = ""
 
 
 def display_header():
@@ -427,6 +470,11 @@ def handle_manuscript_check(uploaded_file):
                 st.session_state.report_bytes = None
                 st.session_state.post_fix_result = None
                 st.session_state.post_fix_validation = None
+                st.session_state.pre_fix_guidance = ""
+                st.session_state.pre_fix_guidance_key = ""
+                st.session_state.pre_fix_guidance_source = ""
+                st.session_state.post_fix_guidance = ""
+                st.session_state.post_fix_guidance_key = ""
 
                 return result
 
@@ -574,20 +622,58 @@ def display_check_results(result):
 
                     # Optional AI explanation, with deterministic fallback when unavailable.
                     if st.session_state.ai_explanations_enabled:
-                        if st.button(f"Explain", key=f"explain_{category}_{tab_idx}_{issue_idx}_{issue.paragraph_index}"):
+                        if st.button(f"Explain This Issue", key=f"explain_{category}_{tab_idx}_{issue_idx}_{issue.paragraph_index}"):
+                            builder = ReviewGuidanceBuilder()
                             issue_payload = {
                                 "category": category,
-                                "location": issue.location,
+                                "location": builder.redact_text(issue.location),
                                 "description": issue.description,
-                                "current_value": issue.current_value,
-                                "expected_value": issue.expected_value,
+                                "current_value": builder.redact_text(issue.current_value),
+                                "expected_value": builder.redact_text(issue.expected_value),
                                 "severity": issue.severity,
+                                "text_preview": builder.redact_text(
+                                    issue.text_preview,
+                                ),
                             }
                             if ensure_llm_connection():
                                 explanation = st.session_state.llm.explain_error(issue_payload)
                             else:
                                 explanation = fallback_explain_issue(issue_payload)
                             st.info(explanation)
+
+    st.subheader("Review Guidance")
+    st.caption(
+        "AI organizes and explains rule-detected results. It does not detect "
+        "issues or approve manuscripts. When enabled, only grouped and redacted "
+        "issue metadata is sent to the configured API."
+    )
+    if st.button("Generate Review Guidance", key="generate_review_guidance"):
+        payload = build_pre_fix_guidance_payload(
+            result,
+            st.session_state.template_rules or DEFAULT_RULES,
+        )
+        llm = None
+        if (
+            st.session_state.ai_explanations_enabled
+            and ensure_llm_connection()
+        ):
+            llm = st.session_state.llm
+        with st.spinner("Preparing review guidance..."):
+            guidance, cache_key, source = resolve_pre_fix_guidance(
+                payload,
+                llm,
+                st.session_state.review_guidance_cache,
+            )
+        st.session_state.pre_fix_guidance = guidance
+        st.session_state.pre_fix_guidance_key = cache_key
+        st.session_state.pre_fix_guidance_source = source
+
+    if st.session_state.pre_fix_guidance:
+        st.caption(st.session_state.pre_fix_guidance_source)
+        with st.container(border=True):
+            st.markdown(
+                st.session_state.pre_fix_guidance.replace("\n", "  \n")
+            )
 
 
 def build_report_generator(
