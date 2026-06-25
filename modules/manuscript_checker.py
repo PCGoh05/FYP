@@ -1279,6 +1279,7 @@ class ManuscriptChecker:
         if not references:
             sdt_references = get_sdt_reference_paragraphs(self.document)
             if sdt_references:
+                self._check_ieee_reference_consistency()
                 self._check_sdt_references(
                     sdt_references,
                     expected_font,
@@ -1303,6 +1304,7 @@ class ManuscriptChecker:
         # Detect reference style
         ref_texts = [cp.text for cp in references]
         detected_style = detect_reference_style(ref_texts)
+        self._check_ieee_reference_consistency()
         
         # Check for style consistency
         ieee_pattern = r'^\[\d+\]'
@@ -1769,6 +1771,118 @@ class ManuscriptChecker:
             for line in reference_text.splitlines()
             if "doi" in line.lower() or re.search(r"\b(19|20)\d{2}\b", line)
         ]
+
+    def _check_ieee_reference_consistency(self) -> None:
+        """Check reference numbering and links between citations and entries."""
+        reference_numbers = []
+        citation_numbers = set()
+        in_references = False
+
+        for child in self.document.element.body.iterchildren():
+            paragraph_texts = [
+                "".join(
+                    text_node.text or ""
+                    for text_node in paragraph.iter()
+                    if text_node.tag == qn("w:t")
+                )
+                for paragraph in child.iter()
+                if paragraph.tag == qn("w:p")
+            ]
+            for block_text in paragraph_texts:
+                normalized = re.sub(r"\s+", " ", block_text).strip()
+                lower_text = normalized.lower()
+                if not normalized:
+                    continue
+
+                if lower_text.startswith(("references", "bibliography", "works cited")):
+                    in_references = True
+                    block_text = re.sub(
+                        r"^\s*(references|bibliography|works cited)\s*",
+                        "",
+                        block_text,
+                        flags=re.IGNORECASE,
+                    )
+                elif in_references and lower_text.startswith(("biographies of authors", "appendix")):
+                    break
+
+                if in_references:
+                    match = re.match(r"^\s*\[(\d+)\]", block_text)
+                    if match:
+                        reference_numbers.append(int(match.group(1)))
+                else:
+                    citation_numbers.update(self._extract_citation_numbers(block_text))
+
+        if not reference_numbers:
+            return
+
+        citation_numbers.discard(0)
+        highest_plausible_citation = max(reference_numbers) + 1
+        citation_numbers = {
+            number
+            for number in citation_numbers
+            if number <= highest_plausible_citation
+        }
+
+        expected_numbers = list(range(1, len(reference_numbers) + 1))
+        if reference_numbers != expected_numbers:
+            self._add_issue(
+                category="references",
+                location="Reference Numbering",
+                para_index=-1,
+                description="Reference numbering is not continuous",
+                current=", ".join(f"[{number}]" for number in reference_numbers),
+                expected=", ".join(f"[{number}]" for number in expected_numbers),
+                severity="warning",
+            )
+
+        reference_number_set = set(reference_numbers)
+        missing_references = sorted(citation_numbers - reference_number_set)
+        if missing_references:
+            self._add_issue(
+                category="references",
+                location="In-text Citations",
+                para_index=-1,
+                description="In-text citation has no matching reference",
+                current=", ".join(f"[{number}]" for number in missing_references),
+                expected="Every in-text citation matches a numbered reference entry",
+                severity="error",
+            )
+
+        uncited_references = sorted(reference_number_set - citation_numbers)
+        if uncited_references:
+            self._add_issue(
+                category="references",
+                location="Reference Entries",
+                para_index=-1,
+                description="Reference is not cited in the manuscript",
+                current=", ".join(f"[{number}]" for number in uncited_references),
+                expected="Every reference entry is cited in the manuscript",
+                severity="warning",
+            )
+
+    @staticmethod
+    def _extract_citation_numbers(text: str) -> set:
+        """Extract IEEE citation numbers, including comma lists and ranges."""
+        numbers = set()
+        for match in re.finditer(r"\[(\d+)\]\s*[-\u2013\u2014]\s*\[(\d+)\]", text):
+            start, end = int(match.group(1)), int(match.group(2))
+            if start <= end:
+                numbers.update(range(start, end + 1))
+
+        for match in re.finditer(
+            r"\[(\d+(?:\s*(?:,|[-\u2013\u2014])\s*\d+)*)\]",
+            text,
+        ):
+            content = match.group(1)
+            for part in re.split(r"\s*,\s*", content):
+                range_match = re.fullmatch(r"(\d+)\s*[-\u2013\u2014]\s*(\d+)", part)
+                if range_match:
+                    start, end = int(range_match.group(1)), int(range_match.group(2))
+                    if start <= end:
+                        numbers.update(range(start, end + 1))
+                else:
+                    numbers.add(int(part))
+        return numbers
 
     def _get_numbering_level(self, paragraph):
         """Return the numbering level XML element for a numbered paragraph."""
