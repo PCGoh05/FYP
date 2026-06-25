@@ -69,7 +69,10 @@ DEFAULT_RULES = {
     "keywords": {
         "font_name": "Times New Roman",
         "font_size": 9,
-        "bold": False
+        "bold": False,
+        "italic": True,
+        "min_count": 5,
+        "capitalize_first_letter": True
     },
     "caption": {
         "font_name": "Times New Roman",

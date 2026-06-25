@@ -609,6 +609,9 @@ class ManuscriptChecker:
         expected_font = keywords_rules.get("font_name", "Times New Roman")
         expected_size = keywords_rules.get("font_size", 9)
         expected_bold = keywords_rules.get("bold")
+        expected_italic = keywords_rules.get("italic")
+        minimum_count = keywords_rules.get("min_count")
+        capitalize_first_letter = keywords_rules.get("capitalize_first_letter")
         size_tolerance = 0.5
         
         for cp in self.classifications:
@@ -638,6 +641,59 @@ class ManuscriptChecker:
                         description="Keywords bold formatting does not match template",
                         current="Bold" if current_bold else "Not Bold",
                         expected="Bold" if expected_bold else "Not Bold",
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 50)
+                    )
+
+                current_italic = bool(font_info.get("italic"))
+                if expected_italic is not None and current_italic != bool(expected_italic):
+                    self._add_issue(
+                        category="body_text",
+                        location="Keywords",
+                        para_index=cp.index,
+                        description="Keywords italic formatting does not match template",
+                        current="Italic" if current_italic else "Not Italic",
+                        expected="Italic" if expected_italic else "Not Italic",
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 50)
+                    )
+
+                keyword_text = re.sub(
+                    r"^\s*(?:keywords?|key\s+words?)\s*(?:-|\u2013|\u2014|:)?\s*",
+                    "",
+                    cp.text,
+                    flags=re.IGNORECASE,
+                )
+                keyword_text = re.sub(r"\([^)]*\)\s*$", "", keyword_text).strip()
+                keywords = [
+                    item.strip()
+                    for item in re.split(r"[,;]", keyword_text)
+                    if item.strip()
+                ]
+                if minimum_count is not None and len(keywords) < int(minimum_count):
+                    self._add_issue(
+                        category="body_text",
+                        location="Keywords",
+                        para_index=cp.index,
+                        description="Keyword count is below the template minimum",
+                        current=f"{len(keywords)} keywords",
+                        expected=f"At least {minimum_count} keywords",
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 50)
+                    )
+
+                invalid_capitalization = [
+                    keyword for keyword in keywords
+                    if keyword and keyword[0].isalpha() and not keyword[0].isupper()
+                ]
+                if capitalize_first_letter and invalid_capitalization:
+                    self._add_issue(
+                        category="body_text",
+                        location="Keywords",
+                        para_index=cp.index,
+                        description="Keyword capitalization does not match template",
+                        current=", ".join(invalid_capitalization[:5]),
+                        expected="Capitalize the first letter of each keyword",
                         severity="warning",
                         text_preview=truncate_text(cp.text, 50)
                     )

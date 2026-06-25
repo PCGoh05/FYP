@@ -113,6 +113,20 @@ def _parse_word_limits(text: str) -> Dict[str, int]:
     return limits
 
 
+def _parse_keyword_requirements(text: str) -> Dict[str, Any]:
+    """Extract explicit keyword count, italic, and capitalization instructions."""
+    normalized = re.sub(r"\s+", " ", text.lower())
+    requirements = {}
+    minimum_match = re.search(r"(?:at least|minimum(?: of)?)\s+(\d+)\s+keywords?", normalized)
+    if minimum_match:
+        requirements["min_count"] = int(minimum_match.group(1))
+    if "italic" in normalized:
+        requirements["italic"] = True
+    if "capitalize" in normalized and "first letter" in normalized:
+        requirements["capitalize_first_letter"] = True
+    return requirements
+
+
 class TemplateExtractor:
     """Extract formatting rules from a journal template document"""
     
@@ -385,10 +399,7 @@ class TemplateExtractor:
             "body": self._extract_body_style(),
             "heading": self._extract_heading_style(),
             "abstract": self._extract_abstract_style(),
-            "keywords": {
-                **default_rules.get("keywords", {}),
-                "font_size": abstract_size
-            },
+            "keywords": self._extract_keywords_style(default_rules, abstract_size),
             "caption": self._extract_caption_style(),
             "reference": self._extract_reference_style(),
             "layout": self._extract_layout(),
@@ -960,6 +971,29 @@ Answer with ONLY "yes" or "no"."""
                 break
         
         return abstract_style
+
+    def _extract_keywords_style(
+        self,
+        default_rules: Dict[str, Any],
+        fallback_size: float,
+    ) -> Dict[str, Any]:
+        """Extract keyword formatting and content requirements."""
+        keyword_style = {
+            **default_rules.get("keywords", {}),
+            "font_size": fallback_size,
+        }
+        for paragraph in self.document.paragraphs:
+            text = get_paragraph_text(paragraph)
+            if not re.match(r"^\s*(?:keywords?|key\s+words?)\b", text, re.IGNORECASE):
+                continue
+            keyword_style.update(_parse_keyword_requirements(text))
+            font_info = get_paragraph_font_info(paragraph)
+            if font_info.get("font_name"):
+                keyword_style["font_name"] = font_info["font_name"]
+            if font_info.get("font_size"):
+                keyword_style["font_size"] = font_info["font_size"]
+            return keyword_style
+        return keyword_style
     
     def _extract_caption_style(self) -> Dict[str, Any]:
         """Extract figure/table caption style"""

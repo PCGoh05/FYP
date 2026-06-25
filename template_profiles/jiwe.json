@@ -117,7 +117,10 @@
     "keywords": {
       "font_name": "Times New Roman",
       "font_size": 9,
-      "bold": false
+      "bold": false,
+      "italic": true,
+      "min_count": 5,
+      "capitalize_first_letter": true
     },
     "caption": {
       "font_name": "Times New Roman",
