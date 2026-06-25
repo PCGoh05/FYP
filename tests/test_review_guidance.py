@@ -1,0 +1,166 @@
+import unittest
+from types import SimpleNamespace
+
+from modules.review_guidance import ReviewGuidanceBuilder
+
+
+def _issue(
+    category,
+    description,
+    severity="warning",
+    location="Paragraph 1",
+    current="Calibri",
+    expected="Times New Roman",
+    preview="",
+):
+    return SimpleNamespace(
+        category=category,
+        description=description,
+        severity=severity,
+        location=location,
+        current_value=current,
+        expected_value=expected,
+        text_preview=preview,
+        paragraph_index=0,
+    )
+
+
+def _result(issues_by_category, score=80.0):
+    return SimpleNamespace(
+        total_issues=sum(len(issues) for issues in issues_by_category.values()),
+        compliance_score=score,
+        issues_by_category=issues_by_category,
+    )
+
+
+class ReviewGuidanceBuilderTest(unittest.TestCase):
+    def test_groups_repeated_issues_and_orders_errors_first(self):
+        result = _result({
+            "body_text": [
+                _issue("body_text", "Body text font does not match template"),
+                _issue(
+                    "body_text",
+                    "Body text font does not match template",
+                    location="Paragraph 2",
+                ),
+            ],
+            "references": [
+                _issue(
+                    "references",
+                    "In-text citation has no matching reference",
+                    severity="error",
+                    current="[4]",
+                    expected="Matching reference",
+                )
+            ],
+        })
+
+        payload = ReviewGuidanceBuilder().build_pre_fix_payload(
+            result,
+            {"_profile": {"name": "JIWE"}},
+        )
+
+        self.assertEqual(payload["groups"][0]["severity"], "error")
+        self.assertFalse(payload["groups"][0]["auto_fix_supported"])
+        self.assertEqual(payload["groups"][1]["count"], 2)
+        self.assertTrue(payload["groups"][1]["auto_fix_supported"])
+        self.assertEqual(payload["groups"][1]["property_name"], "font_name")
+
+    def test_redacts_private_data_and_limits_payload(self):
+        private_preview = (
+            "Contact jane@example.com, ORCID 0000-0002-1825-0097. "
+            + ("private manuscript sentence " * 20)
+        )
+        categories = {}
+        for index in range(25):
+            categories[f"category_{index}"] = [
+                _issue(
+                    f"category_{index}",
+                    f"Unique issue {index}",
+                    location=f"jane@example.com location {index}",
+                    current=private_preview,
+                    expected="Expected format",
+                    preview=private_preview,
+                )
+            ]
+
+        payload = ReviewGuidanceBuilder().build_pre_fix_payload(
+            _result(categories),
+            {"_profile": {"name": "JIWE"}},
+        )
+        serialized = str(payload)
+
+        self.assertEqual(len(payload["groups"]), 20)
+        self.assertNotIn("jane@example.com", serialized)
+        self.assertNotIn("0000-0002-1825-0097", serialized)
+        self.assertNotIn("private manuscript sentence private manuscript sentence", serialized)
+        self.assertTrue(all(len(group["examples"]) <= 2 for group in payload["groups"]))
+
+    def test_unknown_and_high_risk_issues_require_manual_review(self):
+        result = _result({
+            "structure": [
+                _issue("structure", "Required section not found"),
+            ],
+            "figures": [
+                _issue("figures", "Figure caption should appear below the figure"),
+            ],
+            "other": [
+                _issue("other", "Unrecognized issue from future checker"),
+            ],
+        })
+
+        payload = ReviewGuidanceBuilder().build_pre_fix_payload(result, {})
+
+        self.assertTrue(all(
+            group["auto_fix_supported"] is False
+            for group in payload["groups"]
+        ))
+        self.assertTrue(all(group["review_reason"] for group in payload["groups"]))
+
+    def test_fallback_has_required_sections_and_uses_payload_only(self):
+        payload = ReviewGuidanceBuilder().build_pre_fix_payload(
+            _result({
+                "body_text": [
+                    _issue("body_text", "Body text alignment does not match template")
+                ],
+                "references": [
+                    _issue("references", "Reference numbering is not continuous")
+                ],
+            }),
+            {"_profile": {"name": "JIWE"}},
+        )
+
+        fallback = ReviewGuidanceBuilder().build_pre_fix_fallback(payload)
+
+        for heading in [
+            "Priority issues:",
+            "Quick fixes:",
+            "Manual review:",
+            "Suggested order:",
+            "Limitations:",
+        ]:
+            self.assertIn(heading, fallback)
+        self.assertIn("Body text alignment does not match template", fallback)
+        self.assertIn("Reference numbering is not continuous", fallback)
+
+    def test_cache_key_is_stable_and_changes_with_payload(self):
+        builder = ReviewGuidanceBuilder()
+        payload = builder.build_pre_fix_payload(
+            _result({"body_text": [
+                _issue("body_text", "Body text font does not match template")
+            ]}),
+            {},
+        )
+
+        first = builder.cache_key(payload, "pre-fix")
+        second = builder.cache_key(payload, "pre-fix")
+        changed_payload = dict(payload)
+        changed_payload["total_issues"] = payload["total_issues"] + 1
+        changed = builder.cache_key(changed_payload, "pre-fix")
+
+        self.assertEqual(first, second)
+        self.assertNotEqual(first, changed)
+
+
+if __name__ == "__main__":
+    unittest.main()

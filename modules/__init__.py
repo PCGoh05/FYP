@@ -9,6 +9,7 @@ from .manuscript_checker import ManuscriptChecker
 from .auto_fixer import AutoFixer
 from .report_generator import ReportGenerator
 from .llm_integration import LLMIntegration
+from .review_guidance import ReviewGuidanceBuilder
 from .utils import *
 
 __all__ = [
@@ -18,5 +19,6 @@ __all__ = [
     'ManuscriptChecker',
     'AutoFixer',
     'ReportGenerator',
-    'LLMIntegration'
+    'LLMIntegration',
+    'ReviewGuidanceBuilder'
 ]
