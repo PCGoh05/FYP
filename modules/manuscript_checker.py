@@ -1199,6 +1199,8 @@ class ManuscriptChecker:
                     expected=f"{expected_caption_count} captions",
                     severity="warning"
                 )
+
+        self._check_caption_order_and_numbering("table")
     
     def _check_figures(self):
         """Check figures in the document"""
@@ -1254,6 +1256,8 @@ class ManuscriptChecker:
                     severity="warning",
                     text_preview=truncate_text(cp.text, 50)
                 )
+
+        self._check_caption_order_and_numbering("figure")
     
     def _check_references(self):
         """Check references section formatting"""
@@ -1603,6 +1607,109 @@ class ManuscriptChecker:
 
             count += 1
         return count
+
+    def _check_caption_order_and_numbering(self, caption_type: str) -> None:
+        """Check JIWE caption placement and numbering in body XML order."""
+        blocks = self._get_body_blocks()
+        if caption_type == "table":
+            caption_pattern = re.compile(r"^table\s*(\d+)\b", re.IGNORECASE)
+            expected_side = "above"
+            object_kind = "table"
+            category = "tables"
+            label = "Table"
+        else:
+            caption_pattern = re.compile(r"^(?:figure|fig\.?)\s*(\d+)\b", re.IGNORECASE)
+            expected_side = "below"
+            object_kind = "drawing"
+            category = "figures"
+            label = "Figure"
+
+        captions = []
+        for index, block in enumerate(blocks):
+            match = caption_pattern.match(block["text"])
+            if match:
+                captions.append((index, block, int(match.group(1))))
+
+        numbers = [number for _, _, number in captions]
+        expected_numbers = list(range(1, len(numbers) + 1))
+        if numbers and numbers != expected_numbers:
+            self._add_issue(
+                category=category,
+                location=f"{label} Captions",
+                para_index=-1,
+                description=f"{label} numbering is not continuous",
+                current=", ".join(str(number) for number in numbers),
+                expected=", ".join(str(number) for number in expected_numbers),
+                severity="warning",
+            )
+
+        for index, block, _ in captions:
+            previous_block = self._nearest_content_block(blocks, index, -1)
+            next_block = self._nearest_content_block(blocks, index, 1)
+            reversed_position = (
+                expected_side == "above"
+                and previous_block
+                and previous_block["kind"] == object_kind
+            ) or (
+                expected_side == "below"
+                and next_block
+                and next_block["kind"] == object_kind
+            )
+            if reversed_position:
+                self._add_issue(
+                    category=category,
+                    location=f"Caption: {truncate_text(block['text'], 30)}",
+                    para_index=block["paragraph_index"],
+                    description=f"{label} caption should appear {expected_side} the {caption_type}",
+                    current=f"Caption appears on the wrong side of the {caption_type}",
+                    expected=f"Caption immediately {expected_side} the {caption_type}",
+                    severity="warning",
+                    text_preview=truncate_text(block["text"], 50),
+                )
+
+    def _get_body_blocks(self) -> List[Dict[str, Any]]:
+        """Return body paragraphs, tables, and drawings in document order."""
+        blocks = []
+        paragraph_index = -1
+        for child in self.document.element.body.iterchildren():
+            if child.tag == qn("w:p"):
+                paragraph_index += 1
+                text = "".join(
+                    text_node.text or ""
+                    for text_node in child.iter()
+                    if text_node.tag == qn("w:t")
+                )
+                has_drawing = any(
+                    node.tag == qn("w:drawing")
+                    for node in child.iter()
+                )
+                blocks.append({
+                    "kind": "drawing" if has_drawing else "paragraph",
+                    "text": re.sub(r"\s+", " ", text).strip(),
+                    "paragraph_index": paragraph_index,
+                })
+            elif child.tag == qn("w:tbl"):
+                blocks.append({
+                    "kind": "table",
+                    "text": "",
+                    "paragraph_index": -1,
+                })
+        return blocks
+
+    @staticmethod
+    def _nearest_content_block(
+        blocks: List[Dict[str, Any]],
+        start_index: int,
+        direction: int,
+    ) -> Optional[Dict[str, Any]]:
+        """Find the nearest non-empty paragraph, table, or drawing."""
+        index = start_index + direction
+        while 0 <= index < len(blocks):
+            block = blocks[index]
+            if block["kind"] != "paragraph" or block["text"]:
+                return block
+            index += direction
+        return None
 
     def _count_body_images_before_back_matter(self) -> int:
         """Count body images while ignoring author photos in biography sections."""
