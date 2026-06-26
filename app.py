@@ -83,6 +83,7 @@ def get_server_nvidia_api_key() -> str:
 def ensure_llm_connection() -> bool:
     """Connect to the server-managed LLM once when AI explanations are enabled."""
     if st.session_state.llm and st.session_state.llm.is_available():
+        st.session_state.llm_connection_error = ""
         return True
     if st.session_state.get("llm_connection_attempted"):
         return False
@@ -91,15 +92,51 @@ def ensure_llm_connection() -> bool:
     api_key = get_server_nvidia_api_key()
     if not api_key:
         st.session_state.llm = None
+        st.session_state.llm_connection_error = "missing_key"
         return False
 
     st.session_state.llm = create_llm_integration(api_key=api_key)
     if st.session_state.llm.is_available():
         st.session_state.llm_source = "server"
+        st.session_state.llm_connection_error = ""
         return True
 
     st.session_state.llm = None
+    st.session_state.llm_connection_error = "connection_failed"
     return False
+
+
+def get_llm_status_notice(
+    ai_enabled: bool,
+    connected: bool,
+    key_configured: bool,
+    attempted: bool,
+):
+    """Return a user-facing AI status level and message."""
+    if not ai_enabled:
+        return (
+            "info",
+            "AI explanations are disabled. Core checking is rule-based.",
+        )
+    if connected:
+        return (
+            "success",
+            "AI explanations are connected. AI only explains detected issues; format checking remains rule-based.",
+        )
+    if not key_configured:
+        return (
+            "warning",
+            "AI explanation service is not configured on this deployment. You do not need to enter an API key; rule-based explanations will still be shown.",
+        )
+    if attempted:
+        return (
+            "warning",
+            "AI explanation service could not connect with the configured server key. Rule-based explanations will still be shown. After updating Streamlit Secrets, use Retry AI connection.",
+        )
+    return (
+        "info",
+        "AI explanations will connect through the server key when needed. Core checking remains rule-based.",
+    )
 
 
 def build_pre_fix_guidance_payload(result, rules):
@@ -254,6 +291,8 @@ def init_session_state():
         st.session_state.llm_connection_attempted = False
     if "llm_source" not in st.session_state:
         st.session_state.llm_source = ""
+    if "llm_connection_error" not in st.session_state:
+        st.session_state.llm_connection_error = ""
     if "ai_explanations_enabled" not in st.session_state:
         st.session_state.ai_explanations_enabled = False
     if "manuscript_bytes" not in st.session_state:
@@ -321,23 +360,33 @@ def display_sidebar():
                 st.session_state.llm = None
                 st.session_state.llm_connection_attempted = False
                 st.session_state.llm_source = ""
-                st.info("AI explanations are disabled. Core checking is rule-based.")
+                st.session_state.llm_connection_error = ""
 
             # Show current status
-            if ai_enabled and ensure_llm_connection():
-                st.success("AI explanations are using the server NVIDIA API key.")
-                st.info("AI explanations are enabled. Core checking remains rule-based.")
+            key_configured = bool(get_server_nvidia_api_key()) if ai_enabled else False
+            llm_connected = bool(ai_enabled and ensure_llm_connection())
+            status_level, status_message = get_llm_status_notice(
+                ai_enabled=ai_enabled,
+                connected=llm_connected,
+                key_configured=key_configured,
+                attempted=bool(st.session_state.get("llm_connection_attempted")),
+            )
+            getattr(st, status_level)(status_message)
+
+            if llm_connected:
                 if st.button("Disconnect LLM"):
                     st.session_state.llm = None
                     st.session_state.llm_connection_attempted = False
                     st.session_state.llm_source = ""
+                    st.session_state.llm_connection_error = ""
                     st.session_state.ai_explanations_enabled = False
                     st.rerun()
             elif ai_enabled:
-                st.warning(
-                    "AI explanation service is not configured on this deployment. "
-                    "Rule-based explanations will still be shown."
-                )
+                if st.button("Retry AI connection"):
+                    st.session_state.llm = None
+                    st.session_state.llm_connection_attempted = False
+                    st.session_state.llm_connection_error = ""
+                    st.rerun()
                 if os.environ.get("SHOW_LLM_KEY_OVERRIDE") == "1":
                     with st.expander("Developer key override", expanded=False):
                         st.caption("Optional for local testing only. Normal users do not need to enter an API key.")
@@ -353,10 +402,12 @@ def display_sidebar():
                                 st.session_state.llm_connection_attempted = True
                                 if st.session_state.llm.is_available():
                                     st.session_state.llm_source = "override"
+                                    st.session_state.llm_connection_error = ""
                                     st.success("Connected successfully.")
                                     st.rerun()
                                 else:
                                     st.session_state.llm = None
+                                    st.session_state.llm_connection_error = "connection_failed"
                                     st.error("Connection failed. Check the override key.")
                             else:
                                 st.error("Please enter an API key")
