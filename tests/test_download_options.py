@@ -1,6 +1,7 @@
 import unittest
 
 from app import get_download_format_options, get_pdf_download_notice
+from modules.utils import get_docx_to_pdf_status
 
 
 class DownloadOptionsTest(unittest.TestCase):
@@ -21,6 +22,12 @@ class DownloadOptionsTest(unittest.TestCase):
 
     def test_pdf_supported_notice_is_empty(self):
         self.assertEqual(get_pdf_download_notice(True, "PDF download is supported."), "")
+
+    def test_linux_pdf_status_explains_layout_shift_risk(self):
+        status = get_docx_to_pdf_status(system_name="Linux")
+
+        self.assertIn("LibreOffice can shift Word template layout", status)
+        self.assertIn("Microsoft Word", status)
 
 
 if __name__ == "__main__":

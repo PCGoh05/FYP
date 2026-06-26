@@ -79,16 +79,17 @@ def resolve_docx_to_pdf_backend(
     system_name: Optional[str] = None,
     docx2pdf_available: Optional[bool] = None,
     executable_finder=shutil.which,
+    allow_libreoffice: bool = False,
 ) -> Optional[str]:
     """Return the supported DOCX-to-PDF backend for the current environment."""
     system = system_name or platform.system()
     has_docx2pdf = DOCX2PDF_AVAILABLE if docx2pdf_available is None else docx2pdf_available
 
-    if executable_finder("soffice") or executable_finder("libreoffice"):
-        return "libreoffice"
-
     if has_docx2pdf and system in {"Windows", "Darwin"}:
         return "docx2pdf"
+
+    if allow_libreoffice and (executable_finder("soffice") or executable_finder("libreoffice")):
+        return "libreoffice"
 
     return None
 
@@ -98,16 +99,17 @@ def is_docx_to_pdf_supported() -> bool:
     return resolve_docx_to_pdf_backend() is not None
 
 
-def get_docx_to_pdf_status() -> str:
+def get_docx_to_pdf_status(system_name: Optional[str] = None) -> str:
     """Return a user-facing DOCX-to-PDF conversion status."""
-    backend = resolve_docx_to_pdf_backend()
+    system = system_name or platform.system()
+    backend = resolve_docx_to_pdf_backend(system_name=system)
     if backend == "libreoffice":
         return "PDF Download Supported through LibreOffice"
     if backend == "docx2pdf":
         return "PDF Download Supported through Microsoft Word"
-    if platform.system() == "Linux":
-        return "PDF Download not available on this server. Install LibreOffice or download DOCX instead."
-    return "PDF Download not available. Install Microsoft Word or LibreOffice."
+    if system == "Linux":
+        return "PDF Download not available on this server because LibreOffice can shift Word template layout. Download DOCX and export to PDF with Microsoft Word."
+    return "PDF Download not available. Install Microsoft Word or download DOCX instead."
 
 
 def pdf_to_docx(pdf_bytes: bytes) -> bytes:
