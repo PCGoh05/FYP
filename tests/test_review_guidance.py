@@ -133,15 +133,18 @@ class ReviewGuidanceBuilderTest(unittest.TestCase):
         fallback = ReviewGuidanceBuilder().build_pre_fix_fallback(payload)
 
         for heading in [
-            "Priority issues:",
-            "Quick fixes:",
-            "Manual review:",
-            "Suggested order:",
-            "Limitations:",
+            "Most important issues:",
+            "Safe auto-fix candidates:",
+            "Needs manual checking:",
+            "Recommended review order:",
+            "What this guidance cannot decide:",
         ]:
             self.assertIn(heading, fallback)
         self.assertIn("Body text alignment does not match template", fallback)
         self.assertIn("Reference numbering is not continuous", fallback)
+        self.assertNotIn("Priority issues:", fallback)
+        self.assertNotIn("Quick fixes:", fallback)
+        self.assertNotIn("Manual review:", fallback)
 
     def test_cache_key_is_stable_and_changes_with_payload(self):
         builder = ReviewGuidanceBuilder()

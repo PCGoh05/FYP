@@ -64,7 +64,7 @@ class ReviewGuidanceAppTest(unittest.TestCase):
             cache={},
         )
 
-        self.assertIn("Priority issues:", guidance)
+        self.assertIn("Most important issues:", guidance)
         self.assertTrue(cache_key)
         self.assertEqual(source, "Rule-based guidance")
 

@@ -98,11 +98,11 @@ class LLMExplanationTest(unittest.TestCase):
 
     def test_review_guidance_uses_structured_response_and_rule_first_prompt(self):
         response = "\n".join([
-            "Priority issues: Review reference numbering.",
-            "Quick fixes: None.",
-            "Manual review: Renumber references carefully.",
-            "Suggested order: Review citations before submission.",
-            "Limitations: Formatting guidance only.",
+            "Most important issues: Review reference numbering.",
+            "Safe auto-fix candidates: None.",
+            "Needs manual checking: Renumber references carefully.",
+            "Recommended review order: Review citations before submission.",
+            "What this guidance cannot decide: Formatting guidance only.",
         ])
         llm = CapturingLLM(response)
 

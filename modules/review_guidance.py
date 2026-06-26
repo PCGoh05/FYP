@@ -187,16 +187,16 @@ class ReviewGuidanceBuilder:
             group for group in groups if not group.get("auto_fix_supported")
         ]
 
-        lines = ["Priority issues:"]
+        lines = ["Most important issues:"]
         lines.extend(self._format_groups(priority_groups))
         lines.append("")
-        lines.append("Quick fixes:")
+        lines.append("Safe auto-fix candidates:")
         lines.extend(self._format_groups(quick_fixes))
         lines.append("")
-        lines.append("Manual review:")
+        lines.append("Needs manual checking:")
         lines.extend(self._format_groups(manual_groups, include_reason=True))
         lines.append("")
-        lines.append("Suggested order:")
+        lines.append("Recommended review order:")
         if groups:
             lines.append(
                 "1. Resolve errors and missing structural requirements. "
@@ -206,7 +206,7 @@ class ReviewGuidanceBuilder:
         else:
             lines.append("No detected issues require correction.")
         lines.append("")
-        lines.append("Limitations:")
+        lines.append("What this guidance cannot decide:")
         lines.append(
             "This guidance organizes deterministic checker results only. "
             "It does not assess research quality, language quality, or manuscript acceptance."

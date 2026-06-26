@@ -244,11 +244,11 @@ Confidence: explain that this is based on deterministic template rules, not an L
             "- Do not change priorities or auto-fix capability.\n"
             "- Keep the response concise and actionable.\n\n"
             "Return exactly these headings:\n"
-            "Priority issues:\n"
-            "Quick fixes:\n"
-            "Manual review:\n"
-            "Suggested order:\n"
-            "Limitations:\n\n"
+            "Most important issues:\n"
+            "Safe auto-fix candidates:\n"
+            "Needs manual checking:\n"
+            "Recommended review order:\n"
+            "What this guidance cannot decide:\n\n"
             f"Structured rule results:\n{json.dumps(payload, ensure_ascii=True)}"
         )
         system_prompt = (
@@ -257,11 +257,11 @@ Confidence: explain that this is based on deterministic template rules, not an L
         )
         response = self.generate(prompt, system_prompt)
         required = [
-            "Priority issues:",
-            "Quick fixes:",
-            "Manual review:",
-            "Suggested order:",
-            "Limitations:",
+            "Most important issues:",
+            "Safe auto-fix candidates:",
+            "Needs manual checking:",
+            "Recommended review order:",
+            "What this guidance cannot decide:",
         ]
         return response if self._has_required_headings(response, required) else fallback
 
