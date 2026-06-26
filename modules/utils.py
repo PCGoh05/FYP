@@ -531,7 +531,9 @@ def classify_author_info_role(text: str) -> str:
         return "corresponding_author"
     if re.search(
         r"\b(university|universiti|faculty|department|school|college|institute|"
-        r"centre|center|laboratory|address|jalan|street|campus)\b",
+        r"centre|center|laboratory|address|jalan|street|campus|"
+        r"sdn\.?\s*bhd\.?|bhd\.?|ltd\.?|limited|inc\.?|corp\.?|corporation|"
+        r"company|systems|technologies)\b",
         normalized,
     ):
         return "affiliation"

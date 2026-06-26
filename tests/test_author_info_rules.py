@@ -9,6 +9,7 @@ from docx.shared import Pt
 
 from modules.auto_fixer import AutoFixer
 from modules.manuscript_checker import ManuscriptChecker
+from modules.utils import classify_author_info_role
 
 
 def _rules():
@@ -103,6 +104,39 @@ class AuthorInfoRulesTest(unittest.TestCase):
         self.assertFalse(bool(fixed.paragraphs[5].runs[0].font.bold))
         self.assertTrue(fixed.paragraphs[6].runs[0].font.italic)
         self.assertIn("invalid-email", fixed.paragraphs[6].text)
+
+    def test_company_affiliation_is_not_treated_as_author_name(self):
+        text = "2ZEN Computer Systems Sdn Bhd, 4808-1-28, CBD Perdana 2, Persiaran Flora, Cyberjaya, 63000"
+
+        self.assertEqual(classify_author_info_role(text), "affiliation")
+
+    def test_auto_fix_formats_company_affiliation_as_affiliation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "company_affiliation.docx"
+            document = Document()
+            _add(document, "Journal of Informatics and", 24, True, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+            _add(document, "Web Engineering", 24, True, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+            _add(document, "A Test Paper Title for Company Affiliation", 24, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+            _add(document, "First Author1, Second Author2", 10, False, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+            _add(
+                document,
+                "2ZEN Computer Systems Sdn Bhd, 4808-1-28, CBD Perdana 2, Persiaran Flora, Cyberjaya, 63000",
+                10,
+                True,
+                alignment=WD_ALIGN_PARAGRAPH.CENTER,
+            )
+            _add(document, "Abstract - This is the abstract.", 9)
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        company_line = fixed.paragraphs[4].runs[0]
+        self.assertEqual(company_line.font.size.pt, 9)
+        self.assertFalse(bool(company_line.font.bold))
 
 
 if __name__ == "__main__":
