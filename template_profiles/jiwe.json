@@ -63,6 +63,42 @@
     "page_size": "Letter"
   },
   "rules": {
+    "author_role_terms": {
+      "affiliation": [
+        "address",
+        "academy",
+        "bhd",
+        "campus",
+        "centre",
+        "center",
+        "clinical informatics unit",
+        "company",
+        "corporation",
+        "department",
+        "faculty",
+        "gmbh",
+        "hospital",
+        "inc",
+        "institute",
+        "jalan",
+        "laboratory",
+        "limited",
+        "llc",
+        "ltd",
+        "medical centre",
+        "medical center",
+        "pte ltd",
+        "research centre",
+        "research center",
+        "school",
+        "sdn bhd",
+        "street",
+        "systems",
+        "technologies",
+        "university",
+        "universiti"
+      ]
+    },
     "margins": {
       "left": 1.0,
       "right": 1.0,

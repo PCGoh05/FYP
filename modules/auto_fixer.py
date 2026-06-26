@@ -780,7 +780,7 @@ class AutoFixer:
 
     def _fix_author_info(self, paragraph, index: int):
         """Fix front-matter author information without changing its text."""
-        role = classify_author_info_role(get_paragraph_text(paragraph))
+        role = classify_author_info_role(get_paragraph_text(paragraph), self.rules)
         rules = self.rules.get(role, self.rules.get("author", {}))
         allowed_properties = self._allowed_properties_for(
             index,

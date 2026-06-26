@@ -520,7 +520,7 @@ def clean_text_for_comparison(text: str) -> str:
     return text.strip()
 
 
-def classify_author_info_role(text: str) -> str:
+def classify_author_info_role(text: str, rules: Optional[Dict[str, Any]] = None) -> str:
     """Classify a front-matter author-information paragraph by its role."""
     normalized = re.sub(r"\s+", " ", text.lower()).strip()
     if (
@@ -537,6 +537,12 @@ def classify_author_info_role(text: str) -> str:
         normalized,
     ):
         return "affiliation"
+    role_terms = rules.get("author_role_terms", {}) if isinstance(rules, dict) else {}
+    affiliation_terms = role_terms.get("affiliation", []) if isinstance(role_terms, dict) else []
+    for term in affiliation_terms:
+        normalized_term = re.sub(r"\s+", " ", str(term or "").lower()).strip()
+        if normalized_term and normalized_term in normalized:
+            return "affiliation"
     return "author"
 
 

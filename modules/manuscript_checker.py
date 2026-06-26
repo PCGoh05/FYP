@@ -404,7 +404,7 @@ class ManuscriptChecker:
         ]
 
         for cp in author_paragraphs:
-            role = classify_author_info_role(cp.text)
+            role = classify_author_info_role(cp.text, self.rules)
             rules = self.rules.get(role, self.rules.get("author", {}))
             expected_font = rules.get("font_name")
             expected_size = rules.get("font_size")

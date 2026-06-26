@@ -110,6 +110,16 @@ class AuthorInfoRulesTest(unittest.TestCase):
 
         self.assertEqual(classify_author_info_role(text), "affiliation")
 
+    def test_profile_terms_can_classify_journal_specific_affiliation(self):
+        text = "1Regional Medical Centre, Clinical Informatics Unit"
+        rules = {
+            "author_role_terms": {
+                "affiliation": ["medical centre", "clinical informatics unit"]
+            }
+        }
+
+        self.assertEqual(classify_author_info_role(text, rules), "affiliation")
+
     def test_auto_fix_formats_company_affiliation_as_affiliation(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "company_affiliation.docx"
