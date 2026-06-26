@@ -931,19 +931,35 @@ def display_post_fix_validation():
             )
 
 
+def get_download_format_options(pdf_download_supported: bool):
+    """Return download format options that can run in the current environment."""
+    return ["DOCX (Word)", "PDF"] if pdf_download_supported else ["DOCX (Word)"]
+
+
+def get_pdf_download_notice(pdf_download_supported: bool, status: str) -> str:
+    """Return a clear notice when PDF conversion is not available."""
+    if pdf_download_supported:
+        return ""
+    return f"{status} DOCX downloads are still available."
+
+
 def display_download_section():
     """Display download buttons for output files"""
     st.header("Download Results")
     pdf_download_supported = is_docx_to_pdf_supported()
+    pdf_status = get_docx_to_pdf_status()
 
     # Format selection
-    available_formats = ["DOCX (Word)", "PDF"] if pdf_download_supported else ["DOCX (Word)"]
+    available_formats = get_download_format_options(pdf_download_supported)
     download_format = st.radio(
         "Select download format:",
         available_formats,
         horizontal=True,
-        help=get_docx_to_pdf_status()
+        help=pdf_status
     )
+    pdf_notice = get_pdf_download_notice(pdf_download_supported, pdf_status)
+    if pdf_notice:
+        st.info(pdf_notice)
     st.caption(
         "Corrected document contains applied fixes. Highlighted document keeps the original manuscript "
         "and marks changed locations in yellow. Detailed report explains what changed."
