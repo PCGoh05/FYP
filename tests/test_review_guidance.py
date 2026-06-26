@@ -242,6 +242,35 @@ class ReviewGuidanceBuilderTest(unittest.TestCase):
         self.assertNotIn("0000-0002-1825-0097", serialized)
         self.assertNotIn("Full private manuscript paragraph", serialized)
 
+    def test_post_fix_fallback_uses_user_friendly_wording(self):
+        payload = {
+            "safe": True,
+            "change_groups": [
+                {"type": "body", "property": "alignment", "count": 3},
+                {"type": "page_header", "property": "manual_tabs", "count": 1},
+            ],
+            "remaining_groups": [
+                {
+                    "description": "Some figures may be missing captions",
+                    "count": 1,
+                    "review_reason": "Moving document objects can damage Word layout.",
+                }
+            ],
+        }
+
+        guidance = ReviewGuidanceBuilder().build_post_fix_fallback(payload)
+
+        self.assertIn("Auto-fixed items:", guidance)
+        self.assertIn("Body text alignment was corrected to match the template. (3 changes)", guidance)
+        self.assertIn("Page header spacing was adjusted. (1 change)", guidance)
+        self.assertIn("Issues still needing review:", guidance)
+        self.assertIn("Why these were not auto-fixed:", guidance)
+        self.assertIn("Auto-fix safety check:", guidance)
+        self.assertIn("The auto-fix did not create additional detected issues.", guidance)
+        self.assertNotIn("Body: alignment", guidance)
+        self.assertNotIn("manual tabs", guidance)
+        self.assertNotIn("Post-fix validation did not increase detected issues", guidance)
+
 
 if __name__ == "__main__":
     unittest.main()

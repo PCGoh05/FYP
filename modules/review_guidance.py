@@ -218,30 +218,23 @@ class ReviewGuidanceBuilder:
         change_groups = payload.get("change_groups", [])
         remaining_groups = payload.get("remaining_groups", [])
 
-        lines = ["Fixed automatically:"]
+        lines = ["Auto-fixed items:"]
         if change_groups:
             for group in change_groups:
-                change_type = str(group.get("type", "formatting")).replace("_", " ")
-                property_name = str(
-                    group.get("property", "formatting")
-                ).replace("_", " ")
-                lines.append(
-                    f"- {change_type.title()}: {property_name} "
-                    f"({int(group.get('count', 0))} changes)"
-                )
+                lines.append(f"- {self._friendly_change_summary(group)}")
         else:
             lines.append("- No automatic changes were recorded.")
 
         lines.append("")
-        lines.append("Remaining issues:")
+        lines.append("Issues still needing review:")
         lines.extend(self._format_groups(remaining_groups))
         lines.append("")
-        lines.append("Why they remain:")
+        lines.append("Why these were not auto-fixed:")
         lines.extend(
             self._format_groups(remaining_groups, include_reason=True)
         )
         lines.append("")
-        lines.append("Next review steps:")
+        lines.append("What to check next:")
         if remaining_groups:
             lines.append(
                 "- Review unresolved errors first, then manually inspect "
@@ -252,14 +245,14 @@ class ReviewGuidanceBuilder:
                 "- Perform a final visual review before submission."
             )
         lines.append("")
-        lines.append("Safety status:")
+        lines.append("Auto-fix safety check:")
         if payload.get("safe"):
             lines.append(
-                "- Post-fix validation did not increase detected issues."
+                "- The auto-fix did not create additional detected issues."
             )
         else:
             lines.append(
-                "- Post-fix validation found a possible regression. "
+                "- The auto-fix may have introduced a new issue. "
                 "Review the corrected document before use."
             )
         return "\n".join(lines)
@@ -411,6 +404,40 @@ class ReviewGuidanceBuilder:
                 line += f" Reason: {group['review_reason']}"
             lines.append(line)
         return lines
+
+    @staticmethod
+    def _friendly_change_summary(group: Dict[str, Any]) -> str:
+        change_type = str(group.get("type", "formatting") or "formatting")
+        property_name = str(group.get("property", "formatting") or "formatting")
+        count = int(group.get("count", 0) or 0)
+        suffix = f" ({count} change{'s' if count != 1 else ''})"
+
+        labels = {
+            ("body", "alignment"): "Body text alignment was corrected to match the template.",
+            ("body_text", "alignment"): "Body text alignment was corrected to match the template.",
+            ("page_header", "manual_tabs"): "Page header spacing was adjusted.",
+            ("journal_header", "manual_tabs"): "Page header spacing was adjusted.",
+            ("author_info", "bold"): "Author information bold formatting was corrected.",
+            ("author_info", "font_size"): "Author information font size was corrected.",
+            ("author_info", "font_name"): "Author information font was corrected.",
+            ("title", "font_size"): "Paper title font size was corrected.",
+            ("title", "font_name"): "Paper title font was corrected.",
+            ("heading", "bold"): "Section heading bold formatting was corrected.",
+            ("headings", "bold"): "Section heading bold formatting was corrected.",
+            ("reference", "font_size"): "Reference font size was corrected.",
+            ("references", "font_size"): "Reference font size was corrected.",
+            ("reference", "line_spacing"): "Reference line spacing was corrected.",
+            ("references", "line_spacing"): "Reference line spacing was corrected.",
+            ("layout", "page_size"): "Page size was corrected.",
+            ("layout", "orientation"): "Page orientation was corrected.",
+            ("margins", "margins"): "Page margins were corrected.",
+        }
+        message = labels.get((change_type, property_name))
+        if not message:
+            readable_type = change_type.replace("_", " ")
+            readable_property = property_name.replace("_", " ")
+            message = f"{readable_type.title()} {readable_property} was corrected."
+        return f"{message}{suffix}"
 
     @staticmethod
     def _normalize(value: Any) -> str:

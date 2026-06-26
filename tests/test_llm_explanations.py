@@ -135,11 +135,11 @@ class LLMExplanationTest(unittest.TestCase):
         summary = llm.generate_post_fix_summary(_post_fix_payload())
 
         for heading in [
-            "Fixed automatically:",
-            "Remaining issues:",
-            "Why they remain:",
-            "Next review steps:",
-            "Safety status:",
+            "Auto-fixed items:",
+            "Issues still needing review:",
+            "Why these were not auto-fixed:",
+            "What to check next:",
+            "Auto-fix safety check:",
         ]:
             self.assertIn(heading, summary)
         self.assertIn("must not reinterpret", llm.last_prompt)

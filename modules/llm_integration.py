@@ -279,11 +279,11 @@ Confidence: explain that this is based on deterministic template rules, not an L
             "- Do not add new issues or claim that a manuscript is publication-ready.\n"
             "- Explain why manual-review items were not changed automatically.\n\n"
             "Return exactly these headings:\n"
-            "Fixed automatically:\n"
-            "Remaining issues:\n"
-            "Why they remain:\n"
-            "Next review steps:\n"
-            "Safety status:\n\n"
+            "Auto-fixed items:\n"
+            "Issues still needing review:\n"
+            "Why these were not auto-fixed:\n"
+            "What to check next:\n"
+            "Auto-fix safety check:\n\n"
             f"Structured post-fix results:\n{json.dumps(payload, ensure_ascii=True)}"
         )
         system_prompt = (
@@ -292,11 +292,11 @@ Confidence: explain that this is based on deterministic template rules, not an L
         )
         response = self.generate(prompt, system_prompt)
         required = [
-            "Fixed automatically:",
-            "Remaining issues:",
-            "Why they remain:",
-            "Next review steps:",
-            "Safety status:",
+            "Auto-fixed items:",
+            "Issues still needing review:",
+            "Why these were not auto-fixed:",
+            "What to check next:",
+            "Auto-fix safety check:",
         ]
         return response if self._has_required_headings(response, required) else fallback
 
