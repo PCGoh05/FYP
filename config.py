@@ -97,7 +97,7 @@ DEFAULT_RULES = {
         "font_size": 9,
         "bold": False,
         "alignment": "JUSTIFY",
-        "line_spacing": 1.0,
+        "line_spacing": 1.15,
         "publication_italic_required": True
     },
     "layout": {
