@@ -5,6 +5,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
 from modules.template_extractor import TemplateExtractor
+from modules.profile_loader import ProfileLoader
 
 
 def _set_document_default_line_spacing(document, line_value):
@@ -51,6 +52,11 @@ def _append_reference_content_control(document, text):
 
 
 class ReferenceTemplateExtractionTest(unittest.TestCase):
+    def test_jiwe_profile_reference_spacing_matches_template_default(self):
+        rules = ProfileLoader().default_rules(ProfileLoader().load("jiwe"))
+
+        self.assertEqual(rules["reference"]["line_spacing"], 1.15)
+
     def test_reference_examples_in_content_controls_inherit_document_spacing(self):
         document = Document()
         _set_document_default_line_spacing(document, 276)
