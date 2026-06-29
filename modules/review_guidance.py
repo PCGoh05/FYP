@@ -322,6 +322,8 @@ class ReviewGuidanceBuilder:
             return "line_spacing"
         if "manual tab" in lower:
             return "manual_tabs"
+        if "capitalization" in lower:
+            return "capitalization"
         if "alignment" in lower:
             return "alignment"
         if "font size" in lower or " size " in f" {lower} ":

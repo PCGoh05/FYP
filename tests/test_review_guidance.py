@@ -137,6 +137,38 @@ class ReviewGuidanceBuilderTest(unittest.TestCase):
         self.assertEqual(group["property_name"], None)
         self.assertIn("publication source segment", group["review_reason"])
 
+    def test_capitalization_issues_are_auto_fix_candidates(self):
+        payload = ReviewGuidanceBuilder().build_pre_fix_payload(
+            _result({
+                "headings": [
+                    _issue("headings", "Heading capitalization does not match template"),
+                ],
+                "body_text": [
+                    _issue("body_text", "Keyword capitalization does not match template"),
+                ],
+            }),
+            {"_profile": {"name": "JIWE"}},
+        )
+
+        groups = {
+            group["description"]: group
+            for group in payload["groups"]
+        }
+        self.assertTrue(
+            groups["Heading capitalization does not match template"]["auto_fix_supported"]
+        )
+        self.assertEqual(
+            groups["Heading capitalization does not match template"]["property_name"],
+            "capitalization",
+        )
+        self.assertTrue(
+            groups["Keyword capitalization does not match template"]["auto_fix_supported"]
+        )
+        self.assertEqual(
+            groups["Keyword capitalization does not match template"]["property_name"],
+            "capitalization",
+        )
+
     def test_fallback_has_required_sections_and_uses_payload_only(self):
         payload = ReviewGuidanceBuilder().build_pre_fix_payload(
             _result({
