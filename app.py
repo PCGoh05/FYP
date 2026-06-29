@@ -24,6 +24,7 @@ from modules.auto_fixer import (
 )
 from modules.report_generator import ReportGenerator
 from modules.llm_integration import create_llm_integration, fallback_explain_issue
+from modules.profile_loader import ProfileLoader
 from modules.review_guidance import ReviewGuidanceBuilder
 from modules.utils import (
     pdf_to_docx,
@@ -32,7 +33,7 @@ from modules.utils import (
     get_docx_to_pdf_status,
     is_docx_to_pdf_supported,
 )
-from config import APP_TITLE, APP_VERSION, DEFAULT_RULES
+from config import APP_TITLE, APP_VERSION
 
 # Page configuration
 st.set_page_config(
@@ -56,6 +57,18 @@ def get_build_commit() -> str:
         return result.stdout.strip()
     except Exception:
         return "unknown"
+
+
+def get_default_template_rules():
+    """Return the validated JIWE default rules used when no template is uploaded."""
+    loader = ProfileLoader()
+    profile = loader.load("jiwe")
+    rules = loader.default_rules(profile)
+    rules["_profile"] = {
+        "name": profile.get("name", "JIWE"),
+        "source": "default_profile",
+    }
+    return rules
 
 
 def get_server_nvidia_api_key() -> str:
@@ -543,7 +556,7 @@ def handle_manuscript_check(uploaded_file):
 
             with st.spinner("Analyzing manuscript formatting..."):
                 # Use template rules or defaults
-                rules = st.session_state.template_rules or DEFAULT_RULES
+                rules = st.session_state.template_rules or get_default_template_rules()
 
                 # Warn user if using default rules
                 if not st.session_state.template_rules:
@@ -746,7 +759,7 @@ def display_check_results(result):
     if st.button("Generate Review Guidance", key="generate_review_guidance"):
         payload = build_pre_fix_guidance_payload(
             result,
-            st.session_state.template_rules or DEFAULT_RULES,
+            st.session_state.template_rules or get_default_template_rules(),
         )
         llm = None
         if (
@@ -814,7 +827,7 @@ def handle_auto_fix():
 
     try:
         with st.spinner("Applying formatting fixes..."):
-            rules = st.session_state.template_rules or DEFAULT_RULES
+            rules = st.session_state.template_rules or get_default_template_rules()
             classifications = st.session_state.classifications
 
             # Create auto-fixer
@@ -956,7 +969,7 @@ def display_post_fix_validation():
             remaining_result,
             st.session_state.get("changes", []),
             validation,
-            st.session_state.template_rules or DEFAULT_RULES,
+            st.session_state.template_rules or get_default_template_rules(),
         )
         llm = None
         if (
@@ -1144,9 +1157,9 @@ def main():
         # Option to use default rules
         if not st.session_state.template_uploaded:
             if st.button("Use Default Rules"):
-                st.session_state.template_rules = DEFAULT_RULES
+                st.session_state.template_rules = get_default_template_rules()
                 st.session_state.template_uploaded = True
-                st.success("Using default IEEE-style formatting rules")
+                st.success("Using default JIWE formatting rules")
                 st.rerun()
 
     with col2:

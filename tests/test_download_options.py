@@ -1,6 +1,10 @@
 import unittest
 
-from app import get_download_format_options, get_pdf_download_notice
+from app import (
+    get_default_template_rules,
+    get_download_format_options,
+    get_pdf_download_notice,
+)
 from modules.utils import get_docx_to_pdf_status
 
 
@@ -28,6 +32,13 @@ class DownloadOptionsTest(unittest.TestCase):
 
         self.assertIn("LibreOffice can shift Word template layout", status)
         self.assertIn("Microsoft Word", status)
+
+    def test_default_template_rules_use_jiwe_profile(self):
+        rules = get_default_template_rules()
+
+        self.assertEqual(rules["_profile"]["name"], "JIWE")
+        self.assertEqual(rules["reference"]["line_spacing"], 1.15)
+        self.assertIn("sdn bhd", rules["author_role_terms"]["affiliation"])
 
 
 if __name__ == "__main__":
