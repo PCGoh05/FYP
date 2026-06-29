@@ -1,222 +1,172 @@
 # Automated Manuscript Template Compliance Checker
 
-A comprehensive web application for checking and fixing academic manuscript formatting against journal templates. Built with Python Streamlit, deterministic rule-based validation, and optional LLM-assisted explanations.
+A rule-first, profile-based web application for checking academic manuscript
+formatting against journal template rules. The primary validated case study is
+Journal of Informatics and Web Engineering (JIWE). Optional LLM support is used
+only to explain rule-detected results; it does not make compliance decisions.
 
-## 🎯 Features
+## Features
 
 ### Core Functionality
-- **Template Rule Extraction**: Automatically extract formatting rules from any journal template (.docx)
-- **10-Category Format Checking**: Comprehensive checks for margins, title, body text, headings, structure, tables, figures, references, line spacing, and overall compliance
-- **Rule-Based Paragraph Classification**: Deterministic classifier to identify and preserve special content (journal headers, author info, etc.)
-- **Auto-Fix System**: Automatically correct formatting issues while preserving special formatting
-- **Turnitin-Style Comparison View**: Visual comparison showing before/after changes
-- **Two Output Files**: Corrected document and detailed comparison report
+- Template rule extraction from DOCX journal templates.
+- Profile-based default rules, with JIWE as the validated default profile.
+- Rule-based paragraph classification for journal headers, title, author info,
+  body text, headings, captions, declarations, and references.
+- Formatting checks for margins, page layout, journal header, title, author
+  information, body text, headings, structure, tables, figures, references, and
+  line spacing.
+- Safer auto-fix for supported formatting issues only.
+- Highlighted original document, corrected DOCX, and comparison report outputs.
+- Smoke and labelled evaluation support through `evaluate_checker.py`.
 
-### LLM Integration (Optional)
-- Human-friendly error explanations
-- Report assistance
-- Writing suggestions
-- Core checking remains rule-based
+### Optional LLM Layer
+- Explains issues already detected by deterministic rules.
+- Summarizes review priorities and post-fix results.
+- Does not extract template rules, detect compliance issues, auto-fix content, or
+  approve manuscripts.
 
-## 📁 Project Structure
+## Project Structure
 
-```
+```text
 FYP/
-├── app.py                      # Main Streamlit application
-├── config.py                   # Configuration settings
-├── requirements.txt            # Python dependencies
-├── README.md                   # This file
-├── assets/
-│   └── styles.css             # Custom CSS styles
-└── modules/
-    ├── __init__.py
-    ├── template_extractor.py  # Extract rules from templates
-    ├── paragraph_classifier.py # Intelligent paragraph classification
-    ├── manuscript_checker.py   # Format checking engine
-    ├── auto_fixer.py          # Auto-fix formatting issues
-    ├── report_generator.py    # Generate comparison reports
-    ├── llm_integration.py     # Optional LLM explanation layer
-    └── utils.py               # Utility functions
+|-- app.py                      # Main Streamlit application
+|-- config.py                   # Shared defaults and constants
+|-- evaluate_checker.py         # Evaluation and smoke-test CLI
+|-- template_profiles/
+|   |-- jiwe.json               # Validated JIWE profile
+|   `-- generic.json            # Generic fallback profile
+|-- modules/
+|   |-- template_extractor.py   # Extract rules from templates
+|   |-- profile_loader.py       # Load and merge journal profiles
+|   |-- paragraph_classifier.py # Rule-based paragraph classification
+|   |-- manuscript_checker.py   # Rule-based compliance checker
+|   |-- auto_fixer.py           # Supported formatting fixes
+|   |-- report_generator.py     # Comparison report generation
+|   |-- llm_integration.py      # Optional explanation layer
+|   `-- utils.py                # Shared document utilities
+|-- tests/                      # Regression tests
+`-- docs/                       # Evaluation and implementation notes
 ```
 
-## 🚀 Installation
+## Installation
 
 ### Prerequisites
 - Python 3.8 or higher
-- pip (Python package manager)
+- pip
 
-### Step-by-Step Installation
+### Setup
 
-1. **Navigate to the project directory:**
+1. Navigate to the project directory:
    ```bash
-   cd "c:\Users\Acer\Desktop\latest fyp\FYP"
+   cd "C:\Users\Acer\Desktop\latest fyp\FYP"
    ```
 
-2. **Create a virtual environment (recommended):**
+2. Create and activate a virtual environment:
    ```bash
-   python -m venv venv
-   
-   # On Windows:
-   venv\Scripts\activate
-   
-   # On macOS/Linux:
-   source venv/bin/activate
+   python -m venv .venv
+   .venv\Scripts\activate
    ```
 
-3. **Install dependencies:**
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Run the application:**
+4. Run the application:
    ```bash
    streamlit run app.py
    ```
 
-5. **Open in browser:**
-   The application will automatically open at `http://localhost:8501`
+5. Open the local URL shown by Streamlit.
 
-## 📖 Usage Guide
+## Usage Guide
 
-### Step 1: Upload Template (Optional)
-1. Click on "Upload Template" section
-2. Upload a journal template document (.docx)
-3. The system will automatically extract formatting rules
-4. View extracted rules in the sidebar
-
-*Alternatively, click "Use Default Rules" to use IEEE-style formatting*
+### Step 1: Select Template Rules
+1. Upload a journal template DOCX to extract formatting rules.
+2. Or click "Use Default Rules" to use the validated JIWE default profile.
+3. Review extracted, inferred, and defaulted rule sources in the sidebar.
 
 ### Step 2: Upload Manuscript
-1. Upload your manuscript document (.docx)
-2. Click "Check Format" button
-3. View compliance score and issues found
+1. Upload a manuscript DOCX.
+2. Click "Check Format".
+3. Review the compliance index, document structure, and issue categories.
 
-### Step 3: Review Results
-- **Compliance Index**: User-facing rule-weighted indicator; formal accuracy is evaluated with Precision, Recall, and F1-score
-- **Document Structure**: Check for required sections (Abstract, Introduction, etc.)
-- **Issues by Category**: Detailed view of all formatting issues
+### Step 3: Review Issues
+- "Compliance Index" is a user-facing rule-weighted indicator.
+- Formal FYP accuracy should be reported with Precision, Recall, and F1-score
+  using labelled samples.
+- Issues are grouped by category and include current value, expected value, and
+  evidence where available.
 
-### Step 4: Auto-Fix
-1. Click "Auto-Fix All" button
-2. Review the comparison view showing all changes
-3. Download the corrected document and comparison report
+### Step 4: Auto-Fix Supported Formatting
+1. Click "Auto-Fix All".
+2. The system applies only supported, deterministic formatting fixes.
+3. Remaining issues are shown separately for manual review.
+4. Download the corrected DOCX, highlighted original DOCX, or comparison report.
 
 ## LLM Configuration
 
-The LLM is optional. It is used for explanations and report assistance only.
-Core compliance checking remains deterministic and rule-based.
+LLM usage is optional. Normal users do not need to enter an API key when the
+deployed app has a server-managed key configured.
 
-### Using NVIDIA API
-1. Get an API key from [build.nvidia.com](https://build.nvidia.com)
-2. In the sidebar, expand "LLM Settings"
-3. Enter the NVIDIA API key
+Supported key locations:
+- Streamlit Secrets: `NVIDIA_API_KEY`
+- Environment variable: `NVIDIA_API_KEY`
+- Local developer override in the sidebar for testing only
 
-## 📋 Format Checking Categories
+If no valid key is configured, the checker still works and shows rule-based
+explanations.
+
+## Format Checking Categories
 
 | Category | Description |
 |----------|-------------|
-| **Page Margins** | Left, right, top, bottom margins |
-| **Paper Title** | Font, size, bold, alignment |
-| **Body Text** | Font name and size consistency |
-| **Section Headings** | Heading formatting |
-| **Document Structure** | Required sections check |
-| **Tables** | Table presence and captions |
-| **Figures** | Figure presence and captions |
-| **References** | Format consistency (IEEE/APA) |
-| **Line Spacing** | Paragraph spacing |
-| **Overall Compliance** | Calculated percentage score |
+| Page Margins | Left, right, top, and bottom margins |
+| Layout | Page size and orientation |
+| Journal Header | Journal name, volume line, and stable header spacing |
+| Paper Title | Font, size, style, and alignment |
+| Author Info | Author names, affiliations, and corresponding author lines |
+| Body Text | Font, size, bold, line spacing, and alignment |
+| Headings | Main heading and subheading formatting |
+| Structure | Required sections and declaration sections |
+| Tables | Caption presence, order, and numbering checks |
+| Figures | Caption presence, order, and numbering checks |
+| References | Reference section, citation consistency, and reference formatting |
 
-## 🎨 Paragraph Classification
+## Evaluation
 
-The system intelligently classifies paragraphs to avoid modifying content that should be preserved:
+Run smoke evaluation with real JIWE samples:
 
-**Preserved (Not Modified):**
-- Journal headers (ISSN, DOI, etc.)
-- Author information
-- Section labels (Abstract, Keywords)
-
-**Fixed (Format Corrected):**
-- Paper title
-- Section headings
-- Body text
-- Abstract content
-- Captions
-- References
-
-## 📤 Output Files
-
-### 1. Corrected Document
-- Original content preserved
-- All formatting issues fixed
-- Ready for submission
-
-### 2. Comparison Report
-- Summary of changes
-- Target format rules
-- Detailed change log
-- Color-coded before/after
-
-## ⚙️ Configuration
-
-Edit `config.py` to customize:
-
-```python
-# Default formatting rules
-DEFAULT_RULES = {
-    "margins": {"left": 1.0, "right": 1.0, "top": 1.0, "bottom": 1.0},
-    "title": {"font_name": "Times New Roman", "font_size": 24, "bold": True},
-    "body": {"font_name": "Times New Roman", "font_size": 12, "line_spacing": 1.5},
-    # ... more rules
-}
-
-# LLM settings
-LLM_CONFIG = {
-    "provider": "groq",
-    "groq_model": "llama-3.1-8b-instant",
-    # ... more settings
-}
-```
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**1. Module not found error:**
 ```bash
-pip install -r requirements.txt
+python evaluate_checker.py --template "C:\Users\Acer\Downloads\FYP_SAMPLETEST\JIWE_Template-new_jan2026-OTH (8).docx" --samples "C:\Users\Acer\Downloads\FYP_SAMPLETEST\PUBLISHED\TEST" --auto-fix-evaluation
 ```
 
-**2. Streamlit not starting:**
+For formal FYP accuracy, create a labelled issue file and run:
+
 ```bash
-pip install --upgrade streamlit
+python evaluate_checker.py --labels evaluation_labels.json
 ```
 
-**3. Document parsing error:**
-- Ensure the document is a valid .docx file
-- Check file is not corrupted or password-protected
+## Current Scope and Limitations
 
-**4. LLM connection failed:**
-- Verify that the NVIDIA API key is correct
-- Check the selected NVIDIA model name in `config.py`
+- JIWE is the main validated journal profile.
+- Additional journals can be added through `template_profiles`, but each journal
+  still needs validation with real samples.
+- DOCX handling is the most reliable path.
+- PDF upload can be converted for checking when dependencies are available.
+- PDF download is only offered when a high-fidelity Microsoft Word conversion
+  backend is available; low-fidelity LibreOffice conversion is avoided because it
+  can shift Word layouts.
+- Auto-fix does not move figures/tables, rewrite content, generate missing
+  sections, or approve manuscripts.
 
-## 🔒 Privacy
+## Privacy
 
-- All document processing is done locally
-- LLM analysis only sends text snippets (not full documents)
-- No data is stored after session ends
+- Core checking runs locally in the app process.
+- LLM requests, when enabled, use grouped and redacted issue metadata rather than
+  full manuscripts.
+- Uploaded documents are not intentionally stored after the session.
 
-## 📝 License
+## License
 
 This project is developed as a Final Year Project (FYP).
-
-## 🤝 Contributing
-
-Feel free to submit issues and enhancement requests!
-
-## 📧 Support
-
-For questions or support, please contact the project maintainer.
-
----
-
-**Built with ❤️ using Python, Streamlit, and python-docx**
