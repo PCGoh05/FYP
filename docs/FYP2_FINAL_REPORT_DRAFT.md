@@ -658,28 +658,28 @@ Zhong, X., Tang, J., & Jimeno Yepes, A. (2019). PubLayNet: Largest dataset ever 
 
 Appendix A: Updated Gantt Chart
 
-This appendix should include the final FYP2 project schedule and completed milestones.
+The FYP2 work was completed in stages: requirement review, rule profile refinement, checker implementation, auto-fix safety improvement, regression testing, evaluation artifact generation, report preparation, and final verification. The detailed Gantt chart can be attached using the official university format if required by the faculty submission template.
 
 Appendix B: FYP2 Meeting Logs
 
-This appendix should include meeting dates, discussion points, and actions taken.
+Meeting logs should be attached from the student's official supervisor consultation records. This report does not invent meeting dates or supervisor comments that were not available in the repository evidence.
 
 Appendix C: Turnitin Similarity Index Page
 
-This appendix should include the Turnitin similarity page when available.
+The Turnitin similarity index page should be attached after the final document is submitted to the university Turnitin workflow.
 
 Appendix D: Evaluation Result Samples
 
-This appendix should include selected outputs from `evaluation_results`, especially published and declined auto-fix summaries.
+Selected evaluation artifacts are stored in the `evaluation_results` directory. The published sample auto-fix run checked 10 documents, reduced detected issues from 88 to 14, recorded 94 formatting changes, and marked 10 out of 10 post-fix validations as safe. The declined or flawed sample run checked 6 documents, reduced detected issues from 98 to 28, recorded 75 formatting changes, and marked 6 out of 6 post-fix validations as safe. Later phased evaluation on published samples detected 134 issues before auto-fix and 18 issues after auto-fix, with 321 recorded formatting changes and 10 out of 10 safe post-fix validations.
 
 Appendix E: Subject Expert Evaluation Form
 
-This appendix should include the subject expert rating form covering usefulness, clarity, time saving, trust, and remaining manual review.
+The recommended subject expert evaluation form asks reviewers to rate usefulness, clarity, time saving, trust, and remaining manual workload on a 1 to 5 scale. It also asks for short comments on false positives, missed issues, and suggested improvements. This evaluation is recommended because the system is intended to support human reviewers rather than replace final editorial judgement.
 
 Appendix F: Selected Prototype Screenshots
 
-This appendix should include screenshots of upload, checking, issue categories, review guidance, auto-fix, and download outputs.
+Recommended screenshots include the upload interface, extracted template rule summary, issue category tabs, detailed issue table, review guidance output, auto-fix result summary, download options, highlighted original document, corrected DOCX output, and comparison report output.
 
 Appendix G: Code Repository Summary
 
-This appendix should include the repository structure, major modules, test results, and GitHub commit evidence.
+The repository contains the Streamlit application, configuration files, journal profiles, checking modules, auto-fix module, report generator, optional LLM explanation module, evaluation CLI, automated tests, documentation, and evaluation outputs. The latest verification passed 103 automated tests and Python compilation checks before the report artifacts were committed.
