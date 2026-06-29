@@ -29,7 +29,7 @@ def _rules():
             "alignment": "CENTER",
         },
         "body": {"font_name": "Times New Roman", "font_size": 10, "bold": False, "line_spacing": 1.0},
-        "heading": {"font_name": "Times New Roman", "font_size": 10, "bold": True},
+        "heading": {"font_name": "Times New Roman", "font_size": 10, "bold": True, "all_caps": True},
         "subheading": {"font_name": "Times New Roman", "font_size": 10, "bold": False, "italic": True},
         "abstract": {"font_name": "Times New Roman", "font_size": 9, "bold": False},
         "keywords": {"font_name": "Times New Roman", "font_size": 9, "bold": False},
@@ -125,6 +125,14 @@ class IntentionalDocumentErrorsTest(unittest.TestCase):
             for issue in result.issues_by_category.get("structure", [])
         ]
         self.assertIn("Possible misspelled required section heading", descriptions)
+
+    def test_main_heading_capitalization_is_reported(self):
+        result = self._check(intro_text="1. Introduction")
+        descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("headings", [])
+        ]
+        self.assertIn("Heading capitalization does not match template", descriptions)
 
     def test_large_body_font_size_is_reported(self):
         result = self._check(body_size=20)

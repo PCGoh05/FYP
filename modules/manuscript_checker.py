@@ -970,6 +970,19 @@ class ManuscriptChecker:
                         text_preview=cp.text
                     )
 
+                expected_all_caps = heading_rules.get("all_caps")
+                if expected_all_caps and not self._heading_text_is_all_caps(cp.text):
+                    self._add_issue(
+                        category="headings",
+                        location=f"Heading: {truncate_text(cp.text, 30)}",
+                        para_index=cp.index,
+                        description="Heading capitalization does not match template",
+                        current=cp.text,
+                        expected="All capital letters",
+                        severity="warning",
+                        text_preview=cp.text
+                    )
+
                 paragraph = self.document.paragraphs[cp.index]
                 numbering_bold = self._get_numbering_bold(paragraph)
                 if expected_bold is not None and numbering_bold is not None and numbering_bold != bool(expected_bold):
@@ -990,6 +1003,13 @@ class ManuscriptChecker:
         if re.match(r"^\d+\.\d+", stripped):
             return self.rules.get("subheading", self.rules.get("heading", {}))
         return self.rules.get("heading", {})
+
+    @staticmethod
+    def _heading_text_is_all_caps(text: str) -> bool:
+        """Return True when heading words are uppercase after removing numbering."""
+        stripped = re.sub(r"^\s*\d+(?:\.\d+)*\.?\s+", "", text or "").strip()
+        letters = [char for char in stripped if char.isalpha()]
+        return bool(letters) and all(char.isupper() for char in letters)
     
     def _check_document_structure(self) -> Dict[str, Any]:
         """Check required sections, order, and heading-role confidence."""
