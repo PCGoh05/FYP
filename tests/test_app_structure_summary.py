@@ -1,6 +1,6 @@
 import unittest
 
-from app import build_structure_summary_items
+from app import build_structure_summary_items, format_structure_evidence
 
 
 class AppStructureSummaryTest(unittest.TestCase):
@@ -22,6 +22,11 @@ class AppStructureSummaryTest(unittest.TestCase):
                 {"label": "Keywords", "status": "Missing"},
             ],
         )
+
+    def test_formats_structure_evidence_for_users(self):
+        self.assertEqual(format_structure_evidence("valid"), "Clear heading")
+        self.assertEqual(format_structure_evidence("weak"), "Needs review")
+        self.assertEqual(format_structure_evidence("not_checked"), "Not checked")
 
 
 if __name__ == "__main__":

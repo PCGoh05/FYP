@@ -157,6 +157,16 @@ def format_section_label(section_name: str) -> str:
     return str(section_name).replace("_", " ").title()
 
 
+def format_structure_evidence(status: str) -> str:
+    """Return user-friendly structure evidence text."""
+    labels = {
+        "valid": "Clear heading",
+        "weak": "Needs review",
+        "not_checked": "Not checked",
+    }
+    return labels.get(str(status), format_section_label(status))
+
+
 def build_structure_summary_items(structure):
     """Build user-friendly document structure summary items."""
     structure_details = structure if isinstance(structure.get("sections"), dict) else None
@@ -695,7 +705,9 @@ def display_check_results(result):
                 "Section": section.title(),
                 "Found": "Yes" if details.get("found") else "No",
                 "Paragraph": details.get("index"),
-                "Format Evidence": details.get("format_status", "not_checked"),
+                "Format Evidence": format_structure_evidence(
+                    details.get("format_status", "not_checked")
+                ),
             })
         st.dataframe(format_rows, use_container_width=True, hide_index=True)
         if structure_details.get("order_correct", True):
