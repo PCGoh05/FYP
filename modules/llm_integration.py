@@ -38,9 +38,6 @@ def load_env_file():
 # Load .env file on import
 load_env_file()
 
-# LLM is disabled by default - using built-in fallback logic
-GROQ_AVAILABLE = False
-
 try:
     import requests
     REQUESTS_AVAILABLE = True
