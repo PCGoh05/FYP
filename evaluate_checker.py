@@ -466,16 +466,27 @@ def print_file_metrics(file_name: str, result, file_labels: Dict) -> Tuple[Set[I
     return predicted_issues, expected_issues, predicted_paragraphs, expected_paragraphs
 
 
-def main() -> None:
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Build the evaluation CLI parser."""
     parser = argparse.ArgumentParser(description="Evaluate the manuscript checker.")
-    parser.add_argument("--template", default="samples/JIWE_Template.docx")
-    parser.add_argument("--samples", default="samples")
+    parser.add_argument("--template", default=None)
+    parser.add_argument("--samples", default=None)
     parser.add_argument("--labels", default=None)
     parser.add_argument("--export-label-template", default=None)
     parser.add_argument("--auto-fix-evaluation", action="store_true")
     parser.add_argument("--summary-json", default=None)
     parser.add_argument("--summary-md", default=None)
+    return parser
+
+
+def main() -> None:
+    parser = build_arg_parser()
     args = parser.parse_args()
+
+    if not args.template or not args.samples:
+        print("Provide valid paths with --template and --samples.")
+        parser.print_help()
+        return
 
     template_path = Path(args.template)
     samples_dir = Path(args.samples)

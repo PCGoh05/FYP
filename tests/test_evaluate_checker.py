@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from evaluate_checker import (
+    build_arg_parser,
     console_safe,
     render_evaluation_markdown,
     validate_evaluation_inputs,
@@ -10,6 +11,19 @@ from evaluate_checker import (
 
 
 class EvaluateCheckerInputValidationTest(unittest.TestCase):
+    def test_cli_does_not_default_to_removed_sample_files(self):
+        parser = build_arg_parser()
+
+        template_action = next(
+            action for action in parser._actions if action.dest == "template"
+        )
+        samples_action = next(
+            action for action in parser._actions if action.dest == "samples"
+        )
+
+        self.assertIsNone(template_action.default)
+        self.assertIsNone(samples_action.default)
+
     def test_render_evaluation_markdown_includes_smoke_and_auto_fix_tables(self):
         summary = {
             "template": "JIWE_Template.docx",
