@@ -3,6 +3,7 @@ import unittest
 from app import (
     get_default_template_rules,
     get_download_format_options,
+    get_pdf_support_banner,
     get_pdf_download_notice,
 )
 from modules.utils import get_docx_to_pdf_status
@@ -21,8 +22,9 @@ class DownloadOptionsTest(unittest.TestCase):
             "PDF download is unavailable on this server. Please download DOCX instead.",
         )
 
-        self.assertIn("PDF download is unavailable", notice)
-        self.assertIn("DOCX", notice)
+        self.assertIn("PDF export is not available", notice)
+        self.assertIn("DOCX download is available", notice)
+        self.assertIn("Microsoft Word", notice)
 
     def test_pdf_supported_notice_is_empty(self):
         self.assertEqual(get_pdf_download_notice(True, "PDF download is supported."), "")
@@ -32,6 +34,17 @@ class DownloadOptionsTest(unittest.TestCase):
 
         self.assertIn("LibreOffice can shift Word template layout", status)
         self.assertIn("Microsoft Word", status)
+
+    def test_pdf_unavailable_banner_is_user_friendly(self):
+        level, message = get_pdf_support_banner(
+            False,
+            get_docx_to_pdf_status(system_name="Linux"),
+        )
+
+        self.assertEqual(level, "info")
+        self.assertIn("DOCX download is available", message)
+        self.assertIn("Microsoft Word", message)
+        self.assertNotIn("LibreOffice", message)
 
     def test_default_template_rules_use_jiwe_profile(self):
         rules = get_default_template_rules()

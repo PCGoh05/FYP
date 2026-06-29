@@ -1044,7 +1044,21 @@ def get_pdf_download_notice(pdf_download_supported: bool, status: str) -> str:
     """Return a clear notice when PDF conversion is not available."""
     if pdf_download_supported:
         return ""
-    return f"{status} DOCX downloads are still available."
+    return (
+        "PDF export is not available on this server. DOCX download is available. "
+        "Open the downloaded DOCX in Microsoft Word and export it to PDF to preserve the journal layout."
+    )
+
+
+def get_pdf_support_banner(pdf_download_supported: bool, status: str):
+    """Return the Streamlit message level and text for PDF download support."""
+    if pdf_download_supported:
+        return "success", status
+    return (
+        "info",
+        "DOCX download is available. For PDF submission, download the DOCX file, "
+        "open it in Microsoft Word, and export it to PDF there to preserve the journal layout.",
+    )
 
 
 def display_download_section():
@@ -1173,10 +1187,15 @@ def main():
         else:
             st.warning("PDF Upload not available (install pdf2docx)")
     with col_info2:
-        if is_docx_to_pdf_supported():
-            st.success(get_docx_to_pdf_status())
+        pdf_supported = is_docx_to_pdf_supported()
+        level, message = get_pdf_support_banner(
+            pdf_supported,
+            get_docx_to_pdf_status(),
+        )
+        if level == "success":
+            st.success(message)
         else:
-            st.warning(get_docx_to_pdf_status())
+            st.info(message)
 
     col1, col2 = st.columns(2)
 
