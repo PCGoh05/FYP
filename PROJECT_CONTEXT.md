@@ -42,10 +42,11 @@ Important JIWE rules currently encoded:
 
 - Journal header: Palatino Linotype, 24 pt, bold, centered.
 - Paper title: Times New Roman, 24 pt, centered.
-- Body text: Times New Roman, 10 pt.
+- Body text: Times New Roman, 10 pt, justified.
 - Section headings: Times New Roman, 10 pt.
+- Abstract: Times New Roman, 9 pt, justified, 200-300 words, one paragraph.
 - Captions: Times New Roman, 10 pt.
-- References: Times New Roman, 9 pt.
+- References: Times New Roman, 9 pt, justified, 1.15 line spacing.
 - Page size: Letter.
 
 ## Recent Important Commits
@@ -56,6 +57,9 @@ Important JIWE rules currently encoded:
 e714fae Centralize template profile loading
 d476d06 Fix heading numbering formatting
 263ea53 Ignore locked temp files after PDF conversion
+e8879d1 Use JIWE profile for default rules
+8c40dc7 Remove internal planning docs
+e73cdf3 Remove unused deployment package
 ```
 
 ## Current Improvements Already Made
@@ -68,31 +72,31 @@ d476d06 Fix heading numbering formatting
 - Reference entries are checked and fixed across the full references section.
 - LLM is not used in the core checking path.
 - `evaluate_checker.py` skips Word temp files and supports manual-label evaluation.
+- The default-rules path now loads the validated JIWE profile instead of raw generic defaults.
+- Internal implementation planning documents were removed from tracked submission files.
+- Low-fidelity LibreOffice PDF download deployment support was removed to avoid layout-shift expectations.
 
 ## Known Risks
 
-- `modules/auto_fixer.py` still contains duplicate old and new method implementations. Python uses the later definitions, but the file is confusing and should be cleaned carefully.
 - Some JIWE assumptions still exist in Python logic, especially around journal header detection and title behavior.
-- PDF handling is still less robust than DOCX handling.
+- DOCX handling is the primary supported path. PDF upload can be converted for checking, but PDF output needs a high-fidelity Microsoft Word backend.
 - Compliance score is only a UI-friendly index. FYP accuracy should use Precision, Recall, and F1 from labelled samples.
 - Multi-journal support is profile-based but not fully universal.
 
 ## Recommended Next Task
 
-Clean up `modules/auto_fixer.py` without changing behavior:
+Prepare formal evaluation evidence:
 
-1. Identify duplicate old methods that are overridden by later definitions.
-2. Remove dead duplicate implementations carefully.
-3. Keep the structured, issue-based implementations.
-4. Run:
+1. Export a starter manual-label file with `evaluate_checker.py`.
+2. Label a representative set of JIWE published and declined samples.
+3. Run labelled evaluation to report Precision, Recall, and F1-score.
+4. Keep smoke evaluation for regression and auto-fix safety:
 
 ```text
-python -m py_compile modules\auto_fixer.py modules\manuscript_checker.py app.py evaluate_checker.py
-python evaluate_checker.py
+python evaluate_checker.py --template <JIWE_TEMPLATE.docx> --samples <SAMPLE_DIR> --auto-fix-evaluation
 ```
 
-5. Confirm no Chinese characters exist in changed code files.
-6. Commit and push.
+5. Confirm no Chinese characters or secrets exist in tracked submission files.
 
 ## FYP Framing
 
