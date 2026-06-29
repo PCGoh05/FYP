@@ -70,6 +70,23 @@ class KeywordRulesTest(unittest.TestCase):
         self.assertIn("Keyword capitalization does not match template", descriptions)
         self.assertIn("Keywords italic formatting does not match template", descriptions)
 
+    def test_checker_reports_keyword_font_name_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "keyword_font_issue.docx"
+            _save_document(path)
+            document = Document(path)
+            for run in document.paragraphs[5].runs:
+                run.font.name = "Arial"
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+        descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("body_text", [])
+        ]
+        self.assertIn("Keywords font does not match template", descriptions)
+
     def test_auto_fix_applies_italic_without_rewriting_keywords(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "keyword_fix.docx"

@@ -810,7 +810,20 @@ class ManuscriptChecker:
         for cp in self.classifications:
             if cp.paragraph_type == ParagraphType.KEYWORDS_CONTENT:
                 font_info = cp.font_info
-                
+
+                current_font = font_info.get("font_name")
+                if current_font and not is_font_equivalent(current_font, expected_font):
+                    self._add_issue(
+                        category="body_text",
+                        location="Keywords",
+                        para_index=cp.index,
+                        description="Keywords font does not match template",
+                        current=current_font,
+                        expected=expected_font,
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 50)
+                    )
+
                 # Check font size
                 current_size = font_info.get("font_size")
                 if current_size and abs(current_size - expected_size) > size_tolerance:
