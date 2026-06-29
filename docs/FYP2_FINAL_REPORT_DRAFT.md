@@ -1,4 +1,4 @@
-# FYP2 Final Report Draft
+# FYP2 Final Report
 
 Project title: Automated Manuscript Template Compliance Checker for Academic Journals
 
@@ -16,7 +16,7 @@ Validated case study: Journal of Informatics and Web Engineering (JIWE)
 
 ## Preliminary Pages
 
-### Cover Page Placeholder
+### Cover Page
 
 FINAL YEAR PROJECT FINAL REPORT
 
@@ -28,9 +28,9 @@ GOH PEI CHUNG
 
 BACHELOR OF COMPUTER SCIENCE (DATA SCIENCE)
 
-[Submission Month and Year]
+June 2026
 
-### Title Page Placeholder
+### Title Page
 
 Automated Manuscript Template Compliance Checker for Academic Journals
 
@@ -46,13 +46,13 @@ MULTIMEDIA UNIVERSITY
 
 MALAYSIA
 
-[Submission Month and Year]
+June 2026
 
-### Copyright Page Placeholder
+### Copyright Page
 
 Copyright of this report belongs to Universiti Telekom Sdn. Bhd. as qualified by the applicable Multimedia University intellectual property policy. No part of this publication may be reproduced, stored, or transmitted without proper permission and acknowledgement.
 
-### Declaration Placeholder
+### Declaration
 
 I hereby declare that the work contained in this report has been completed by myself and that no portion of this work has been submitted in support of any application for any other degree or qualification of this or any other university or institution of learning.
 
@@ -62,7 +62,7 @@ Faculty of Computing and Informatics
 
 Multimedia University
 
-Date: [Insert date]
+Date: 29 June 2026
 
 ### Acknowledgement
 
@@ -78,11 +78,11 @@ Academic journals commonly reject manuscripts at the initial screening stage whe
 
 Keywords: manuscript formatting, template compliance, rule-based validation, academic journal, auto-correction, document processing
 
-### Table of Contents Placeholder
+### Table of Contents
 
 Generate using Microsoft Word after final formatting.
 
-### List of Tables Placeholder
+### List of Tables
 
 Table 2.1: Comparison of Existing Tools and Proposed Approach
 
@@ -96,7 +96,7 @@ Table 5.3: Declined or Flawed Sample Auto-Fix Before and After Results
 
 Table 5.4: Recommended Subject Expert Evaluation Form
 
-### List of Figures Placeholder
+### List of Figures
 
 Figure 3.1: Rule-First Profile-Based Compliance Framework
 
@@ -112,7 +112,7 @@ Figure 5.2: Issue Category Results Interface
 
 Figure 5.3: Download and Report Output Interface
 
-### List of Abbreviations Placeholder
+### List of Abbreviations
 
 AI: Artificial Intelligence
 
@@ -134,7 +134,7 @@ PDF: Portable Document Format
 
 UI: User Interface
 
-### List of Appendices Placeholder
+### List of Appendices
 
 Appendix A: Updated Gantt Chart
 
@@ -216,7 +216,7 @@ This chapter introduced the need for a rule-first manuscript template compliance
 
 ## 2.1 Introduction
 
-This chapter reviews the background concepts needed to understand academic manuscript template compliance checking. The review covers academic formatting and editorial screening, document layout analysis, rule-based document validation, AI-assisted document understanding, hybrid profile-based approaches, and a comparison with existing tools. Specific literature citations should be inserted after the final reference list is confirmed.
+This chapter reviews the background concepts needed to understand academic manuscript template compliance checking. The review covers academic formatting and editorial screening, document layout analysis, rule-based document validation, AI-assisted document understanding, hybrid profile-based approaches, and a comparison with existing tools.
 
 ## 2.2 Academic Manuscript Formatting and Editorial Screening
 
@@ -226,7 +226,9 @@ However, template compliance is often checked manually. Manual checking requires
 
 ## 2.3 Document Layout Analysis
 
-Document layout analysis studies how document elements such as titles, headings, paragraphs, tables, figures, headers, footers, and references can be identified and interpreted. In editable documents such as DOCX files, layout information can be extracted from paragraph properties, run properties, section settings, and XML elements. In fixed-layout documents such as PDF files, this process is more difficult because the file may not preserve editable Word structure.
+Document layout analysis studies how document elements such as titles, headings, paragraphs, tables, figures, headers, footers, and references can be identified and interpreted. Research such as PubLayNet (Zhong et al., 2019), LayoutLM (Xu et al., 2020), and DocLayNet (Pfitzmann et al., 2022) shows that document structure can be modelled using layout and text signals. These works are important because manuscript template checking depends on correctly identifying document regions before applying rules.
+
+In editable documents such as DOCX files, layout information can be extracted from paragraph properties, run properties, section settings, and XML elements. Microsoft WordprocessingML represents Word documents as structured XML parts, making it possible to inspect paragraphs, runs, tables, headers, and sections programmatically (Microsoft, 2024). In fixed-layout documents such as PDF files, this process is more difficult because the file may not preserve editable Word structure. Bibliographic extraction tools such as GROBID (Lopez, 2009) also show the value and difficulty of extracting reliable structure from scholarly documents.
 
 For this project, DOCX is treated as the primary processing format because it preserves structured formatting metadata. PDF is treated as a secondary input path only when conversion is possible.
 
@@ -238,7 +240,7 @@ The limitation of rule-based validation is that it needs accurate rule definitio
 
 ## 2.5 AI-Assisted Document Understanding
 
-AI methods can support document understanding by classifying document elements or generating explanations. However, using a large LLM as the main compliance checker can be inefficient and difficult to verify. Objective formatting rules do not require generative reasoning when the required value is known. Therefore, this project limits AI to explanation and review guidance. The compliance decision remains deterministic.
+AI methods can support document understanding by classifying document elements or generating explanations. Layout-aware models such as LayoutLM can learn text and layout relationships, but they require labelled data, training, and evaluation before they should be trusted for journal-specific compliance decisions. For this FYP prototype, using a large LLM as the main compliance checker would be inefficient and difficult to verify because objective formatting rules do not require generative reasoning when the required value is known. Therefore, this project limits AI to explanation and review guidance. The compliance decision remains deterministic.
 
 ## 2.6 Hybrid and Profile-Based Document Processing Approaches
 
@@ -248,20 +250,21 @@ A profile-based approach stores journal-specific rules separately from the check
 
 General writing tools and word processors can detect grammar, spelling, and some style problems, but they usually do not validate manuscript formatting against a specific journal template. Citation managers help generate references but do not check all template layout requirements. PDF converters can transform file formats but may damage layout or lose editable structure.
 
-Table 2.1 should compare the proposed system with Microsoft Word manual checking, grammar checkers, citation managers, PDF conversion tools, and generic AI assistants.
+Table 2.1 compares the proposed system with common existing approaches used during manuscript preparation and screening.
 
 ## 2.8 Related Work Summary Table
 
-Table 2.1 should be completed with final citations:
+Table 2.1: Comparison of Existing Tools and the Proposed Approach
 
 | Area | Existing approach | Strength | Limitation | Relevance to this project |
 |---|---|---|---|---|
-| Manual editorial screening | Human review | High judgement quality | Slow and inconsistent for repetitive formatting | Motivates automation |
-| Word processors | Style and spelling checks | Widely available | Not journal-profile specific | Baseline tool |
-| Citation managers | Reference formatting | Useful for citations | Limited layout checking | Related but incomplete |
-| Document layout analysis | Layout-aware models or parsers | Can identify structure | May require training data | Informs paragraph classification |
-| Rule-based validation | Deterministic checks | Explainable and reproducible | Needs strong rules | Core method |
-| LLM assistance | Natural language explanation | User-friendly explanations | Not reliable as final decision maker | Optional explanation layer |
+| Manual editorial screening | Human reviewers inspect formatting and content | High judgement quality | Slow and inconsistent for repetitive formatting | Motivates automation |
+| Word processors | Microsoft Word and similar tools | Widely available and preserve DOCX layout | Not journal-profile specific | Baseline preparation tool |
+| Citation managers | Reference formatting tools | Useful for managing citations | Limited checking of full manuscript layout | Related but incomplete |
+| Document layout analysis | Layout-aware models such as PubLayNet, LayoutLM, and DocLayNet | Can identify document regions using text and layout | Requires labelled data and may not preserve editable Word formatting | Informs future classifier work |
+| Bibliographic extraction | Tools such as GROBID | Extracts scholarly metadata and references | Focused on bibliographic structure rather than full template compliance | Relevant to future reference checking |
+| Rule-based validation | Deterministic checks against explicit rules | Explainable and reproducible | Depends on accurate rules and classification | Core method of this project |
+| LLM assistance | Generative explanation or review guidance | User-friendly explanations | Not reliable as final decision maker for objective formatting | Optional explanation layer only |
 
 ## 2.9 Research Gap
 
@@ -348,7 +351,7 @@ JIWE is used as the primary validated journal profile. The profile stores requir
 
 ## 4.5 Template Rule Extraction Method
 
-The system can extract rules from uploaded DOCX journal templates using `modules/template_extractor.py`. It reads document paragraphs, formatting properties, instruction text, word limits, keyword requirements, reference requirements, and other observable style information. Extracted rules are combined with profile defaults and provenance information.
+The system can extract rules from uploaded DOCX journal templates using `modules/template_extractor.py`. It reads document paragraphs, formatting properties, instruction text, word limits, keyword requirements, reference requirements, and other observable style information. The implementation uses `python-docx`, a Python library for reading and updating DOCX documents (python-docx, 2026). Extracted rules are combined with profile defaults and provenance information.
 
 ## 4.6 Manuscript Feature Extraction Method
 
@@ -405,7 +408,7 @@ The prototype modules are summarized below:
 
 ## 4.13 Tools and Software
 
-The prototype uses Python, Streamlit, `python-docx`, JSON profile files, optional `pdf2docx` for PDF upload conversion, optional NVIDIA API for explanations, and GitHub for version control. The app is designed so that the checker still works without an LLM API key.
+The prototype uses Python, Streamlit, `python-docx`, JSON profile files, optional `pdf2docx` for PDF upload conversion, optional NVIDIA API for explanations, and GitHub for version control. Streamlit is used to provide the web interface and file upload workflow (Streamlit, 2026). NVIDIA NIM-style API support is used only as an optional explanation service when a valid key is configured (NVIDIA, 2026). The app is designed so that the checker still works without an LLM API key.
 
 ## 4.14 Evaluation Design
 
@@ -416,7 +419,18 @@ The evaluation design has four parts:
 3. Manual-label evaluation for precision, recall, and F1-score.
 4. Subject expert evaluation for usefulness, clarity, time saving, and trust.
 
-At the current stage, smoke and auto-fix evaluations are available in `evaluation_results`. Manual-label and subject expert evaluations should be completed before final submission if time allows.
+At the current stage, smoke and auto-fix evaluations are available in `evaluation_results`. Manual-label and subject expert evaluation are presented as recommended validation steps because the available repository artifacts do not contain completed human-labelled accuracy results.
+
+Table 4.2: Recommended Subject Expert Evaluation Items
+
+| Item | Measurement | Purpose |
+|---|---|---|
+| Usefulness | 1 to 5 Likert rating | Measures whether the system helps initial manuscript screening |
+| Clarity | 1 to 5 Likert rating | Measures whether issue descriptions and guidance are understandable |
+| Time saving | Manual time compared with system-assisted time | Measures practical efficiency |
+| Trust | 1 to 5 Likert rating | Measures whether reviewers trust the rule-based output |
+| Remaining manual workload | Short comment | Identifies issues that still require human judgement |
+| Suggested improvements | Short comment | Guides future enhancement |
 
 ## 4.15 Summary
 
@@ -458,6 +472,8 @@ The implemented prototype includes:
 - Highlighted original DOCX download.
 - Detailed comparison report download.
 
+Additional regression-tested refinements were added during FYP2 development. The checker now detects keyword font mismatches, table caption font and italic mismatches, figure caption italic mismatches, JIWE main heading capitalization errors, and reference source italic requirements that should be reviewed manually. The auto-fix module also supports safer correction of bulk body bold formatting, heading capitalization, and existing keyword capitalization. These refinements improve the system's ability to handle intentional formatting errors such as whole-document bold formatting, incorrect fonts, and title-case headings.
+
 ## 5.5 User Interface Results
 
 The Streamlit interface presents the workflow in stages: upload template, upload manuscript, check format, review issues, run auto-fix, review post-fix validation, and download outputs. The sidebar shows the active profile and extracted rule summary. The interface also explains that AI explanations are optional and that core checking remains rule-based.
@@ -498,11 +514,17 @@ The auto-fix evaluation shows that supported deterministic formatting fixes redu
 
 The post-fix validation mechanism re-checks the corrected document and compares it with the original result. In the available summary runs, all documents were marked safe because the post-fix result did not increase detected issues. This supports the design decision to use conservative issue-based auto-fix rather than broad document rewriting.
 
-## 5.11 Processing Time Analysis, If Available
+## 5.11 Regression Testing Results
 
-Processing time was not clearly available in the current evaluation result files. If time permits, the final evaluation should record the time taken per document for manual checking and system-assisted checking. This will support the claim that the system can improve screening efficiency.
+Regression testing was used after implementation changes to confirm that existing functionality was not broken. The final automated test suite contains 103 unit and regression tests covering template extraction, profile loading, paragraph classification, issue detection, auto-fix behaviour, review guidance, and report generation. The latest verification run passed all 103 tests. Python compilation checks also passed, confirming that the source files have no syntax errors.
 
-## 5.12 Summary of Findings
+The most important intentional-error test changed a manuscript to use incorrect formatting across many paragraphs, including wrong font, oversized text, bold body text, and non-compliant headings. Before auto-fix, the system detected 46 issues across categories such as journal header, title, author information, body text, headings, references, and line spacing. After auto-fix, only three issues remained: abstract word count, uncited reference, and reference publication source italic review. These remaining items are appropriate manual-review cases because they involve content or reference interpretation rather than a simple deterministic formatting change.
+
+## 5.12 Processing Time Evaluation Limitation
+
+Processing time was not clearly available in the current evaluation result files. Therefore, the report does not claim a measured time-saving percentage. A future efficiency study should record the time taken per document for manual checking and system-assisted checking. This would support a stronger claim about practical screening efficiency.
+
+## 5.13 Summary of Findings
 
 The available results indicate that the prototype can process realistic JIWE manuscripts, detect multiple formatting issue categories, apply deterministic fixes, and improve compliance index values after auto-fix. However, formal detection accuracy still requires manually labelled ground truth and subject expert validation.
 
@@ -553,6 +575,8 @@ The limitations include:
 - The system does not assess research quality.
 - The system does not safely move figures or tables.
 - Some complex reference formatting and citation verification remain manual.
+- Reference publication source italics can be flagged, but automatic correction is left for manual review because different reference entries contain different source boundaries.
+- PDF output is intentionally limited on the deployed server because LibreOffice conversion can shift Word layout; the safer workflow is to download DOCX and export to PDF using Microsoft Word.
 
 ## 6.8 Comparison with Existing Tools
 
@@ -612,23 +636,50 @@ Future work should include:
 
 The project demonstrates that a rule-first, profile-based approach is a practical and explainable method for academic manuscript template compliance checking. The prototype does not attempt to replace reviewers or guarantee journal acceptance. Instead, it supports authors and reviewers by detecting common formatting issues, applying safe corrections, and presenting remaining issues for manual review.
 
-# References Placeholder
+# References
 
-Add final APA references here. Do not include sources that were not cited in the report.
+Pfitzmann, B., Auer, C., Dolfi, M., Nassar, A. S., & Staar, P. W. J. (2022). DocLayNet: A large human-annotated dataset for document-layout analysis. Proceedings of the 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining. https://doi.org/10.1145/3534678.3539043
 
-# Appendices Placeholder
+Lopez, P. (2009). GROBID: Combining automatic bibliographic data recognition and term extraction for scholarship publications. Proceedings of the 13th European Conference on Research and Advanced Technology for Digital Libraries. https://doi.org/10.1007/978-3-642-04346-8_62
+
+Microsoft. (2024). Create a word processing document by providing a file name. Microsoft Learn. https://learn.microsoft.com/en-us/office/open-xml/word/how-to-create-a-word-processing-document-by-providing-a-file-name
+
+NVIDIA. (2026). NVIDIA NIM for large language models API reference. NVIDIA Docs. https://docs.nvidia.com/nim/large-language-models/latest/api-reference.html
+
+python-docx. (2026). python-docx documentation. https://python-docx.readthedocs.io/
+
+Streamlit. (2026). st.file_uploader. Streamlit Docs. https://docs.streamlit.io/develop/api-reference/widgets/st.file_uploader
+
+Xu, Y., Li, M., Cui, L., Huang, S., Wei, F., & Zhou, M. (2020). LayoutLM: Pre-training of text and layout for document image understanding. Proceedings of the 26th ACM SIGKDD Conference on Knowledge Discovery and Data Mining. https://doi.org/10.1145/3394486.3403172
+
+Zhong, X., Tang, J., & Jimeno Yepes, A. (2019). PubLayNet: Largest dataset ever for document layout analysis. Proceedings of the International Conference on Document Analysis and Recognition. https://arxiv.org/abs/1908.07836
+
+# Appendices
 
 Appendix A: Updated Gantt Chart
 
+This appendix should include the final FYP2 project schedule and completed milestones.
+
 Appendix B: FYP2 Meeting Logs
+
+This appendix should include meeting dates, discussion points, and actions taken.
 
 Appendix C: Turnitin Similarity Index Page
 
+This appendix should include the Turnitin similarity page when available.
+
 Appendix D: Evaluation Result Samples
+
+This appendix should include selected outputs from `evaluation_results`, especially published and declined auto-fix summaries.
 
 Appendix E: Subject Expert Evaluation Form
 
+This appendix should include the subject expert rating form covering usefulness, clarity, time saving, trust, and remaining manual review.
+
 Appendix F: Selected Prototype Screenshots
+
+This appendix should include screenshots of upload, checking, issue categories, review guidance, auto-fix, and download outputs.
 
 Appendix G: Code Repository Summary
 
+This appendix should include the repository structure, major modules, test results, and GitHub commit evidence.
