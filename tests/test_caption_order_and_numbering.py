@@ -12,7 +12,7 @@ from modules.manuscript_checker import ManuscriptChecker
 def _rules():
     return {
         "_profile": {"name": "JIWE", "required_sections": []},
-        "caption": {"font_name": "Times New Roman", "font_size": 10},
+        "caption": {"font_name": "Times New Roman", "font_size": 10, "italic": False},
     }
 
 
@@ -105,6 +105,40 @@ class CaptionOrderAndNumberingTest(unittest.TestCase):
         ]
         self.assertIn("Table caption font does not match template", table_descriptions)
         self.assertIn("Table caption size does not match template", table_descriptions)
+
+    def test_checker_reports_caption_italic_mismatches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "caption_italic_format.docx"
+            document = Document()
+
+            _add_drawing_paragraph(document)
+            figure_caption = document.add_paragraph()
+            figure_run = figure_caption.add_run("Figure 1: Caption below the image")
+            figure_run.font.name = "Times New Roman"
+            figure_run.font.size = Pt(10)
+            figure_run.font.italic = True
+
+            table_caption = document.add_paragraph()
+            table_run = table_caption.add_run("Table 1: Caption above the table")
+            table_run.font.name = "Times New Roman"
+            table_run.font.size = Pt(10)
+            table_run.font.italic = True
+            table = document.add_table(rows=1, cols=1)
+            table.cell(0, 0).text = "Table data"
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+        table_descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("tables", [])
+        ]
+        figure_descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("figures", [])
+        ]
+        self.assertIn("Table caption italic formatting does not match template", table_descriptions)
+        self.assertIn("Figure caption italic formatting does not match template", figure_descriptions)
 
 
 if __name__ == "__main__":

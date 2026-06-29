@@ -1217,10 +1217,12 @@ class ManuscriptChecker:
             caption_rules = self.rules.get("caption", {})
             expected_font = caption_rules.get("font_name", "Times New Roman")
             expected_size = caption_rules.get("font_size", 10)
+            expected_italic = caption_rules.get("italic")
 
             for cp in table_captions:
                 current_font = cp.font_info.get("font_name")
                 current_size = cp.font_info.get("font_size")
+                current_italic = bool(cp.font_info.get("italic"))
 
                 if current_font and not is_font_equivalent(current_font, expected_font):
                     self._add_issue(
@@ -1242,6 +1244,18 @@ class ManuscriptChecker:
                         description="Table caption size does not match template",
                         current=f"{current_size}pt",
                         expected=f"{expected_size}pt",
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 50)
+                    )
+
+                if expected_italic is not None and current_italic != bool(expected_italic):
+                    self._add_issue(
+                        category="tables",
+                        location=f"Caption: {truncate_text(cp.text, 30)}",
+                        para_index=cp.index,
+                        description="Table caption italic formatting does not match template",
+                        current="Italic" if current_italic else "Not Italic",
+                        expected="Italic" if expected_italic else "Not Italic",
                         severity="warning",
                         text_preview=truncate_text(cp.text, 50)
                     )
@@ -1274,10 +1288,12 @@ class ManuscriptChecker:
         caption_rules = self.rules.get("caption", {})
         expected_font = caption_rules.get("font_name", "Times New Roman")
         expected_size = caption_rules.get("font_size", 10)
+        expected_italic = caption_rules.get("italic")
         
         for cp in figure_captions:
             current_font = cp.font_info.get("font_name")
             current_size = cp.font_info.get("font_size")
+            current_italic = bool(cp.font_info.get("italic"))
             
             if current_font and not is_font_equivalent(current_font, expected_font):
                 self._add_issue(
@@ -1299,6 +1315,18 @@ class ManuscriptChecker:
                     description="Figure caption size does not match template",
                     current=f"{current_size}pt",
                     expected=f"{expected_size}pt",
+                    severity="warning",
+                    text_preview=truncate_text(cp.text, 50)
+                )
+
+            if expected_italic is not None and current_italic != bool(expected_italic):
+                self._add_issue(
+                    category="figures",
+                    location=f"Caption: {truncate_text(cp.text, 30)}",
+                    para_index=cp.index,
+                    description="Figure caption italic formatting does not match template",
+                    current="Italic" if current_italic else "Not Italic",
+                    expected="Italic" if expected_italic else "Not Italic",
                     severity="warning",
                     text_preview=truncate_text(cp.text, 50)
                 )
