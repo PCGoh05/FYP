@@ -204,15 +204,16 @@ def resolve_pre_fix_guidance(payload, llm, cache):
         cached = cache[cache_key]
         return cached["text"], cache_key, cached["source"]
 
+    fallback = builder.build_pre_fix_fallback(payload)
     if llm and llm.is_available():
         guidance = llm.generate_review_guidance(payload)
         source = (
-            "AI-enhanced guidance"
-            if llm.is_available()
-            else "Rule-based guidance"
+            "Rule-based fallback after AI response was unavailable or incomplete"
+            if guidance == fallback
+            else "AI-enhanced guidance"
         )
     else:
-        guidance = builder.build_pre_fix_fallback(payload)
+        guidance = fallback
         source = "Rule-based guidance"
 
     cache[cache_key] = {"text": guidance, "source": source}
@@ -246,15 +247,16 @@ def resolve_post_fix_guidance(payload, llm, cache):
         cached = cache[cache_key]
         return cached["text"], cache_key, cached["source"]
 
+    fallback = builder.build_post_fix_fallback(payload)
     if llm and llm.is_available():
         guidance = llm.generate_post_fix_summary(payload)
         source = (
-            "AI-enhanced guidance"
-            if llm.is_available()
-            else "Rule-based guidance"
+            "Rule-based fallback after AI response was unavailable or incomplete"
+            if guidance == fallback
+            else "AI-enhanced guidance"
         )
     else:
-        guidance = builder.build_post_fix_fallback(payload)
+        guidance = fallback
         source = "Rule-based guidance"
 
     cache[cache_key] = {"text": guidance, "source": source}
