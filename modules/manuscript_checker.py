@@ -1732,7 +1732,7 @@ class ManuscriptChecker:
             r"\bdoi\b",
             r"\(\d{4}\)",
             r"\".+?\"",
-            r"“.+?”",
+            r"\u201c.+?\u201d",
         )
 
         has_source_keyword = any(keyword in lower_text for keyword in source_keywords)

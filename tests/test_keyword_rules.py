@@ -42,7 +42,7 @@ def _save_document(path: Path):
     ]:
         document.add_paragraph(text)
     keyword_paragraph = document.add_paragraph()
-    run = keyword_paragraph.add_run("Keywords—machine learning, security, detection")
+    run = keyword_paragraph.add_run("Keywords\u2014machine learning, security, detection")
     run.font.name = "Times New Roman"
     run.font.size = Pt(9)
     run.font.italic = False
