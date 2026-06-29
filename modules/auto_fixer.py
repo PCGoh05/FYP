@@ -228,7 +228,7 @@ class AutoFixer:
             return {property_name}
 
         if category == "body_text":
-            return {"font_name", "font_size"}
+            return {"font_name", "font_size", "bold"}
         if category in {"references", "figures", "tables"}:
             return {"font_name", "font_size"}
         if category == "line_spacing":

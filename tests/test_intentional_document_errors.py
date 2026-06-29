@@ -1,11 +1,13 @@
 import tempfile
 import unittest
+from io import BytesIO
 from pathlib import Path
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 
+from modules.auto_fixer import AutoFixer
 from modules.manuscript_checker import ManuscriptChecker
 
 
@@ -72,6 +74,35 @@ def _save_document(path: Path, intro_text="INTRODUCTION", body_size=10, all_bold
     document.save(path)
 
 
+def _save_bulk_bad_body_document(path: Path):
+    document = Document()
+    section = document.sections[0]
+    section.left_margin = Inches(1)
+    section.right_margin = Inches(1)
+    section.top_margin = Inches(1)
+    section.bottom_margin = Inches(1)
+
+    _add_paragraph(document, "Journal of Informatics and", "Palatino Linotype", 24, True, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+    _add_paragraph(document, "Web Engineering", "Palatino Linotype", 24, True, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+    _add_paragraph(document, "A Bulk Formatting Regression Paper", size=24, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+    _add_paragraph(document, "Abstract - This is the abstract.", font_name="Arial", size=20, bold=True)
+    _add_paragraph(document, "Keywords - checking, template, rules, formatting, validation", font_name="Arial", size=20, bold=True)
+    _add_paragraph(document, "INTRODUCTION", font_name="Arial", size=20, bold=True)
+    for index in range(18):
+        _add_paragraph(
+            document,
+            f"This body paragraph {index} uses deliberately wrong bulk formatting.",
+            font_name="Arial",
+            size=20,
+            bold=True,
+        )
+    _add_paragraph(document, "CONCLUSION", font_name="Arial", size=20, bold=True)
+    _add_paragraph(document, "Conclusion text.", font_name="Arial", size=20, bold=True)
+    _add_paragraph(document, "REFERENCES", font_name="Arial", size=20, bold=True)
+    _add_paragraph(document, "[1] Reference text.", font_name="Arial", size=20, bold=True)
+    document.save(path)
+
+
 class IntentionalDocumentErrorsTest(unittest.TestCase):
     def _check(self, **kwargs):
         with tempfile.TemporaryDirectory() as tmp:
@@ -115,6 +146,28 @@ class IntentionalDocumentErrorsTest(unittest.TestCase):
         ]
         self.assertIn("Body text bold formatting does not match template", body_descriptions)
         self.assertIn("Reference bold formatting does not match template", reference_descriptions)
+
+    def test_auto_fix_corrects_bulk_body_font_size_and_bold_after_issue_cap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bulk_bad_body.docx"
+            _save_bulk_bad_body_document(path)
+            before = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+            fixer = AutoFixer(_rules(), before.classifications, before.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+
+            after = ManuscriptChecker(_rules()).load_manuscript(
+                BytesIO(fixer.get_fixed_document_bytes())
+            ).check_all()
+
+        body_descriptions = [
+            issue.description
+            for issue in after.issues_by_category.get("body_text", [])
+        ]
+        self.assertNotIn("Body text font does not match template", body_descriptions)
+        self.assertNotIn("Body text font size does not match template", body_descriptions)
+        self.assertNotIn("Body text bold formatting does not match template", body_descriptions)
 
 
 if __name__ == "__main__":
