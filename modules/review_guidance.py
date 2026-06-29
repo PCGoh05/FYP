@@ -23,6 +23,7 @@ class ReviewGuidanceBuilder:
         "numbering is not continuous",
         "citation has no matching",
         "not cited",
+        "publication source may need italic",
         "should appear above",
         "should appear below",
         "may be missing a number",
@@ -345,6 +346,8 @@ class ReviewGuidanceBuilder:
     @staticmethod
     def _manual_review_reason(category: str, description: str) -> str:
         lower = description.lower()
+        if "publication source may need italic" in lower:
+            return "The exact publication source segment must be selected before applying italic formatting."
         if "citation" in lower or "reference numbering" in lower:
             return "Citation changes may alter academic meaning."
         if "equation" in lower or "numbering" in lower:

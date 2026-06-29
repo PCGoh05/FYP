@@ -117,6 +117,26 @@ class ReviewGuidanceBuilderTest(unittest.TestCase):
         ))
         self.assertTrue(all(group["review_reason"] for group in payload["groups"]))
 
+    def test_reference_publication_source_italic_requires_manual_review(self):
+        payload = ReviewGuidanceBuilder().build_pre_fix_payload(
+            _result({
+                "references": [
+                    _issue(
+                        "references",
+                        "Reference publication source may need italic formatting",
+                        current="No italic publication source segment detected",
+                        expected="Italic journal, conference, book, or proceedings source segment",
+                    )
+                ],
+            }),
+            {"_profile": {"name": "JIWE"}},
+        )
+
+        group = payload["groups"][0]
+        self.assertFalse(group["auto_fix_supported"])
+        self.assertEqual(group["property_name"], None)
+        self.assertIn("publication source segment", group["review_reason"])
+
     def test_fallback_has_required_sections_and_uses_payload_only(self):
         payload = ReviewGuidanceBuilder().build_pre_fix_payload(
             _result({
