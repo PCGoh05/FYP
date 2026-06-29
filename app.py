@@ -152,6 +152,35 @@ def get_llm_status_notice(
     )
 
 
+def format_section_label(section_name: str) -> str:
+    """Return a readable label for a document section key."""
+    return str(section_name).replace("_", " ").title()
+
+
+def build_structure_summary_items(structure):
+    """Build user-friendly document structure summary items."""
+    structure_details = structure if isinstance(structure.get("sections"), dict) else None
+    sections = (
+        structure_details.get("expected_order", [])
+        if structure_details else ["abstract", "keywords", "introduction", "conclusion", "references"]
+    )
+    if structure_details:
+        found_map = {
+            name: details.get("found", False)
+            for name, details in structure_details.get("sections", {}).items()
+        }
+    else:
+        found_map = structure
+
+    return [
+        {
+            "label": format_section_label(section),
+            "status": "Found" if found_map.get(section, False) else "Missing",
+        }
+        for section in sections
+    ]
+
+
 def build_pre_fix_guidance_payload(result, rules):
     """Build privacy-limited pre-fix guidance input."""
     return ReviewGuidanceBuilder().build_pre_fix_payload(result, rules)
@@ -646,18 +675,17 @@ def display_check_results(result):
             for name, details in structure_details.get("sections", {}).items()
         }
 
+    summary_items = build_structure_summary_items(structure)
     sections = (
         structure_details.get("expected_order", [])
-        if structure_details else ["abstract", "keywords", "introduction", "conclusion", "references"]
+        if structure_details else [item["label"].lower() for item in summary_items]
     )
-    structure_cols = st.columns(max(1, len(sections)))
+    structure_cols = st.columns(max(1, len(summary_items)))
 
-    for i, section in enumerate(sections):
+    for i, item in enumerate(summary_items):
         with structure_cols[i]:
-            found = structure.get(section, False)
-            status = "Yes" if found else "No"
-            st.markdown(f"**{section.title()}**")
-            st.write(status)
+            st.markdown(f"**{item['label']}**")
+            st.write(item["status"])
 
     if structure_details:
         format_rows = []
