@@ -134,6 +134,18 @@ class IntentionalDocumentErrorsTest(unittest.TestCase):
         ]
         self.assertIn("Heading capitalization does not match template", descriptions)
 
+    def test_auto_fix_capitalizes_main_heading_when_rule_requires_all_caps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "heading_caps.docx"
+            _save_document(path, intro_text="1. Introduction")
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        self.assertEqual(fixed.paragraphs[6].text, "1. INTRODUCTION")
+
     def test_large_body_font_size_is_reported(self):
         result = self._check(body_size=20)
         descriptions = [

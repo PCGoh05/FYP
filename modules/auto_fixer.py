@@ -209,6 +209,8 @@ class AutoFixer:
             return "line_spacing"
         if "manual tab" in description or "manual tabs" in description:
             return "manual_tabs"
+        if "capitalization" in description or "all capital" in description:
+            return "capitalization"
         if "alignment" in description:
             return "alignment"
         if "font size" in description or " size " in f" {description} ":
@@ -833,13 +835,23 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["headings"],
-            fallback=["font_name", "font_size", "bold", "italic", "number_font_name", "number_font_size", "number_bold"],
+            fallback=[
+                "font_name",
+                "font_size",
+                "bold",
+                "italic",
+                "capitalization",
+                "number_font_name",
+                "number_font_size",
+                "number_bold",
+            ],
         )
 
         expected_font = heading_rules.get("font_name", "Times New Roman")
         expected_size = heading_rules.get("font_size", 10)
         expected_bold = heading_rules.get("bold", None)
         expected_italic = heading_rules.get("italic", None)
+        expected_all_caps = heading_rules.get("all_caps")
 
         changes.extend(self._fix_numbering_formatting(
             paragraph,
@@ -861,6 +873,21 @@ class AutoFixer:
                     allowed_properties=allowed_properties,
                 ))
 
+        current_text = get_paragraph_text(paragraph)
+        if (
+            expected_all_caps
+            and self._property_allowed("capitalization", allowed_properties)
+            and not self._heading_text_is_all_caps(current_text)
+        ):
+            target_text = current_text.upper()
+            self._replace_paragraph_text_preserving_first_run(paragraph, target_text)
+            changes.append({
+                "property_name": "capitalization",
+                "current_value": current_text,
+                "target_value": target_text,
+                "evidence": "Heading capitalization did not match target rule",
+            })
+
         if changes:
             self._add_property_changes(
                 paragraph_index=index,
@@ -877,6 +904,13 @@ class AutoFixer:
         if re.match(r"^\d+\.\d+", stripped):
             return self.rules.get("subheading", self.rules.get("heading", {}))
         return self.rules.get("heading", {})
+
+    @staticmethod
+    def _heading_text_is_all_caps(text: str) -> bool:
+        """Return True when heading words are uppercase after removing numbering."""
+        stripped = re.sub(r"^\s*\d+(?:\.\d+)*\.?\s+", "", text or "").strip()
+        letters = [char for char in stripped if char.isalpha()]
+        return bool(letters) and all(char.isupper() for char in letters)
 
     def _get_numbering_level(self, paragraph):
         """Return the numbering level XML element for a numbered paragraph."""
