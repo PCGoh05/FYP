@@ -4,6 +4,7 @@ from pathlib import Path
 
 from docx import Document
 from docx.oxml import OxmlElement
+from docx.shared import Pt
 
 from modules.manuscript_checker import ManuscriptChecker
 
@@ -83,6 +84,27 @@ class CaptionOrderAndNumberingTest(unittest.TestCase):
         self.assertIn("Table numbering is not continuous", table_descriptions)
         self.assertIn("Figure caption should appear below the figure", figure_descriptions)
         self.assertIn("Figure numbering is not continuous", figure_descriptions)
+
+    def test_checker_reports_table_caption_font_and_size_mismatches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "table_caption_format.docx"
+            document = Document()
+            caption = document.add_paragraph()
+            run = caption.add_run("Table 1: Caption above the table")
+            run.font.name = "Arial"
+            run.font.size = Pt(20)
+            table = document.add_table(rows=1, cols=1)
+            table.cell(0, 0).text = "Table data"
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+        table_descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("tables", [])
+        ]
+        self.assertIn("Table caption font does not match template", table_descriptions)
+        self.assertIn("Table caption size does not match template", table_descriptions)
 
 
 if __name__ == "__main__":

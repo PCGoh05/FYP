@@ -1214,6 +1214,38 @@ class ManuscriptChecker:
                     severity="warning"
                 )
 
+            caption_rules = self.rules.get("caption", {})
+            expected_font = caption_rules.get("font_name", "Times New Roman")
+            expected_size = caption_rules.get("font_size", 10)
+
+            for cp in table_captions:
+                current_font = cp.font_info.get("font_name")
+                current_size = cp.font_info.get("font_size")
+
+                if current_font and not is_font_equivalent(current_font, expected_font):
+                    self._add_issue(
+                        category="tables",
+                        location=f"Caption: {truncate_text(cp.text, 30)}",
+                        para_index=cp.index,
+                        description="Table caption font does not match template",
+                        current=current_font,
+                        expected=expected_font,
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 50)
+                    )
+
+                if current_size and abs(current_size - expected_size) > 0.5:
+                    self._add_issue(
+                        category="tables",
+                        location=f"Caption: {truncate_text(cp.text, 30)}",
+                        para_index=cp.index,
+                        description="Table caption size does not match template",
+                        current=f"{current_size}pt",
+                        expected=f"{expected_size}pt",
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 50)
+                    )
+
         self._check_caption_order_and_numbering("table")
     
     def _check_figures(self):
