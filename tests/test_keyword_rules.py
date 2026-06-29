@@ -87,18 +87,20 @@ class KeywordRulesTest(unittest.TestCase):
         ]
         self.assertIn("Keywords font does not match template", descriptions)
 
-    def test_auto_fix_applies_italic_without_rewriting_keywords(self):
+    def test_auto_fix_applies_italic_and_capitalizes_existing_keywords(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "keyword_fix.docx"
             _save_document(path)
-            original = Document(path).paragraphs[5].text
             result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
             fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
             fixer.load_manuscript(str(path))
             fixer.fix_all()
             fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
 
-        self.assertEqual(fixed.paragraphs[5].text, original)
+        self.assertEqual(
+            fixed.paragraphs[5].text,
+            "Keywords\u2014Machine learning, Security, Detection",
+        )
         self.assertTrue(all(run.font.italic for run in fixed.paragraphs[5].runs if run.text.strip()))
 
 

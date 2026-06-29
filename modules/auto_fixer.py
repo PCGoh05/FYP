@@ -1155,13 +1155,14 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["body_text"],
-            fallback=["font_name", "font_size", "bold", "italic"],
+            fallback=["font_name", "font_size", "bold", "italic", "capitalization"],
         )
 
         expected_font = keywords_rules.get("font_name", "Times New Roman")
         expected_size = keywords_rules.get("font_size", 9)
         expected_bold = keywords_rules.get("bold", None)
         expected_italic = keywords_rules.get("italic", None)
+        capitalize_first_letter = keywords_rules.get("capitalize_first_letter")
 
         for run in paragraph.runs:
             if run.text.strip():
@@ -1174,6 +1175,21 @@ class AutoFixer:
                     allowed_properties=allowed_properties,
                 ))
 
+        current_text = get_paragraph_text(paragraph)
+        if (
+            capitalize_first_letter
+            and self._property_allowed("capitalization", allowed_properties)
+        ):
+            target_text = self._capitalize_keyword_text(current_text)
+            if target_text != current_text:
+                self._replace_paragraph_text_preserving_first_run(paragraph, target_text)
+                changes.append({
+                    "property_name": "capitalization",
+                    "current_value": current_text,
+                    "target_value": target_text,
+                    "evidence": "Keyword capitalization did not match target rule",
+                })
+
         if changes:
             self._add_property_changes(
                 paragraph_index=index,
@@ -1183,6 +1199,28 @@ class AutoFixer:
                 text_preview=truncate_text(get_paragraph_text(paragraph), 40),
                 paragraph_type=ParagraphType.KEYWORDS_CONTENT.value,
             )
+
+    @staticmethod
+    def _capitalize_keyword_text(text: str) -> str:
+        """Capitalize the first letter of each existing keyword item."""
+        match = re.match(
+            r"^(\s*(?:keywords?|key\s+words?)\s*(?:-|\u2013|\u2014|:)?\s*)(.*)$",
+            text or "",
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return text
+
+        prefix, keyword_text = match.groups()
+        parts = re.split(r"([,;])", keyword_text)
+        for index in range(0, len(parts), 2):
+            parts[index] = re.sub(
+                r"^(\s*)([A-Za-z])",
+                lambda item: item.group(1) + item.group(2).upper(),
+                parts[index],
+                count=1,
+            )
+        return prefix + "".join(parts)
 
     def _fix_caption(self, paragraph, index: int):
         """Fix caption formatting with structured change records."""
