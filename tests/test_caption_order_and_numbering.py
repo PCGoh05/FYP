@@ -4,8 +4,9 @@ from pathlib import Path
 
 from docx import Document
 from docx.oxml import OxmlElement
-from docx.shared import Pt
+from docx.shared import Inches, Pt
 
+from modules.auto_fixer import AutoFixer
 from modules.manuscript_checker import ManuscriptChecker
 
 
@@ -139,6 +140,32 @@ class CaptionOrderAndNumberingTest(unittest.TestCase):
         ]
         self.assertIn("Table caption italic formatting does not match template", table_descriptions)
         self.assertIn("Figure caption italic formatting does not match template", figure_descriptions)
+
+    def test_auto_fix_does_not_reformat_caption_for_position_issue_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "caption_position_only.docx"
+            document = Document()
+            section = document.sections[0]
+            section.left_margin = Inches(1)
+            section.right_margin = Inches(1)
+            section.top_margin = Inches(1)
+            section.bottom_margin = Inches(1)
+
+            document.add_paragraph("Figure 1: Caption placed before the image")
+            _add_drawing_paragraph(document)
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+
+        descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("figures", [])
+        ]
+        self.assertIn("Figure caption should appear below the figure", descriptions)
+        self.assertEqual([], fixer.get_change_records())
 
 
 if __name__ == "__main__":

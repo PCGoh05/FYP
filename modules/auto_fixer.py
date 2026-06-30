@@ -188,9 +188,33 @@ class AutoFixer:
                         self._global_issue_property_map.setdefault(category, set()).update(properties)
                     continue
                 self._issue_map.setdefault(para_index, set()).add(category)
-                property_name = self._infer_issue_property(issue)
-                if property_name:
-                    self._issue_property_map.setdefault(para_index, set()).add(property_name)
+                properties = self._infer_issue_properties(issue)
+                if properties:
+                    self._issue_property_map.setdefault(para_index, set()).update(properties)
+
+    def _infer_issue_properties(self, issue: Any) -> set:
+        """Infer one or more affected formatting properties from a checker issue."""
+        property_name = self._infer_issue_property(issue)
+        if property_name:
+            return {property_name}
+
+        description = (getattr(issue, "description", "") or "").lower()
+        current_value = (getattr(issue, "current_value", "") or "").lower()
+        if "formatting does not match template" not in description:
+            return set()
+
+        properties = set()
+        if "font " in current_value:
+            properties.add("font_name")
+        if "size " in current_value:
+            properties.add("font_size")
+        if "bold" in current_value:
+            properties.add("bold")
+        if "italic" in current_value:
+            properties.add("italic")
+        if "alignment" in current_value:
+            properties.add("alignment")
+        return properties
 
     def _infer_issue_property(self, issue: Any) -> Optional[str]:
         """Infer the affected formatting property from a checker issue."""
@@ -225,14 +249,13 @@ class AutoFixer:
 
     def _infer_global_issue_properties(self, category: str, issue: Any) -> set:
         """Infer properties represented by an aggregate category-level issue."""
-        property_name = self._infer_issue_property(issue)
-        if property_name:
-            return {property_name}
+        properties = self._infer_issue_properties(issue)
+        if properties:
+            return properties
 
-        if category == "body_text":
+        description = (getattr(issue, "description", "") or "").lower()
+        if category == "body_text" and "body text formatting issues" in description:
             return {"font_name", "font_size", "bold"}
-        if category in {"references", "figures", "tables"}:
-            return {"font_name", "font_size"}
         if category == "line_spacing":
             return {"line_spacing"}
         if category == "other" and "manual tab" in (getattr(issue, "description", "") or "").lower():
@@ -263,7 +286,7 @@ class AutoFixer:
             properties.update(self._global_issue_property_map.get(category, set()))
         if properties:
             return properties
-        return set(fallback or [])
+        return set()
 
     def _property_allowed(self, property_name: str, allowed_properties: Optional[set]) -> bool:
         """Return True when a property can be changed under the current issue filter."""

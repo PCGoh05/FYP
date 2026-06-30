@@ -1078,6 +1078,13 @@ def handle_auto_fix():
     return None
 
 
+def format_change_display_value(value):
+    """Return user-facing text for a recorded format-change value."""
+    if value == "(inherited)":
+        return "Inherited from Word style"
+    return value
+
+
 def display_comparison_view(changes):
     """Display structured change records without parsing free-text strings."""
     st.header("Format Changes Applied")
@@ -1110,8 +1117,8 @@ def display_comparison_view(changes):
             "Paragraph": change.paragraph_index + 1 if change.paragraph_index >= 0 else "Document",
             "Type": change.change_type,
             "Property": change.property_name,
-            "Current Value": change.current_value or change.before,
-            "Target Value": change.target_value or change.after,
+            "Current Value": format_change_display_value(change.current_value or change.before),
+            "Target Value": format_change_display_value(change.target_value or change.after),
             "Text": text_preview,
             "Evidence": change.evidence,
         })

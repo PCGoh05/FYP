@@ -245,6 +245,10 @@ Confidence: explain that this is based on deterministic template rules, not an L
             "- Do not infer manuscript content that is not present in the payload.\n"
             "- Do not change priorities or auto-fix capability.\n"
             "- Keep the response concise and actionable.\n\n"
+            "User-facing wording:\n"
+            "- Do not show internal field names such as category, severity, priority, "
+            "property_name, or auto_fix_supported.\n"
+            "- Rewrite grouped issues as plain reviewer actions.\n\n"
             "Return exactly these headings:\n"
             "Most important issues:\n"
             "Safe auto-fix candidates:\n"
@@ -280,6 +284,10 @@ Confidence: explain that this is based on deterministic template rules, not an L
             "- You must not reinterpret change records, checker results, or safety status.\n"
             "- Do not add new issues or claim that a manuscript is publication-ready.\n"
             "- Explain why manual-review items were not changed automatically.\n\n"
+            "User-facing wording:\n"
+            "- Do not show internal field names such as category, severity, priority, "
+            "property_name, or auto_fix_supported.\n"
+            "- Rewrite grouped issues as plain reviewer actions.\n\n"
             "Return exactly these headings:\n"
             "Auto-fixed items:\n"
             "Issues still needing review:\n"
@@ -308,7 +316,17 @@ Confidence: explain that this is based on deterministic template rules, not an L
         required_headings: List[str],
     ) -> bool:
         """Return True only for complete structured guidance."""
-        return bool(response) and all(
+        forbidden_markers = [
+            "category:",
+            "severity:",
+            "priority:",
+            "property_name",
+            "auto_fix_supported",
+        ]
+        lower_response = (response or "").lower()
+        return bool(response) and not any(
+            marker in lower_response for marker in forbidden_markers
+        ) and all(
             heading in response
             for heading in required_headings
         )

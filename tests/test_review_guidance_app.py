@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from app import (
     build_pre_fix_guidance_payload,
     build_post_fix_guidance_payload,
+    format_change_display_value,
     resolve_pre_fix_guidance,
     resolve_post_fix_guidance,
 )
@@ -48,6 +49,13 @@ def _result():
 
 
 class ReviewGuidanceAppTest(unittest.TestCase):
+    def test_formats_inherited_change_value_for_users(self):
+        self.assertEqual(
+            format_change_display_value("(inherited)"),
+            "Inherited from Word style",
+        )
+        self.assertEqual(format_change_display_value("Times New Roman"), "Times New Roman")
+
     def test_builds_pre_fix_payload_from_checker_result(self):
         payload = build_pre_fix_guidance_payload(
             _result(),

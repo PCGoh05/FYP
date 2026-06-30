@@ -148,6 +148,28 @@ class LLMExplanationTest(unittest.TestCase):
             ReviewGuidanceBuilder().build_pre_fix_fallback(_pre_fix_payload()),
         )
 
+    def test_review_guidance_rejects_raw_internal_metadata(self):
+        response = "\n".join([
+            "Most important issues:",
+            "- Figure numbering is not continuous (category: figures, severity: warning, priority: 2)",
+            "Safe auto-fix candidates:",
+            "None",
+            "Needs manual checking:",
+            "- Abstract word count is outside the template limit (category: body_text, severity: warning, priority: 4)",
+            "Recommended review order:",
+            "1. Review figure numbering.",
+            "What this guidance cannot decide:",
+            "- Whether to accept or reject the manuscript.",
+        ])
+        llm = CapturingLLM(response)
+
+        guidance = llm.generate_review_guidance(_pre_fix_payload())
+
+        self.assertEqual(
+            guidance,
+            ReviewGuidanceBuilder().build_pre_fix_fallback(_pre_fix_payload()),
+        )
+
     def test_post_fix_summary_uses_fixed_sections_and_fallback(self):
         llm = CapturingLLM("")
 
