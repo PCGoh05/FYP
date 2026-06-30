@@ -73,6 +73,9 @@ class ReportGenerator:
         # Add generation timestamp
         self._add_timestamp()
 
+        # Add usage guidance
+        self._add_usage_section()
+
         # Add summary section
         self._add_summary_section()
 
@@ -117,6 +120,43 @@ class ReportGenerator:
         run.font.color.rgb = RGBColor(128, 128, 128)
 
         self.document.add_paragraph()  # Spacing
+
+    def _add_usage_section(self):
+        """Add short guidance that explains the report and marked original outputs."""
+        self.document.add_heading("How to Use This Report", level=1)
+
+        guidance_items = [
+            (
+                "Corrected Manuscript",
+                "contains supported formatting fixes that were applied automatically.",
+            ),
+            (
+                "Marked Original",
+                "keeps the submitted manuscript layout; yellow highlights mark changed locations, not necessarily remaining errors.",
+            ),
+            (
+                "Fix Summary Report",
+                "lists what changed, the target rules, post-fix validation, and issues that still need manual review.",
+            ),
+        ]
+
+        for label, description in guidance_items:
+            paragraph = self.document.add_paragraph(style=None)
+            paragraph.style = self.document.styles["Normal"]
+            paragraph.paragraph_format.left_indent = Inches(0.15)
+            label_run = paragraph.add_run(f"{label}: ")
+            label_run.font.bold = True
+            paragraph.add_run(description)
+
+        note = self.document.add_paragraph()
+        note.add_run(
+            "A highlighted running header usually means page-header tab spacing was normalized "
+            "to reduce wrapping in Microsoft Word; it does not mean the journal name itself is wrong."
+        )
+        note.runs[0].font.italic = True
+        note.runs[0].font.color.rgb = RGBColor(96, 96, 96)
+
+        self.document.add_paragraph()
 
     def _add_summary_section(self):
         """Add summary section with change statistics"""

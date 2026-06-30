@@ -44,6 +44,19 @@ class ReportGeneratorTest(unittest.TestCase):
         self.assertIn("Issues after auto-fix: 1", text)
         self.assertIn("Remaining Issues After Auto-Fix", text)
 
+    def test_report_explains_difference_from_marked_original(self):
+        report = ReportGenerator(
+            rules={},
+            changes=[],
+            check_result=None,
+        ).generate_comparison_report()
+
+        text = "\n".join(paragraph.text for paragraph in report.paragraphs)
+
+        self.assertIn("How to Use This Report", text)
+        self.assertIn("Marked Original", text)
+        self.assertIn("yellow highlights mark changed locations", text)
+
 
 if __name__ == "__main__":
     unittest.main()

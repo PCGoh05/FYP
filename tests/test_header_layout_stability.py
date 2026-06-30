@@ -229,6 +229,23 @@ class HeaderLayoutStabilityTest(unittest.TestCase):
             self.assertTrue(header_runs)
             self.assertEqual(header_runs[0].font.highlight_color, WD_COLOR_INDEX.YELLOW)
 
+    def test_highlighted_document_preserves_original_body_without_inserted_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "unstable.docx"
+            _save_unstable_docx(path)
+
+            checker = ManuscriptChecker(_rules()).load_manuscript(str(path))
+            result = checker.check_all()
+            fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+
+            highlighted_doc = Document(BytesIO(fixer.get_highlighted_document_bytes()))
+            paragraph_texts = [paragraph.text for paragraph in highlighted_doc.paragraphs]
+
+            self.assertNotIn("Highlighted Formatting Changes", paragraph_texts)
+            self.assertEqual(paragraph_texts[0], "Journal of Informatics and")
+
 
 if __name__ == "__main__":
     unittest.main()

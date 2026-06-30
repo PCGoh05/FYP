@@ -342,6 +342,8 @@ class ParagraphClassifier:
         """Return True for journal names and publication metadata."""
         if index > 8:
             return False
+        if self._starts_with_label(text_lower, "abstract") or self._starts_with_keywords(text_lower):
+            return False
 
         return self._matches_pattern_group("journal_header", text_lower)
 
@@ -377,7 +379,7 @@ class ParagraphClassifier:
         text_lower = text.lower()
         if self._is_journal_header(text_lower, index):
             return False
-        if self._is_section_heading(text):
+        if self._is_section_heading(text, allow_custom_all_caps=False):
             return False
         if self._starts_with_label(text_lower, "abstract") or self._starts_with_keywords(text_lower):
             return False
@@ -397,7 +399,7 @@ class ParagraphClassifier:
 
         return False
 
-    def _is_section_heading(self, text: str) -> bool:
+    def _is_section_heading(self, text: str, allow_custom_all_caps: bool = True) -> bool:
         """Return True for common academic section headings."""
         text_clean = re.sub(r"\s+", " ", text.strip())
         text_lower = text_clean.lower().strip(".")
@@ -419,9 +421,34 @@ class ParagraphClassifier:
                 return True
 
         if text_clean.isupper() and 4 <= len(text_clean) <= 80:
-            return any(word in text_lower for word in section_terms)
+            if any(word in text_lower for word in section_terms):
+                return True
+
+        if allow_custom_all_caps and self._is_custom_all_caps_section_heading(text_clean, text_lower):
+            return True
 
         return False
+
+    def _is_custom_all_caps_section_heading(self, text_clean: str, text_lower: str) -> bool:
+        """Return True for short custom section headings that are not profile terms."""
+        if not text_clean.isupper():
+            return False
+        if not 10 <= len(text_clean) <= 100:
+            return False
+        if text_clean.endswith((".", ",", ";", ":")):
+            return False
+        if re.search(r"[@:/\\]|https?|www\.|doi|orcid|eissn|issn", text_lower):
+            return False
+        if re.search(r"\b(figure|fig|table|vol|no|pp|pages?)\b", text_lower):
+            return False
+
+        words = re.findall(r"[A-Z][A-Z0-9'-]*", text_clean)
+        if not 2 <= len(words) <= 12:
+            return False
+        if any(len(word) > 28 for word in words):
+            return False
+
+        return True
 
     def _is_template_instruction(self, text_lower: str) -> bool:
         """Return True for template-only formatting instructions."""

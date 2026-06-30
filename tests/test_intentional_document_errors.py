@@ -9,6 +9,7 @@ from docx.shared import Inches, Pt
 
 from modules.auto_fixer import AutoFixer
 from modules.manuscript_checker import ManuscriptChecker
+from modules.paragraph_classifier import ParagraphType
 
 
 def _rules():
@@ -188,6 +189,45 @@ class IntentionalDocumentErrorsTest(unittest.TestCase):
         self.assertNotIn("Body text font does not match template", body_descriptions)
         self.assertNotIn("Body text font size does not match template", body_descriptions)
         self.assertNotIn("Body text bold formatting does not match template", body_descriptions)
+
+    def test_auto_fix_preserves_bold_on_custom_all_caps_section_heading(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "custom_heading.docx"
+            document = Document()
+            _add_paragraph(document, "Journal of Informatics and", "Palatino Linotype", 24, True, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+            _add_paragraph(document, "Web Engineering", "Palatino Linotype", 24, True, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+            _add_paragraph(document, "Vol. 5 No. 2 (June 2026)\teISSN: 2821-370X", "Palatino Linotype", 10, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+            _add_paragraph(document, "A Test Paper Title for Format Validation", size=24, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+            _add_paragraph(document, "Abstract - This is the abstract.", size=9)
+            _add_paragraph(document, "Keywords - checking, template", size=9)
+            _add_paragraph(document, "INTRODUCTION", size=10, bold=True)
+            _add_paragraph(document, "This body paragraph should be normal text.", size=10, bold=False)
+            _add_paragraph(document, "DOMAIN-SPECIFIC SYNTHETIC DATASET EXAMPLES", size=10, bold=True)
+            _add_paragraph(document, "This paragraph belongs under the custom heading.", size=10, bold=False)
+            _add_paragraph(document, "CONCLUSION", size=10, bold=True)
+            _add_paragraph(document, "Conclusion text.", size=10, bold=False)
+            _add_paragraph(document, "REFERENCES", size=10, bold=True)
+            _add_paragraph(document, "[1] Reference text.", size=9, bold=False)
+            document.save(path)
+
+            before = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+            custom_heading = next(
+                cp for cp in before.classifications
+                if cp.text == "DOMAIN-SPECIFIC SYNTHETIC DATASET EXAMPLES"
+            )
+            self.assertEqual(custom_heading.paragraph_type, ParagraphType.SECTION_HEADING)
+
+            fixer = AutoFixer(_rules(), before.classifications, before.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        fixed_heading = next(
+            paragraph for paragraph in fixed.paragraphs
+            if paragraph.text == "DOMAIN-SPECIFIC SYNTHETIC DATASET EXAMPLES"
+        )
+        visible_runs = [run for run in fixed_heading.runs if run.text.strip()]
+        self.assertTrue(all(run.font.bold for run in visible_runs))
 
 
 if __name__ == "__main__":

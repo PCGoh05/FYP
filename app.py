@@ -1239,8 +1239,9 @@ def display_download_section():
     labels = get_download_result_labels(download_format)
     st.caption(
         "Corrected Manuscript applies supported formatting fixes. Marked Original keeps the submitted manuscript "
-        "and highlights locations that were changed or need review. Fix Summary Report lists the changes and "
-        "remaining manual-review items."
+        "and highlights changed locations in yellow. Yellow does not mean the issue remains; a highlighted running "
+        "header usually means header tab spacing was normalized. Fix Summary Report lists the changes and remaining "
+        "manual-review items."
     )
 
     output_timestamp = st.session_state.output_timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -1375,36 +1375,6 @@ class AutoFixer:
         """Get list of all change records"""
         return self.changes
 
-    def _prepend_highlight_summary(self, document: Document):
-        """Add a compact summary at the start of the highlighted document."""
-        if not self.changes:
-            return
-
-        first_element = document.paragraphs[0]._p if document.paragraphs else None
-        summary_lines = [
-            "Highlighted Formatting Changes",
-            "Yellow highlight marks original text that was changed by the formatter.",
-            f"Total formatting properties changed: {len(self.changes)}",
-        ]
-        for change in self.changes[:20]:
-            if change.paragraph_index < 0:
-                summary_lines.append(
-                    f"- {change.location}: {change.property_name} changed from "
-                    f"{change.current_value} to {change.target_value}"
-                )
-            else:
-                summary_lines.append(
-                    f"- Paragraph {change.paragraph_index + 1}: {change.property_name} "
-                    f"changed from {change.current_value} to {change.target_value}"
-                )
-        if len(self.changes) > 20:
-            summary_lines.append(f"- {len(self.changes) - 20} more changes are listed in the report.")
-
-        for line in reversed(summary_lines):
-            paragraph = document.add_paragraph(line)
-            if first_element is not None:
-                first_element.addprevious(paragraph._p)
-
     def _run_matches_change(self, run, change: ChangeRecord) -> bool:
         """Return True when a run likely contains the changed property."""
         property_name = change.property_name
@@ -1460,7 +1430,7 @@ class AutoFixer:
     def get_highlighted_document_bytes(self) -> bytes:
         """
         Get the original document with highlighted changed locations.
-        A summary is inserted at the beginning, and changed runs are highlighted in yellow.
+        Changed runs are highlighted in yellow without adding summary content.
         
         Returns:
             Document bytes with yellow highlighting on original changed locations
@@ -1489,8 +1459,6 @@ class AutoFixer:
                 for run in paragraph.runs:
                     if run.text.strip():
                         run.font.highlight_color = WD_COLOR_INDEX.YELLOW
-
-        self._prepend_highlight_summary(highlighted_document)
 
         buffer = BytesIO()
         highlighted_document.save(buffer)
