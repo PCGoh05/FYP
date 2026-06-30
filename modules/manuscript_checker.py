@@ -770,7 +770,7 @@ class ManuscriptChecker:
                 or self.document.paragraphs[cp.index]._p.find(".//" + qn("m:oMathPara")) is not None
                 for cp in abstract_paragraphs
             )
-            has_equation_text = bool(re.search(r"\b[\w]+\s*[=<>]\s*[\w]+", abstract_text))
+            has_equation_text = self._has_equation_like_text(abstract_text)
             if prohibit_equations and (has_math_xml or has_equation_text):
                 self._add_issue(
                     category="body_text",
@@ -794,7 +794,18 @@ class ManuscriptChecker:
                     severity="warning",
                     text_preview=truncate_text(abstract_text, 50),
                 )
-    
+
+    @staticmethod
+    def _has_equation_like_text(text: str) -> bool:
+        """Return True for compact mathematical or statistical formula patterns."""
+        patterns = [
+            r"\b[\w\u0370-\u03ff]+\s*[=<>]\s*[.\w\u0370-\u03ff]+",
+            r"\b[A-Za-z]\s*\([^)]*\)\s*=\s*-?\d+(?:\.\d+)?",
+            r"\bp\s*[<>=]\s*\.?\d+",
+            r"\b(?:r|r2|r\u00b2|f1|wer|mae|mse|rmse)\s*[=<>]\s*\.?\d+",
+        ]
+        return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+
     def _check_keywords_content(self):
         """Check keywords content formatting"""
         # Keywords typically use same format as abstract

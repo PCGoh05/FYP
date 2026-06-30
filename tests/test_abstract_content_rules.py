@@ -20,6 +20,8 @@ def _rules():
         "abstract": {
             "font_name": "Times New Roman",
             "font_size": 9,
+            "min_words": 200,
+            "max_words": 300,
             "one_paragraph": True,
             "prohibit_equations": True,
             "prohibit_tables": True,
@@ -67,6 +69,69 @@ class AbstractContentRulesTest(unittest.TestCase):
         self.assertIn("Abstract contains citation or reference markers", descriptions)
         self.assertIn("Abstract contains equation-like content", descriptions)
         self.assertIn("Abstract contains table or figure material", descriptions)
+
+    def test_checker_reports_abstract_over_word_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "long_abstract.docx"
+            document = Document()
+            for text in [
+                "Journal of Informatics and",
+                "Web Engineering",
+                "Vol. 5 No. 2 (June 2026) eISSN: 2821-370X",
+                "A Test Paper Title for Abstract Validation",
+            ]:
+                document.add_paragraph(text)
+            document.add_paragraph("Abstract - " + "word " * 301)
+            document.add_paragraph("Keywords - Testing, Abstract, Content, Rules, Checker")
+            document.add_paragraph("INTRODUCTION")
+            document.add_paragraph("Body text.")
+            document.add_paragraph("CONCLUSION")
+            document.add_paragraph("Conclusion text.")
+            document.add_paragraph("REFERENCES")
+            document.add_paragraph("[1] Reference text.")
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+        issues = result.issues_by_category.get("body_text", [])
+        matching = [
+            issue for issue in issues
+            if issue.description == "Abstract word count is outside the template limit"
+        ]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0].current_value, "301 words")
+        self.assertEqual(matching[0].expected_value, "200-300 words")
+
+    def test_checker_reports_statistical_formula_like_abstract_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "abstract_formula.docx"
+            document = Document()
+            for text in [
+                "Journal of Informatics and",
+                "Web Engineering",
+                "Vol. 5 No. 2 (June 2026) eISSN: 2821-370X",
+                "A Test Paper Title for Abstract Validation",
+            ]:
+                document.add_paragraph(text)
+            document.add_paragraph(
+                "Abstract - The model showed significance with p < .05 and F(1, 99) = 4.50."
+            )
+            document.add_paragraph("Keywords - Testing, Abstract, Content, Rules, Checker")
+            document.add_paragraph("INTRODUCTION")
+            document.add_paragraph("Body text.")
+            document.add_paragraph("CONCLUSION")
+            document.add_paragraph("Conclusion text.")
+            document.add_paragraph("REFERENCES")
+            document.add_paragraph("[1] Reference text.")
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+        descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("body_text", [])
+        ]
+        self.assertIn("Abstract contains equation-like content", descriptions)
 
 
 if __name__ == "__main__":
