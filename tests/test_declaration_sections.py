@@ -31,6 +31,40 @@ def _rules():
 
 
 class DeclarationSectionsTest(unittest.TestCase):
+    def test_body_sentence_does_not_override_real_conclusion_heading(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "section_evidence.docx"
+            document = Document()
+            for text in [
+                "Journal of Informatics and",
+                "Web Engineering",
+                "A Test Paper Title",
+                "Abstract - This is the abstract.",
+                "Keywords - Testing, Rules, Sections, Format, Checker",
+                "INTRODUCTION",
+                (
+                    "The rest of this paper is organized as follows: Section 2 describes the method, "
+                    "and Section 6 presents the conclusion."
+                ),
+                "CONCLUSION",
+                "Conclusion text.",
+                "REFERENCES",
+                "[1] Reference text.",
+            ]:
+                document.add_paragraph(text)
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+        self.assertEqual(result.document_structure["sections"]["conclusion"]["index"], 7)
+        self.assertEqual(result.document_structure["sections"]["conclusion"]["format_status"], "valid")
+        weak_section_issues = [
+            issue for issue in result.issues_by_category.get("structure", [])
+            if issue.description == "Section was found but its heading role is not confidently detected"
+            and issue.location == "Conclusion Section"
+        ]
+        self.assertEqual(weak_section_issues, [])
+
     def test_checker_reports_missing_required_jiwe_declarations(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "missing_declarations.docx"

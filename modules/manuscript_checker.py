@@ -1019,7 +1019,12 @@ class ManuscriptChecker:
         }
 
         def mark_section(section_name: str, cp: ClassifiedParagraph, format_status: str):
-            if section_name not in sections or sections[section_name]["found"]:
+            if section_name not in sections:
+                return
+            existing = sections[section_name]
+            if existing["found"] and not (
+                existing["format_status"] != "valid" and format_status == "valid"
+            ):
                 return
             sections[section_name] = {
                 "found": True,
@@ -1048,11 +1053,11 @@ class ManuscriptChecker:
                 } else "weak"
                 mark_section("keywords", cp, status)
 
-            if "introduction" in text_lower:
+            if "introduction" in text_lower and cp.paragraph_type != ParagraphType.BODY:
                 status = "valid" if cp.paragraph_type == ParagraphType.SECTION_HEADING else "weak"
                 mark_section("introduction", cp, status)
 
-            if "conclusion" in text_lower:
+            if "conclusion" in text_lower and cp.paragraph_type != ParagraphType.BODY:
                 status = "valid" if cp.paragraph_type == ParagraphType.SECTION_HEADING else "weak"
                 mark_section("conclusion", cp, status)
 
