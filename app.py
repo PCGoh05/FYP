@@ -178,6 +178,55 @@ def get_llm_status_notice(
     )
 
 
+def run_llm_smoke_test(llm):
+    """Run a tiny generation request to prove that the AI explanation service works."""
+    if not llm or not llm.is_available():
+        return (
+            "warning",
+            "AI explanation service is not connected yet. Check the server key and retry the AI connection.",
+        )
+    try:
+        response = llm.generate(
+            "Reply with exactly AI_READY.",
+            "You are a service health checker. Return only the requested token.",
+        )
+    except Exception as exc:
+        return (
+            "warning",
+            f"AI test request failed: {type(exc).__name__}. Rule-based explanations are still available.",
+        )
+
+    if response.strip() == "AI_READY":
+        return (
+            "success",
+            "AI explanation service returned a valid test response. AI guidance buttons can use the server model.",
+        )
+    if not response.strip():
+        return (
+            "warning",
+            "AI service connected but did not return a test response. Rule-based explanations will still be shown.",
+        )
+    return (
+        "warning",
+        "AI service returned an unexpected response. Rule-based explanations will still be shown.",
+    )
+
+
+def get_download_result_labels(download_format: str):
+    """Return clear labels for result download buttons."""
+    if download_format == "DOCX (Word)":
+        return {
+            "corrected": "Download Corrected Manuscript (DOCX)",
+            "highlighted": "Download Marked Original for Review (DOCX)",
+            "report": "Download Fix Summary Report (DOCX)",
+        }
+    return {
+        "corrected": "Convert Corrected Manuscript to PDF",
+        "highlighted": "Download Marked Original for Review (DOCX)",
+        "report": "Convert Fix Summary Report to PDF",
+    }
+
+
 def format_section_label(section_name: str) -> str:
     """Return a readable label for a document section key."""
     return str(section_name).replace("_", " ").title()
@@ -373,6 +422,8 @@ def init_session_state():
         st.session_state.llm_source = ""
     if "llm_connection_error" not in st.session_state:
         st.session_state.llm_connection_error = ""
+    if "llm_smoke_test_notice" not in st.session_state:
+        st.session_state.llm_smoke_test_notice = None
     if "ai_explanations_enabled" not in st.session_state:
         st.session_state.ai_explanations_enabled = False
     if "manuscript_bytes" not in st.session_state:
@@ -441,6 +492,7 @@ def display_sidebar():
                 st.session_state.llm_connection_attempted = False
                 st.session_state.llm_source = ""
                 st.session_state.llm_connection_error = ""
+                st.session_state.llm_smoke_test_notice = None
 
             # Show current status
             key_configured = bool(get_server_nvidia_api_key()) if ai_enabled else False
@@ -454,11 +506,20 @@ def display_sidebar():
             getattr(st, status_level)(status_message)
 
             if llm_connected:
+                if st.button("Test AI explanation service"):
+                    st.session_state.llm_smoke_test_notice = run_llm_smoke_test(
+                        st.session_state.llm
+                    )
+                    st.rerun()
+                if st.session_state.llm_smoke_test_notice:
+                    test_level, test_message = st.session_state.llm_smoke_test_notice
+                    getattr(st, test_level)(test_message)
                 if st.button("Disconnect LLM"):
                     st.session_state.llm = None
                     st.session_state.llm_connection_attempted = False
                     st.session_state.llm_source = ""
                     st.session_state.llm_connection_error = ""
+                    st.session_state.llm_smoke_test_notice = None
                     st.session_state.ai_explanations_enabled = False
                     st.rerun()
             elif ai_enabled:
@@ -466,6 +527,7 @@ def display_sidebar():
                     st.session_state.llm = None
                     st.session_state.llm_connection_attempted = False
                     st.session_state.llm_connection_error = ""
+                    st.session_state.llm_smoke_test_notice = None
                     st.rerun()
                 if os.environ.get("SHOW_LLM_KEY_OVERRIDE") == "1":
                     with st.expander("Developer key override", expanded=False):
@@ -1106,9 +1168,11 @@ def display_download_section():
     pdf_notice = get_pdf_download_notice(pdf_download_supported, pdf_status)
     if pdf_notice:
         st.info(pdf_notice)
+    labels = get_download_result_labels(download_format)
     st.caption(
-        "Corrected document contains applied fixes. Highlighted document keeps the original manuscript "
-        "and marks changed locations in yellow. Detailed report explains what changed."
+        "Corrected Manuscript applies supported formatting fixes. Marked Original keeps the submitted manuscript "
+        "and highlights locations that were changed or need review. Fix Summary Report lists the changes and "
+        "remaining manual-review items."
     )
 
     output_timestamp = st.session_state.output_timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1120,16 +1184,17 @@ def display_download_section():
             base_filename = st.session_state.manuscript_filename
             if download_format == "DOCX (Word)":
                 st.download_button(
-                    label="Download Corrected Document (DOCX)",
+                    label=labels["corrected"],
                     data=st.session_state.fixed_doc_bytes,
                     file_name=f"corrected_{base_filename}_{output_timestamp}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True
+                    use_container_width=True,
+                    help="This is the editable manuscript after supported auto-fixes were applied."
                 )
             else:
                 # PDF download
                 if pdf_download_supported:
-                    if st.button("Convert and Download as PDF", use_container_width=True, key="download_corrected_pdf"):
+                    if st.button(labels["corrected"], use_container_width=True, key="download_corrected_pdf"):
                         with st.spinner("Converting to PDF..."):
                             try:
                                 pdf_bytes = docx_to_pdf(st.session_state.fixed_doc_bytes)
@@ -1147,37 +1212,38 @@ def display_download_section():
                 else:
                     st.warning(get_docx_to_pdf_status())
         else:
-            st.button("Download Corrected Document", disabled=True, use_container_width=True)
+            st.button("Download Corrected Manuscript", disabled=True, use_container_width=True)
 
     with col2:
         if st.session_state.highlighted_doc_bytes:
             base_filename = st.session_state.manuscript_filename
             st.download_button(
-                label="Download Original with Highlighted Changes (DOCX)",
+                label=labels["highlighted"],
                 data=st.session_state.highlighted_doc_bytes,
                 file_name=f"highlighted_{base_filename}_{output_timestamp}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 use_container_width=True,
-                help="Highlights are shown on the original manuscript to indicate locations changed in the corrected document."
+                help="This copy keeps the original text/layout and marks changed or review-needed locations in yellow."
             )
         else:
-            st.button("Download Original with Highlighted Changes", disabled=True, use_container_width=True)
+            st.button("Download Marked Original for Review", disabled=True, use_container_width=True)
 
     with col3:
         if st.session_state.report_bytes:
             base_filename = st.session_state.manuscript_filename
             if download_format == "DOCX (Word)":
                 st.download_button(
-                    label="Download Detailed Report (DOCX)",
+                    label=labels["report"],
                     data=st.session_state.report_bytes,
                     file_name=f"{base_filename}_report_{output_timestamp}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True
+                    use_container_width=True,
+                    help="This report summarizes detected issues, applied fixes, target rules, and remaining checks."
                 )
             else:
                 # PDF download
                 if pdf_download_supported:
-                    if st.button("Convert and Download Report as PDF", use_container_width=True, key="download_report_pdf"):
+                    if st.button(labels["report"], use_container_width=True, key="download_report_pdf"):
                         with st.spinner("Converting to PDF..."):
                             try:
                                 pdf_bytes = docx_to_pdf(st.session_state.report_bytes)
@@ -1195,7 +1261,7 @@ def display_download_section():
                 else:
                     st.warning(get_docx_to_pdf_status())
         else:
-            st.button("Download Detailed Report", disabled=True, use_container_width=True)
+            st.button("Download Fix Summary Report", disabled=True, use_container_width=True)
 
 
 def main():

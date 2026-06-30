@@ -5,12 +5,29 @@ from pathlib import Path
 from unittest.mock import patch
 
 import app
-from app import get_llm_status_notice, get_server_nvidia_api_key
+from app import (
+    get_download_result_labels,
+    get_llm_status_notice,
+    get_server_nvidia_api_key,
+    run_llm_smoke_test,
+)
 
 
 class EmptySecrets:
     def get(self, name, default=None):
         return default
+
+
+class FakeLLM:
+    def __init__(self, available=True, response="AI_READY"):
+        self.available = available
+        self.response = response
+
+    def is_available(self):
+        return self.available
+
+    def generate(self, prompt, system_prompt=None):
+        return self.response
 
 
 class LLMStatusUITest(unittest.TestCase):
@@ -72,6 +89,25 @@ class LLMStatusUITest(unittest.TestCase):
                     self.assertEqual(get_server_nvidia_api_key(), "nvapi-local-test")
             finally:
                 os.chdir(original_cwd)
+
+    def test_llm_smoke_test_reports_success_only_after_generation(self):
+        level, message = run_llm_smoke_test(FakeLLM(response="AI_READY"))
+
+        self.assertEqual(level, "success")
+        self.assertIn("test response", message)
+
+    def test_llm_smoke_test_reports_unexpected_response(self):
+        level, message = run_llm_smoke_test(FakeLLM(response="something else"))
+
+        self.assertEqual(level, "warning")
+        self.assertIn("unexpected response", message)
+
+    def test_download_result_labels_are_user_friendly(self):
+        labels = get_download_result_labels("DOCX (Word)")
+
+        self.assertEqual(labels["corrected"], "Download Corrected Manuscript (DOCX)")
+        self.assertEqual(labels["highlighted"], "Download Marked Original for Review (DOCX)")
+        self.assertEqual(labels["report"], "Download Fix Summary Report (DOCX)")
 
 
 if __name__ == "__main__":
