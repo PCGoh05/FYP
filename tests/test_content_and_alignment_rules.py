@@ -116,6 +116,17 @@ class ContentAndAlignmentRulesTest(unittest.TestCase):
         self.assertEqual(rules["abstract"]["max_words"], 250)
         self.assertEqual(rules["abstract"]["alignment"], "JUSTIFY")
 
+    def test_template_extractor_keeps_profile_caption_italic_when_template_is_silent(self):
+        document = Document()
+        caption = document.add_paragraph()
+        run = caption.add_run("Figure 1: Example caption")
+        run.font.name = "Times New Roman"
+        run.font.size = Pt(10)
+
+        rules = TemplateExtractor(document=document).extract_all_rules()
+
+        self.assertFalse(rules["caption"]["italic"])
+
     def test_checker_reports_abstract_word_count_and_alignment_mismatches(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "alignment_issues.docx"

@@ -1045,10 +1045,11 @@ Answer with ONLY "yes" or "no"."""
                 instruction_fonts.append(font_name)
         
         if caption_fonts or caption_sizes:
+            default_caption = self._profile_default("caption", DEFAULT_RULES["caption"])
             return {
-                "font_name": Counter(caption_fonts).most_common(1)[0][0] if caption_fonts else self._profile_default("caption", DEFAULT_RULES["caption"]).get("font_name", "Times New Roman"),
-                "font_size": Counter(caption_sizes).most_common(1)[0][0] if caption_sizes else self._profile_default("caption", DEFAULT_RULES["caption"]).get("font_size", 10),
-                "italic": Counter(caption_italic).most_common(1)[0][0] if caption_italic else True
+                "font_name": Counter(caption_fonts).most_common(1)[0][0] if caption_fonts else default_caption.get("font_name", "Times New Roman"),
+                "font_size": Counter(caption_sizes).most_common(1)[0][0] if caption_sizes else default_caption.get("font_size", 10),
+                "italic": Counter(caption_italic).most_common(1)[0][0] if caption_italic else default_caption.get("italic", False)
             }
 
         if instruction_fonts or instruction_sizes:
@@ -1058,7 +1059,7 @@ Answer with ONLY "yes" or "no"."""
                 "italic": False
             }
         
-        return self._profile_default("caption", DEFAULT_RULES.get("caption", {"font_name": "Times New Roman", "font_size": 10, "italic": True}))
+        return self._profile_default("caption", DEFAULT_RULES.get("caption", {"font_name": "Times New Roman", "font_size": 10, "italic": False}))
     
     def _extract_reference_style(self) -> Dict[str, Any]:
         """Extract reference entry style - ENHANCED"""

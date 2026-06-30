@@ -12,6 +12,7 @@ import subprocess
 import traceback
 from io import BytesIO
 from datetime import datetime
+from pathlib import Path
 
 # Import modules
 from modules.template_extractor import TemplateExtractor
@@ -71,6 +72,30 @@ def get_default_template_rules():
     return rules
 
 
+def get_local_env_value(name: str) -> str:
+    """Read a single key from a local .env file for local development."""
+    env_paths = [
+        Path.cwd() / ".env",
+        Path(__file__).resolve().parent / ".env",
+    ]
+    seen = set()
+    for env_path in env_paths:
+        if env_path in seen or not env_path.exists():
+            continue
+        seen.add(env_path)
+        try:
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#") or "=" not in stripped:
+                    continue
+                key, value = stripped.split("=", 1)
+                if key.strip() == name:
+                    return value.strip().strip('"').strip("'")
+        except OSError:
+            continue
+    return ""
+
+
 def get_server_nvidia_api_key() -> str:
     """Return a server-managed NVIDIA API key without exposing it in the UI."""
     key_names = [
@@ -90,6 +115,7 @@ def get_server_nvidia_api_key() -> str:
         pass
 
     secret_candidates.extend(os.environ.get(name, "") for name in key_names)
+    secret_candidates.extend(get_local_env_value(name) for name in key_names)
     return next((key for key in secret_candidates if key), "")
 
 
