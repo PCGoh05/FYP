@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
+from config import LLM_CONFIG
 from modules.llm_integration import LLMIntegration, fallback_explain_issue
 from modules.review_guidance import ReviewGuidanceBuilder
 
@@ -16,6 +17,18 @@ class CapturingLLM(LLMIntegration):
         self.last_prompt = prompt
         self.last_system_prompt = system_prompt or ""
         return self.response
+
+
+class FailingCompletionClient:
+    class Chat:
+        class Completions:
+            @staticmethod
+            def create(**kwargs):
+                raise TimeoutError("request timed out")
+
+        completions = Completions()
+
+    chat = Chat()
 
 
 def _issue():
@@ -65,6 +78,12 @@ def _post_fix_payload():
 
 
 class LLMExplanationTest(unittest.TestCase):
+    def test_default_llm_model_is_lightweight_for_explanations(self):
+        self.assertEqual(
+            LLM_CONFIG["nvidia_model"],
+            "meta/llama-3.1-8b-instruct",
+        )
+
     def test_fallback_explanation_uses_fixed_useful_sections(self):
         llm = LLMIntegration.__new__(LLMIntegration)
         llm._available = False
@@ -156,6 +175,22 @@ class LLMExplanationTest(unittest.TestCase):
 
         self.assertTrue(llm.is_available())
         client.chat.completions.create.assert_not_called()
+
+    def test_generate_records_last_error_when_request_fails(self):
+        llm = LLMIntegration.__new__(LLMIntegration)
+        llm._available = True
+        llm._client = FailingCompletionClient()
+        llm.model = "test-model"
+        llm.max_tokens = 50
+        llm.temperature = 0.1
+        llm.last_error = ""
+
+        response = llm.generate("test")
+
+        self.assertEqual(response, "")
+        self.assertFalse(llm.is_available())
+        self.assertIn("TimeoutError", llm.last_error)
+        self.assertIn("request timed out", llm.last_error)
 
 
 if __name__ == "__main__":

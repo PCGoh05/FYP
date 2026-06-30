@@ -196,12 +196,19 @@ def run_llm_smoke_test(llm):
             f"AI test request failed: {type(exc).__name__}. Rule-based explanations are still available.",
         )
 
-    if response.strip() == "AI_READY":
+    normalized_response = response.strip().strip(" .,!?:;\"'`")
+    if normalized_response == "AI_READY":
         return (
             "success",
             "AI explanation service returned a valid test response. AI guidance buttons can use the server model.",
         )
     if not response.strip():
+        last_error = getattr(llm, "last_error", "")
+        if last_error:
+            return (
+                "warning",
+                f"AI test request failed: {last_error}. Rule-based explanations are still available.",
+            )
         return (
             "warning",
             "AI service connected but did not return a test response. Rule-based explanations will still be shown.",
@@ -225,6 +232,40 @@ def get_download_result_labels(download_format: str):
         "highlighted": "Download Marked Original for Review (DOCX)",
         "report": "Convert Fix Summary Report to PDF",
     }
+
+
+def get_issue_explanation_button_label(ai_enabled: bool, connected: bool) -> str:
+    """Return the issue explanation button label for the current AI state."""
+    if ai_enabled and connected:
+        return "Explain with AI"
+    return "Explain with Rule-Based Guidance"
+
+
+def get_review_guidance_mode_notice(
+    ai_enabled: bool,
+    connected: bool,
+    key_configured: bool,
+):
+    """Return a clear notice explaining which guidance source will be used."""
+    if connected:
+        return (
+            "success",
+            "AI-enhanced guidance is available. AI explains grouped rule results; it does not detect new issues.",
+        )
+    if ai_enabled and key_configured:
+        return (
+            "warning",
+            "Rule-based guidance will be used because AI is enabled but not connected.",
+        )
+    if ai_enabled:
+        return (
+            "warning",
+            "Rule-based guidance will be used because no server AI key is configured.",
+        )
+    return (
+        "info",
+        "Rule-based guidance is available. Enable AI explanations only if you want AI-written wording.",
+    )
 
 
 def format_section_label(section_name: str) -> str:
@@ -851,6 +892,15 @@ def display_check_results(result):
             if not issues:
                 st.success(f"No {category.replace('_', ' ')} issues found")
             else:
+                ai_ready = bool(
+                    st.session_state.ai_explanations_enabled
+                    and st.session_state.llm
+                    and st.session_state.llm.is_available()
+                )
+                explanation_label = get_issue_explanation_button_label(
+                    st.session_state.ai_explanations_enabled,
+                    ai_ready,
+                )
                 for issue_idx, issue in enumerate(issues):
                     severity_label = "Error" if issue.severity == "error" else "Warning"
                     st.markdown(f"""
@@ -859,26 +909,33 @@ def display_check_results(result):
                     - Current: `{issue.current_value}` Expected: `{issue.expected_value}`
                     """)
 
-                    # Optional AI explanation, with deterministic fallback when unavailable.
-                    if st.session_state.ai_explanations_enabled:
-                        if st.button(f"Explain This Issue", key=f"explain_{category}_{tab_idx}_{issue_idx}_{issue.paragraph_index}"):
-                            builder = ReviewGuidanceBuilder()
-                            issue_payload = {
-                                "category": category,
-                                "location": builder.redact_text(issue.location),
-                                "description": issue.description,
-                                "current_value": builder.redact_text(issue.current_value),
-                                "expected_value": builder.redact_text(issue.expected_value),
-                                "severity": issue.severity,
-                                "text_preview": builder.redact_text(
-                                    issue.text_preview,
-                                ),
-                            }
-                            if ensure_llm_connection():
-                                explanation = st.session_state.llm.explain_error(issue_payload)
-                            else:
-                                explanation = fallback_explain_issue(issue_payload)
-                            st.info(explanation)
+                    if st.button(
+                        explanation_label,
+                        key=f"explain_{category}_{tab_idx}_{issue_idx}_{issue.paragraph_index}",
+                    ):
+                        builder = ReviewGuidanceBuilder()
+                        issue_payload = {
+                            "category": category,
+                            "location": builder.redact_text(issue.location),
+                            "description": issue.description,
+                            "current_value": builder.redact_text(issue.current_value),
+                            "expected_value": builder.redact_text(issue.expected_value),
+                            "severity": issue.severity,
+                            "text_preview": builder.redact_text(
+                                issue.text_preview,
+                            ),
+                        }
+                        used_ai = (
+                            st.session_state.ai_explanations_enabled
+                            and ensure_llm_connection()
+                        )
+                        if used_ai:
+                            explanation = st.session_state.llm.explain_error(issue_payload)
+                            st.caption("Source: AI explanation based on rule-detected issue metadata")
+                        else:
+                            explanation = fallback_explain_issue(issue_payload)
+                            st.caption("Source: Rule-based explanation")
+                        st.info(explanation)
 
     st.subheader("Review Guidance")
     st.caption(
@@ -886,6 +943,17 @@ def display_check_results(result):
         "issues or approve manuscripts. When enabled, only grouped and redacted "
         "issue metadata is sent to the configured API."
     )
+    guidance_ai_ready = bool(
+        st.session_state.ai_explanations_enabled
+        and st.session_state.llm
+        and st.session_state.llm.is_available()
+    )
+    guidance_level, guidance_message = get_review_guidance_mode_notice(
+        ai_enabled=st.session_state.ai_explanations_enabled,
+        connected=guidance_ai_ready,
+        key_configured=bool(get_server_nvidia_api_key()),
+    )
+    getattr(st, guidance_level)(guidance_message)
     if st.button("Generate Review Guidance", key="generate_review_guidance"):
         payload = build_pre_fix_guidance_payload(
             result,
@@ -908,7 +976,7 @@ def display_check_results(result):
         st.session_state.pre_fix_guidance_source = source
 
     if st.session_state.pre_fix_guidance:
-        st.caption(st.session_state.pre_fix_guidance_source)
+        st.caption(f"Source: {st.session_state.pre_fix_guidance_source}")
         with st.container(border=True):
             st.markdown(
                 st.session_state.pre_fix_guidance.replace("\n", "  \n")

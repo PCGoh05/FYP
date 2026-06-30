@@ -7,7 +7,9 @@ from unittest.mock import patch
 import app
 from app import (
     get_download_result_labels,
+    get_issue_explanation_button_label,
     get_llm_status_notice,
+    get_review_guidance_mode_notice,
     get_server_nvidia_api_key,
     run_llm_smoke_test,
 )
@@ -19,9 +21,10 @@ class EmptySecrets:
 
 
 class FakeLLM:
-    def __init__(self, available=True, response="AI_READY"):
+    def __init__(self, available=True, response="AI_READY", last_error=""):
         self.available = available
         self.response = response
+        self.last_error = last_error
 
     def is_available(self):
         return self.available
@@ -96,11 +99,25 @@ class LLMStatusUITest(unittest.TestCase):
         self.assertEqual(level, "success")
         self.assertIn("test response", message)
 
+    def test_llm_smoke_test_accepts_token_with_punctuation(self):
+        level, message = run_llm_smoke_test(FakeLLM(response="AI_READY."))
+
+        self.assertEqual(level, "success")
+        self.assertIn("test response", message)
+
     def test_llm_smoke_test_reports_unexpected_response(self):
         level, message = run_llm_smoke_test(FakeLLM(response="something else"))
 
         self.assertEqual(level, "warning")
         self.assertIn("unexpected response", message)
+
+    def test_llm_smoke_test_reports_generation_error_reason(self):
+        level, message = run_llm_smoke_test(
+            FakeLLM(response="", last_error="TimeoutError: request timed out")
+        )
+
+        self.assertEqual(level, "warning")
+        self.assertIn("TimeoutError", message)
 
     def test_download_result_labels_are_user_friendly(self):
         labels = get_download_result_labels("DOCX (Word)")
@@ -108,6 +125,29 @@ class LLMStatusUITest(unittest.TestCase):
         self.assertEqual(labels["corrected"], "Download Corrected Manuscript (DOCX)")
         self.assertEqual(labels["highlighted"], "Download Marked Original for Review (DOCX)")
         self.assertEqual(labels["report"], "Download Fix Summary Report (DOCX)")
+
+    def test_issue_explanation_button_is_available_without_ai(self):
+        self.assertEqual(
+            get_issue_explanation_button_label(ai_enabled=False, connected=False),
+            "Explain with Rule-Based Guidance",
+        )
+
+    def test_issue_explanation_button_shows_ai_when_connected(self):
+        self.assertEqual(
+            get_issue_explanation_button_label(ai_enabled=True, connected=True),
+            "Explain with AI",
+        )
+
+    def test_review_guidance_mode_notice_explains_active_source(self):
+        level, message = get_review_guidance_mode_notice(
+            ai_enabled=True,
+            connected=False,
+            key_configured=True,
+        )
+
+        self.assertEqual(level, "warning")
+        self.assertIn("Rule-based guidance", message)
+        self.assertIn("AI is enabled but not connected", message)
 
 
 if __name__ == "__main__":

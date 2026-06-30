@@ -85,6 +85,7 @@ class LLMIntegration:
         self.max_tokens = LLM_CONFIG.get("max_tokens", 1024)
         self.temperature = LLM_CONFIG.get("temperature", 0.3)
         self.timeout_seconds = LLM_CONFIG.get("timeout_seconds", 20)
+        self.last_error = ""
         
         self._client = None
         self._available = False
@@ -101,11 +102,14 @@ class LLMIntegration:
                     max_retries=0
                 )
                 self._available = True
-            except Exception:
+                self.last_error = ""
+            except Exception as exc:
                 self._client = None
                 self._available = False
+                self.last_error = f"{type(exc).__name__}: {exc}"
         else:
             self._available = False
+            self.last_error = "OpenAI client package or NVIDIA API key is missing"
     
     def is_available(self) -> bool:
         """Check if LLM is available"""
@@ -143,8 +147,9 @@ class LLMIntegration:
             
             content = response.choices[0].message.content
             return content.strip() if content else ""
-        except Exception:
+        except Exception as exc:
             self._available = False
+            self.last_error = f"{type(exc).__name__}: {exc}"
             return ""
     
     def explain_error(self, issue: Dict[str, Any]) -> str:

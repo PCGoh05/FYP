@@ -229,7 +229,7 @@ REQUIRED_SECTIONS = [
 # LLM Configuration (optional explanation layer)
 LLM_CONFIG = {
     "nvidia_api_key": "",  # Load from .env file for security
-    "nvidia_model": "meta/llama-3.3-70b-instruct",
+    "nvidia_model": "meta/llama-3.1-8b-instruct",
     "max_tokens": 500,
     "temperature": 0.1,
     "timeout_seconds": 20
