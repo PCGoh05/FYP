@@ -1061,13 +1061,11 @@ class ManuscriptChecker:
                 status = "valid" if cp.paragraph_type == ParagraphType.SECTION_HEADING else "weak"
                 mark_section("conclusion", cp, status)
 
-            if text_lower.startswith(("references", "bibliography", "works cited")) or \
-               cp.paragraph_type == ParagraphType.REFERENCE:
-                status = "valid" if cp.paragraph_type in {
-                    ParagraphType.SECTION_HEADING,
-                    ParagraphType.REFERENCE,
-                } else "weak"
+            if text_lower.startswith(("references", "bibliography", "works cited")):
+                status = "valid" if cp.paragraph_type == ParagraphType.SECTION_HEADING else "weak"
                 mark_section("references", cp, status)
+            elif cp.paragraph_type == ParagraphType.REFERENCE:
+                mark_section("references", cp, "weak")
 
         self._check_required_heading_typos(sections)
         declarations = self._check_required_declarations()

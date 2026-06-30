@@ -34,6 +34,34 @@ def _rules():
 
 
 class ReferenceDetectionTest(unittest.TestCase):
+    def test_reference_entries_without_references_heading_are_weak_structure_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "missing_references_heading.docx"
+            document = Document()
+            document.add_paragraph("Journal of Informatics and")
+            document.add_paragraph("Web Engineering")
+            document.add_paragraph("Vol. 3 No. 3 (January 2026)\teISSN: 2821-370X")
+            document.add_paragraph("A Test Paper Title for Format Validation")
+            document.add_paragraph("Abstract - This is the abstract.")
+            document.add_paragraph("Keywords - checking, template")
+            document.add_paragraph("INTRODUCTION")
+            document.add_paragraph("Body text.")
+            document.add_paragraph("CONCLUSION")
+            document.add_paragraph("Conclusion text.")
+            document.add_paragraph("[1] Reference text.")
+            document.save(path)
+
+            checker = ManuscriptChecker(_rules()).load_manuscript(str(path))
+            result = checker.check_all()
+
+        self.assertEqual(result.document_structure["sections"]["references"]["format_status"], "weak")
+        descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("structure", [])
+        ]
+        self.assertIn("Section was found but its heading role is not confidently detected", descriptions)
+        self.assertNotIn("Missing required section: References", descriptions)
+
     def test_short_ieee_reference_after_references_heading_is_detected(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "short_reference.docx"
