@@ -76,6 +76,9 @@ class ReportGenerator:
         # Add usage guidance
         self._add_usage_section()
 
+        # Add scope boundaries for automatic fixes
+        self._add_auto_fix_scope_section()
+
         # Add summary section
         self._add_summary_section()
 
@@ -155,6 +158,33 @@ class ReportGenerator:
         )
         note.runs[0].font.italic = True
         note.runs[0].font.color.rgb = RGBColor(96, 96, 96)
+
+        self.document.add_paragraph()
+
+    def _add_auto_fix_scope_section(self):
+        """Add the safety boundaries for automatic correction."""
+        self.document.add_heading("Auto-Fix Scope", level=1)
+
+        scope_items = [
+            (
+                "Automatic fixes are limited to detected formatting properties",
+                "such as fonts, font sizes, alignment, margins, line spacing, capitalization, and stable header spacing.",
+            ),
+            (
+                "Manual review remains required",
+                "for missing content, citation meaning, reference source selection, figure/table movement, equations, and any issue that could change academic meaning.",
+            ),
+            (
+                "Post-fix validation is a safety check",
+                "that re-runs the rule checker on the corrected manuscript and reports remaining or increased issues.",
+            ),
+        ]
+
+        for label, description in scope_items:
+            paragraph = self.document.add_paragraph(style=None)
+            label_run = paragraph.add_run(f"{label}: ")
+            label_run.font.bold = True
+            paragraph.add_run(description)
 
         self.document.add_paragraph()
 

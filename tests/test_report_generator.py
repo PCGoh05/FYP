@@ -57,6 +57,19 @@ class ReportGeneratorTest(unittest.TestCase):
         self.assertIn("Marked Original", text)
         self.assertIn("yellow highlights mark changed locations", text)
 
+    def test_report_includes_auto_fix_scope_limits(self):
+        report = ReportGenerator(
+            rules={},
+            changes=[],
+            check_result=None,
+        ).generate_comparison_report()
+
+        text = "\n".join(paragraph.text for paragraph in report.paragraphs)
+
+        self.assertIn("Auto-Fix Scope", text)
+        self.assertIn("Automatic fixes are limited to detected formatting properties", text)
+        self.assertIn("manual review", text)
+
 
 if __name__ == "__main__":
     unittest.main()
