@@ -2,6 +2,7 @@ import unittest
 from types import SimpleNamespace
 
 from app import (
+    build_issue_display_record,
     build_pre_fix_guidance_payload,
     build_post_fix_guidance_payload,
     format_change_display_value,
@@ -55,6 +56,26 @@ class ReviewGuidanceAppTest(unittest.TestCase):
             "Inherited from Word style",
         )
         self.assertEqual(format_change_display_value("Times New Roman"), "Times New Roman")
+
+    def test_builds_issue_display_record_with_action_guidance(self):
+        issue = SimpleNamespace(
+            category="body_text",
+            description="Body text font does not match template",
+            severity="warning",
+            location="Paragraph 7",
+            current_value="Calibri",
+            expected_value="Times New Roman",
+            text_preview="Contact jane@example.com ORCID 0000-0002-1825-0097.",
+            paragraph_index=6,
+        )
+
+        record = build_issue_display_record(issue, "body_text")
+
+        self.assertEqual(record["location"], "Paragraph 7")
+        self.assertEqual(record["action_label"], "Auto-fix supported")
+        self.assertIn("font name", record["action_detail"])
+        self.assertNotIn("jane@example.com", str(record))
+        self.assertNotIn("0000-0002-1825-0097", str(record))
 
     def test_builds_pre_fix_payload_from_checker_result(self):
         payload = build_pre_fix_guidance_payload(

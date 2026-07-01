@@ -137,6 +137,73 @@ class ReviewGuidanceBuilderTest(unittest.TestCase):
         self.assertEqual(group["property_name"], None)
         self.assertIn("publication source segment", group["review_reason"])
 
+    def test_builds_user_friendly_issue_evidence_for_supported_auto_fix(self):
+        issue = _issue(
+            "body_text",
+            "Body text font does not match template",
+            location="Paragraph 7",
+            current="Calibri",
+            expected="Times New Roman",
+            preview="This paragraph uses the wrong font.",
+        )
+        issue.paragraph_index = 6
+
+        evidence = ReviewGuidanceBuilder().build_issue_evidence(issue, "body_text")
+
+        self.assertEqual(evidence["location"], "Paragraph 7")
+        self.assertEqual(evidence["paragraph"], 7)
+        self.assertEqual(evidence["current_value"], "Calibri")
+        self.assertEqual(evidence["expected_value"], "Times New Roman")
+        self.assertTrue(evidence["auto_fix_supported"])
+        self.assertEqual(evidence["property_name"], "font_name")
+        self.assertEqual(evidence["action_label"], "Auto-fix supported")
+        self.assertIn("font name", evidence["action_detail"])
+
+    def test_issue_evidence_keeps_first_paragraph_number(self):
+        issue = _issue(
+            "title",
+            "Title font size does not match template",
+            location="Title",
+        )
+        issue.paragraph_index = 0
+
+        evidence = ReviewGuidanceBuilder().build_issue_evidence(issue, "title")
+
+        self.assertEqual(evidence["paragraph"], 1)
+
+    def test_builds_user_friendly_issue_evidence_for_manual_review(self):
+        issue = _issue(
+            "figures",
+            "Figure caption should appear below the figure",
+            location="Figure 2",
+            current="Caption above figure",
+            expected="Caption below figure",
+        )
+
+        evidence = ReviewGuidanceBuilder().build_issue_evidence(issue, "figures")
+
+        self.assertFalse(evidence["auto_fix_supported"])
+        self.assertEqual(evidence["action_label"], "Manual review required")
+        self.assertIn("Moving document objects", evidence["action_detail"])
+
+    def test_issue_evidence_redacts_private_preview(self):
+        issue = _issue(
+            "author_info",
+            "Author information font size does not match template",
+            location="jane@example.com author line",
+            current="jane@example.com 0000-0002-1825-0097",
+            expected="9 pt",
+            preview="Contact jane@example.com ORCID 0000-0002-1825-0097 for details.",
+        )
+
+        evidence = ReviewGuidanceBuilder().build_issue_evidence(issue, "author_info")
+        serialized = str(evidence)
+
+        self.assertNotIn("jane@example.com", serialized)
+        self.assertNotIn("0000-0002-1825-0097", serialized)
+        self.assertIn("[redacted email]", serialized)
+        self.assertIn("[redacted ORCID]", serialized)
+
     def test_capitalization_issues_are_auto_fix_candidates(self):
         payload = ReviewGuidanceBuilder().build_pre_fix_payload(
             _result({

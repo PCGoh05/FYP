@@ -6,6 +6,7 @@ Main Application Entry Point
 """
 
 import streamlit as st
+import html
 import inspect
 import os
 import subprocess
@@ -305,6 +306,11 @@ def build_structure_summary_items(structure):
         }
         for section in sections
     ]
+
+
+def build_issue_display_record(issue, category):
+    """Build one sanitized issue record for UI display and explanations."""
+    return ReviewGuidanceBuilder().build_issue_evidence(issue, category)
 
 
 def build_pre_fix_guidance_payload(result, rules):
@@ -863,13 +869,17 @@ def display_check_results(result):
                 if issues:
                     with st.expander(f"**{category.replace('_', ' ').title()}** ({len(issues)} issues)", expanded=False):
                         for issue in issues:
+                            record = build_issue_display_record(issue, category)
                             severity_class = "issue-error" if issue.severity == "error" else "issue-warning"
+                            action_color = "#0f766e" if record["auto_fix_supported"] else "#856404"
                             st.markdown(f"""
                             <div class="issue-card {severity_class}">
-                                <strong>{issue.location}</strong><br>
-                                {issue.description}<br>
-                                <span style="color: #dc3545;">Current: {issue.current_value}</span> |
-                                <span style="color: #28a745;">Expected: {issue.expected_value}</span>
+                                <strong>{html.escape(record["severity"].title())}: {html.escape(record["location"])}</strong><br>
+                                {html.escape(record["description"])}<br>
+                                <span style="color: #dc3545;">Current: {html.escape(record["current_value"])}</span> |
+                                <span style="color: #28a745;">Expected: {html.escape(record["expected_value"])}</span><br>
+                                <span style="color: {action_color};"><strong>Review action:</strong> {html.escape(record["action_label"])}</span><br>
+                                <span style="color: #6c757d; font-size: 0.92rem;">{html.escape(record["action_detail"])}</span>
                             </div>
                             """, unsafe_allow_html=True)
 
@@ -902,28 +912,34 @@ def display_check_results(result):
                     ai_ready,
                 )
                 for issue_idx, issue in enumerate(issues):
-                    severity_label = "Error" if issue.severity == "error" else "Warning"
-                    st.markdown(f"""
-                    **{severity_label}: {issue.location}**
-                    - {issue.description}
-                    - Current: `{issue.current_value}` Expected: `{issue.expected_value}`
-                    """)
+                    record = build_issue_display_record(issue, category)
+                    severity_label = "Error" if record["severity"] == "error" else "Warning"
+                    st.markdown(f"**{severity_label}: {record['location']}**")
+                    st.write(f"Problem: {record['description']}")
+                    st.write(
+                        f"Current: {record['current_value']} | "
+                        f"Expected: {record['expected_value']}"
+                    )
+                    st.caption(
+                        f"Review action: {record['action_label']} - "
+                        f"{record['action_detail']}"
+                    )
 
                     if st.button(
                         explanation_label,
                         key=f"explain_{category}_{tab_idx}_{issue_idx}_{issue.paragraph_index}",
                     ):
-                        builder = ReviewGuidanceBuilder()
                         issue_payload = {
-                            "category": category,
-                            "location": builder.redact_text(issue.location),
-                            "description": issue.description,
-                            "current_value": builder.redact_text(issue.current_value),
-                            "expected_value": builder.redact_text(issue.expected_value),
-                            "severity": issue.severity,
-                            "text_preview": builder.redact_text(
-                                issue.text_preview,
-                            ),
+                            "category": record["category"],
+                            "location": record["location"],
+                            "description": record["description"],
+                            "current_value": record["current_value"],
+                            "expected_value": record["expected_value"],
+                            "severity": record["severity"],
+                            "text_preview": record["text_preview"],
+                            "auto_fix_supported": record["auto_fix_supported"],
+                            "property_name": record["property_name"],
+                            "review_reason": record["review_reason"],
                         }
                         used_ai = (
                             st.session_state.ai_explanations_enabled

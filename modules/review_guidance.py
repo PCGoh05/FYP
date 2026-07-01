@@ -177,6 +177,86 @@ class ReviewGuidanceBuilder:
             ),
         )
 
+    def build_issue_evidence(
+        self,
+        issue: Any,
+        category: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Return user-facing evidence for one deterministic checker issue."""
+        issue_category = (
+            getattr(issue, "category", "")
+            or category
+            or "other"
+        )
+        description = (
+            getattr(issue, "description", "")
+            or "Formatting issue"
+        )
+        location = self.redact_text(
+            getattr(issue, "location", "Document"),
+            80,
+        ) or "Document"
+        raw_paragraph_index = getattr(issue, "paragraph_index", -1)
+        try:
+            paragraph_index = (
+                int(raw_paragraph_index)
+                if raw_paragraph_index is not None
+                else -1
+            )
+        except (TypeError, ValueError):
+            paragraph_index = -1
+        paragraph = paragraph_index + 1 if paragraph_index >= 0 else "Document"
+        property_name = self._infer_safe_property(
+            issue_category,
+            description,
+            location,
+        )
+        auto_fix_supported = property_name is not None
+        review_reason = (
+            ""
+            if auto_fix_supported
+            else self._manual_review_reason(issue_category, description)
+        )
+        current_value = self.redact_text(
+            getattr(issue, "current_value", ""),
+            120,
+        ) or "Not available"
+        expected_value = self.redact_text(
+            getattr(issue, "expected_value", ""),
+            120,
+        ) or "Not available"
+        text_preview = self.redact_text(
+            getattr(issue, "text_preview", ""),
+            160,
+        )
+
+        if auto_fix_supported:
+            action_label = "Auto-fix supported"
+            action_detail = (
+                f"Can safely adjust {self._friendly_property_name(property_name)} "
+                "because this issue maps to a deterministic formatting property."
+            )
+        else:
+            action_label = "Manual review required"
+            action_detail = review_reason
+
+        return {
+            "category": issue_category,
+            "category_label": issue_category.replace("_", " ").title(),
+            "location": location,
+            "paragraph": paragraph,
+            "description": description,
+            "current_value": current_value,
+            "expected_value": expected_value,
+            "severity": getattr(issue, "severity", "warning") or "warning",
+            "text_preview": text_preview,
+            "auto_fix_supported": auto_fix_supported,
+            "property_name": property_name,
+            "action_label": action_label,
+            "action_detail": action_detail,
+            "review_reason": review_reason,
+        }
+
     def build_pre_fix_fallback(self, payload: Dict[str, Any]) -> str:
         """Return useful pre-fix guidance without an API."""
         groups = payload.get("groups", [])
@@ -443,6 +523,26 @@ class ReviewGuidanceBuilder:
             readable_property = property_name.replace("_", " ")
             message = f"{readable_type.title()} {readable_property} was corrected."
         return f"{message}{suffix}"
+
+    @staticmethod
+    def _friendly_property_name(property_name: str) -> str:
+        labels = {
+            "font_name": "font name",
+            "font_size": "font size",
+            "line_spacing": "line spacing",
+            "manual_tabs": "header spacing",
+            "number_bold": "heading number bold formatting",
+            "number_font_size": "heading number font size",
+            "number_font_name": "heading number font",
+            "page_size": "page size",
+            "orientation": "page orientation",
+            "columns": "page column layout",
+            "margins": "page margins",
+        }
+        return labels.get(
+            str(property_name or "formatting"),
+            str(property_name or "formatting").replace("_", " "),
+        )
 
     @staticmethod
     def _normalize(value: Any) -> str:
