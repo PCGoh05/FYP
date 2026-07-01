@@ -4,6 +4,7 @@ from pathlib import Path
 
 from evaluate_checker import (
     build_arg_parser,
+    calculate_category_issue_metrics,
     console_safe,
     render_evaluation_markdown,
     validate_evaluation_inputs,
@@ -56,6 +57,16 @@ class EvaluateCheckerInputValidationTest(unittest.TestCase):
                 "recall": 0.86,
                 "f1": 0.8699,
             },
+            "category_issue_metrics": {
+                "body_text": {
+                    "true_positive": 1,
+                    "false_positive": 0,
+                    "false_negative": 1,
+                    "precision": 1.0,
+                    "recall": 0.5,
+                    "f1": 0.6667,
+                }
+            },
         }
 
         markdown = render_evaluation_markdown(summary)
@@ -65,6 +76,30 @@ class EvaluateCheckerInputValidationTest(unittest.TestCase):
         self.assertIn("## Auto-Fix Before/After", markdown)
         self.assertIn("| sample.docx | 4 | 1 | 92.4 | 98.1 | Yes |", markdown)
         self.assertIn("## Manual-Label Metrics", markdown)
+        self.assertIn("### Issue Metrics by Category", markdown)
+        self.assertIn("| Body Text | 1.0 | 0.5 | 0.6667 | 1 | 0 | 1 |", markdown)
+
+    def test_calculates_issue_metrics_by_category(self):
+        predicted = {
+            ("sample.docx", "body_text", "Paragraph 1", "Font mismatch"),
+            ("sample.docx", "references", "Reference 1", "Missing citation"),
+        }
+        expected = {
+            ("sample.docx", "body_text", "Paragraph 1", "Font mismatch"),
+            ("sample.docx", "body_text", "Paragraph 2", "Size mismatch"),
+        }
+
+        metrics = calculate_category_issue_metrics(predicted, expected)
+
+        self.assertEqual(metrics["body_text"]["true_positive"], 1)
+        self.assertEqual(metrics["body_text"]["false_positive"], 0)
+        self.assertEqual(metrics["body_text"]["false_negative"], 1)
+        self.assertEqual(metrics["body_text"]["precision"], 1.0)
+        self.assertEqual(metrics["body_text"]["recall"], 0.5)
+        self.assertEqual(metrics["body_text"]["f1"], 0.6667)
+        self.assertEqual(metrics["references"]["true_positive"], 0)
+        self.assertEqual(metrics["references"]["false_positive"], 1)
+        self.assertEqual(metrics["references"]["false_negative"], 0)
 
     def test_console_safe_replaces_unprintable_characters(self):
         text = console_safe("A\u2009B", encoding="cp1252")

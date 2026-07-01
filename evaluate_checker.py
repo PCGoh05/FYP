@@ -189,6 +189,41 @@ def calculate_set_metrics(predicted: Set[Tuple], expected: Set[Tuple]) -> Dict[s
     }
 
 
+def issue_key_category(key: Tuple) -> str:
+    """Return the category part from an issue key."""
+    if len(key) >= 4:
+        return normalize_text(key[1])
+    if key:
+        return normalize_text(key[0])
+    return "unknown"
+
+
+def calculate_category_issue_metrics(
+    predicted: Set[Tuple],
+    expected: Set[Tuple],
+) -> Dict[str, Dict[str, float]]:
+    """Calculate issue detection metrics for each issue category."""
+    categories = sorted({
+        issue_key_category(key)
+        for key in predicted | expected
+    })
+    return {
+        category: calculate_set_metrics(
+            {
+                key
+                for key in predicted
+                if issue_key_category(key) == category
+            },
+            {
+                key
+                for key in expected
+                if issue_key_category(key) == category
+            },
+        )
+        for category in categories
+    }
+
+
 def calculate_classification_metrics(predicted_by_index: Dict[int, str], expected_by_index: Dict[int, str]) -> Dict[str, float]:
     """Calculate paragraph classification accuracy, precision, recall, and F1-score."""
     predicted = {
@@ -358,6 +393,25 @@ def render_evaluation_markdown(summary: Dict) -> str:
             "- Paragraph classification: "
             + render_metric_line(paragraph_metrics, ["accuracy", "precision", "recall", "f1"]),
         ])
+        category_metrics = summary.get("category_issue_metrics") or {}
+        if category_metrics:
+            lines.extend([
+                "",
+                "### Issue Metrics by Category",
+                "",
+                "| Category | Precision | Recall | F1 | TP | FP | FN |",
+                "|---|---:|---:|---:|---:|---:|---:|",
+            ])
+            for category, metrics in sorted(category_metrics.items()):
+                lines.append(
+                    f"| {category.replace('_', ' ').title()} | "
+                    f"{metrics.get('precision', 0.0)} | "
+                    f"{metrics.get('recall', 0.0)} | "
+                    f"{metrics.get('f1', 0.0)} | "
+                    f"{metrics.get('true_positive', 0)} | "
+                    f"{metrics.get('false_positive', 0)} | "
+                    f"{metrics.get('false_negative', 0)} |"
+                )
     else:
         lines.extend([
             "",
@@ -561,6 +615,7 @@ def main() -> None:
 
     overall_issue_metrics = {}
     overall_paragraph_metrics = {}
+    category_issue_metrics = {}
     confusion_matrix = {}
 
     if labels_data:
@@ -589,10 +644,16 @@ def main() -> None:
 
         confusion_matrix = build_confusion_matrix(all_predicted_paragraphs, all_expected_paragraphs)
         overall_issue_metrics = calculate_set_metrics(all_predicted_issues, all_expected_issues)
+        category_issue_metrics = calculate_category_issue_metrics(
+            all_predicted_issues,
+            all_expected_issues,
+        )
         overall_paragraph_metrics = paragraph_metrics
 
         print("\nOVERALL ISSUE METRICS")
         print(json.dumps(overall_issue_metrics, indent=2, sort_keys=True))
+        print("\nISSUE METRICS BY CATEGORY")
+        print(json.dumps(category_issue_metrics, indent=2, sort_keys=True))
         print("\nOVERALL PARAGRAPH CLASSIFICATION METRICS")
         print(json.dumps(overall_paragraph_metrics, indent=2, sort_keys=True))
         print("\nPARAGRAPH CONFUSION MATRIX")
@@ -612,6 +673,7 @@ def main() -> None:
         "invalid_samples": skipped_invalid,
         "smoke_rows": smoke_rows,
         "overall_issue_metrics": overall_issue_metrics,
+        "category_issue_metrics": category_issue_metrics,
         "overall_paragraph_metrics": overall_paragraph_metrics,
         "paragraph_confusion_matrix": confusion_matrix,
     }
