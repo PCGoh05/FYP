@@ -65,6 +65,21 @@ class ManuscriptChecker:
         "line_spacing",
         "other"
     ]
+
+    REFERENCE_SOURCE_KEYWORDS = (
+        "journal",
+        "proceedings",
+        "conference",
+        "transactions",
+        "communications",
+        "informatics",
+        "engineering",
+        "springer",
+        "elsevier",
+        "ieee",
+        "acm",
+        "arxiv",
+    )
     
     def __init__(self, rules: Dict[str, Any], llm_integration=None):
         """Initialize checker with template rules"""
@@ -1488,7 +1503,7 @@ class ManuscriptChecker:
             if (
                 publication_italic_required
                 and self._reference_likely_has_publication_source(cp.text)
-                and not self._paragraph_has_italic_text(cp.index)
+                and not self._paragraph_has_italic_publication_source(cp.index)
             ):
                 self._add_issue(
                     category="references",
@@ -1742,15 +1757,10 @@ class ManuscriptChecker:
                 if abs(effective_spacing - float(expected_line_spacing)) > 0.05:
                     line_spacing_mismatches.append(paragraph)
 
-            has_italic = any(
-                bool(run.font.italic)
-                for run in paragraph.runs
-                if run.text.strip()
-            )
             if (
                 publication_italic_required
                 and self._reference_likely_has_publication_source(text)
-                and not has_italic
+                and not self._paragraph_object_has_italic_publication_source(paragraph)
             ):
                 self._add_issue(
                     category="references",
@@ -1811,6 +1821,67 @@ class ManuscriptChecker:
                 return True
         return False
 
+    def _paragraph_has_italic_publication_source(self, paragraph_index: int) -> bool:
+        """Return True when italic text looks like a publication source."""
+        if paragraph_index < 0 or paragraph_index >= len(self.document.paragraphs):
+            return False
+        return self._paragraph_object_has_italic_publication_source(
+            self.document.paragraphs[paragraph_index],
+        )
+
+    def _paragraph_object_has_italic_publication_source(self, paragraph) -> bool:
+        """Return True when a paragraph has an italic source-like run."""
+        full_text = "".join(run.text or "" for run in paragraph.runs)
+        cursor = 0
+        for run in paragraph.runs:
+            run_text = run.text or ""
+            start = cursor
+            end = cursor + len(run_text)
+            cursor = end
+            if (
+                run_text.strip()
+                and bool(run.font.italic)
+                and (
+                    self._text_looks_like_publication_source(run_text)
+                    or self._span_looks_like_publication_source_zone(
+                        full_text,
+                        start,
+                        end,
+                    )
+                )
+            ):
+                return True
+        return False
+
+    def _text_looks_like_publication_source(self, text: str) -> bool:
+        """Return True when text resembles a journal or proceedings source."""
+        normalized = re.sub(r"\s+", " ", text or "").strip().lower()
+        if len(normalized) < 5:
+            return False
+        return any(
+            keyword in normalized
+            for keyword in self.REFERENCE_SOURCE_KEYWORDS
+        )
+
+    @staticmethod
+    def _span_looks_like_publication_source_zone(
+        full_text: str,
+        start: int,
+        end: int,
+    ) -> bool:
+        """Return True when an italic span is in the usual IEEE source position."""
+        prefix = full_text[:start]
+        suffix = full_text[end:]
+        has_title_before = bool(re.search(r"[\"“”].+[\"“”]\s*,?\s*$", prefix))
+        has_reference_detail_after = bool(
+            re.search(
+                r"\b(vol\.|volume|no\.|pp\.|pages?|doi|https?://)\b|\b\d{4}\b",
+                suffix,
+                re.IGNORECASE,
+            )
+        )
+        return has_title_before and has_reference_detail_after
+
     def _reference_likely_has_publication_source(self, text: str) -> bool:
         """Return True for references likely to contain an italic publication source."""
         normalized = re.sub(r"\s+", " ", text or "").strip()
@@ -1818,19 +1889,6 @@ class ManuscriptChecker:
             return False
 
         lower_text = normalized.lower()
-        source_keywords = (
-            "journal",
-            "proceedings",
-            "conference",
-            "transactions",
-            "communications",
-            "informatics",
-            "engineering",
-            "springer",
-            "elsevier",
-            "ieee",
-            "acm",
-        )
         detail_patterns = (
             r"\bvol\.",
             r"\bvolume\b",
@@ -1842,7 +1900,10 @@ class ManuscriptChecker:
             r"\u201c.+?\u201d",
         )
 
-        has_source_keyword = any(keyword in lower_text for keyword in source_keywords)
+        has_source_keyword = any(
+            keyword in lower_text
+            for keyword in self.REFERENCE_SOURCE_KEYWORDS
+        )
         has_bibliographic_detail = any(re.search(pattern, normalized, re.IGNORECASE) for pattern in detail_patterns)
         return has_source_keyword and has_bibliographic_detail
 
