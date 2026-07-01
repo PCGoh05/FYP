@@ -576,7 +576,7 @@ def display_sidebar():
                         api_key = st.text_input(
                             "NVIDIA API Key",
                             type="password",
-                            placeholder="nvapi-xxxxxxxxxxxx",
+                            placeholder="Paste a local testing key",
                             help="Use only when the server-managed key is not configured."
                         )
                         if st.button("Connect with override key", type="primary"):

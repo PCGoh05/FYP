@@ -87,9 +87,9 @@ class LLMStatusUITest(unittest.TestCase):
             original_cwd = os.getcwd()
             try:
                 os.chdir(tmp)
-                Path(".env").write_text("NVIDIA_API_KEY=nvapi-local-test\n", encoding="utf-8")
+                Path(".env").write_text("NVIDIA_API_KEY=local-test-key\n", encoding="utf-8")
                 with patch.dict(os.environ, {}, clear=True), patch.object(app.st, "secrets", EmptySecrets()):
-                    self.assertEqual(get_server_nvidia_api_key(), "nvapi-local-test")
+                    self.assertEqual(get_server_nvidia_api_key(), "local-test-key")
             finally:
                 os.chdir(original_cwd)
 

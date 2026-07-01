@@ -23,6 +23,7 @@ C:\Users\Acer\Desktop\latest fyp\FYP
 - `app.py`: Streamlit UI for template upload, manuscript upload, checking, fixing, highlighting, and downloads.
 - `config.py`: application constants and remaining default rule/pattern definitions.
 - `evaluate_checker.py`: smoke testing and manual-label evaluation entry point.
+- `run_quality_checks.py`: one-command quality gate for tests, compile checks, text/secret scans, and optional evaluation smoke tests.
 - `template_profiles/jiwe.json`: validated JIWE journal profile.
 - `template_profiles/generic.json`: generic academic fallback profile.
 - `modules/profile_loader.py`: loads, detects, normalizes, and merges template profiles.

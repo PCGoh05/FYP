@@ -193,7 +193,7 @@ class LLMExplanationTest(unittest.TestCase):
             "modules.llm_integration.OpenAI",
             return_value=client,
         ):
-            llm = LLMIntegration(api_key="nvapi-test-key")
+            llm = LLMIntegration(api_key="test-nvidia-key")
 
         self.assertTrue(llm.is_available())
         client.chat.completions.create.assert_not_called()
