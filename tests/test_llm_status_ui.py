@@ -11,6 +11,7 @@ from app import (
     get_llm_status_notice,
     get_review_guidance_mode_notice,
     get_server_nvidia_api_key,
+    get_system_capability_sections,
     run_llm_smoke_test,
 )
 
@@ -148,6 +149,24 @@ class LLMStatusUITest(unittest.TestCase):
         self.assertEqual(level, "warning")
         self.assertIn("Rule-based guidance", message)
         self.assertIn("AI is enabled but not connected", message)
+
+    def test_system_capability_sections_explain_scope_and_limits(self):
+        sections = get_system_capability_sections()
+        titles = [section["title"] for section in sections]
+        combined_text = " ".join(
+            item
+            for section in sections
+            for item in section["items"]
+        )
+
+        self.assertIn("Best Supported Use", titles)
+        self.assertIn("Auto-Fix Can Change", titles)
+        self.assertIn("Needs Manual Review", titles)
+        self.assertIn("PDF and AI Boundaries", titles)
+        self.assertIn("JIWE", combined_text)
+        self.assertIn("rule-detected formatting", combined_text)
+        self.assertIn("does not decide manuscript acceptance", combined_text)
+        self.assertIn("Precision, Recall, and F1", combined_text)
 
 
 if __name__ == "__main__":

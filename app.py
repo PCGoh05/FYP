@@ -269,6 +269,49 @@ def get_review_guidance_mode_notice(
     )
 
 
+def get_system_capability_sections():
+    """Return user-facing capability and limitation text for the sidebar."""
+    return [
+        {
+            "title": "Best Supported Use",
+            "items": [
+                "Primary validated case study: JIWE manuscript formatting in DOCX format.",
+                "Checks are rule-based and compare detected manuscript properties against uploaded template rules or the default JIWE profile.",
+                "Useful for pre-screening formatting issues before editor or supervisor review.",
+            ],
+        },
+        {
+            "title": "Can Detect",
+            "items": [
+                "Margins, page size, journal header, paper title, author information, body text, headings, abstract rules, keywords, captions, references, citations, and required sections.",
+                "Some checks are exact formatting checks; others are warning-level structural or content-pattern checks that should be reviewed by a person.",
+            ],
+        },
+        {
+            "title": "Auto-Fix Can Change",
+            "items": [
+                "Only rule-detected formatting properties such as font, font size, bold, italic, alignment, line spacing, margins, page size, capitalization, and stable header spacing.",
+                "Auto-Fix re-checks the corrected document and reports remaining issues after supported changes are applied.",
+            ],
+        },
+        {
+            "title": "Needs Manual Review",
+            "items": [
+                "Missing sections, missing captions, figure/table movement, equation numbering, citation meaning, reference source selection, author identity, and research content.",
+                "The system does not decide manuscript acceptance, research quality, novelty, or language quality.",
+            ],
+        },
+        {
+            "title": "PDF and AI Boundaries",
+            "items": [
+                "DOCX is the primary supported workflow. PDF upload can be converted for checking, but final PDF export should be done with Microsoft Word to preserve journal layout.",
+                "AI explanations are optional. AI explains rule-detected issues only; it does not perform core checking, auto-fix, or approval.",
+                "FYP accuracy should be reported using labelled Precision, Recall, and F1 results, not only the UI compliance index.",
+            ],
+        },
+    ]
+
+
 def format_section_label(section_name: str) -> str:
     """Return a readable label for a document section key."""
     return str(section_name).replace("_", " ").title()
@@ -638,6 +681,16 @@ def display_sidebar():
                                     st.error("Connection failed. Check the override key.")
                             else:
                                 st.error("Please enter an API key")
+
+        with st.expander("System Capability / Limitation", expanded=False):
+            st.caption(
+                "Use this section to understand what the checker can verify, "
+                "what Auto-Fix can safely change, and what still needs human review."
+            )
+            for section in get_system_capability_sections():
+                st.markdown(f"**{section['title']}**")
+                for item in section["items"]:
+                    st.write(f"- {item}")
 
         st.divider()
 
