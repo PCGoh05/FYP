@@ -313,6 +313,11 @@ def build_issue_display_record(issue, category):
     return ReviewGuidanceBuilder().build_issue_evidence(issue, category)
 
 
+def build_auto_fix_preview_record(issues_by_category):
+    """Build a user-facing preview of supported and manual auto-fix work."""
+    return ReviewGuidanceBuilder().build_auto_fix_preview(issues_by_category)
+
+
 def build_pre_fix_guidance_payload(result, rules):
     """Build privacy-limited pre-fix guidance input."""
     return ReviewGuidanceBuilder().build_pre_fix_payload(result, rules)
@@ -385,6 +390,39 @@ def resolve_post_fix_guidance(payload, llm, cache):
     while len(cache) > 20:
         cache.pop(next(iter(cache)))
     return guidance, cache_key, source
+
+
+def display_auto_fix_preview(preview):
+    """Display what auto-fix can and cannot safely handle."""
+    st.info(preview["summary"])
+    metric_col1, metric_col2, metric_col3 = st.columns(3)
+    metric_col1.metric("Detected Issues", preview["total_issues"])
+    metric_col2.metric("Auto-Fix Candidates", preview["supported_count"])
+    metric_col3.metric("Manual Review", preview["manual_count"])
+
+    supported_groups = preview.get("supported_groups", [])
+    manual_groups = preview.get("manual_groups", [])
+    if supported_groups:
+        with st.expander("What Auto-Fix Can Change", expanded=False):
+            for group in supported_groups:
+                st.write(
+                    "- "
+                    f"{group['description']} "
+                    f"({group['count']} issue"
+                    f"{'s' if group['count'] != 1 else ''})"
+                )
+    if manual_groups:
+        with st.expander("What Still Needs Manual Review", expanded=False):
+            for group in manual_groups:
+                reason = group.get("review_reason") or "Manual checking is required."
+                st.write(
+                    "- "
+                    f"{group['description']} "
+                    f"({group['count']} issue"
+                    f"{'s' if group['count'] != 1 else ''})"
+                    f" Reason: {reason}"
+                )
+
 
 # Load custom CSS
 def load_css():
@@ -1433,24 +1471,29 @@ def main():
         st.header("Auto-Fix Formatting")
 
         col1, col2 = st.columns([3, 1])
+        auto_fix_preview = build_auto_fix_preview_record(
+            st.session_state.check_result.issues_by_category
+        )
 
         with col1:
             st.write("""
-            Click the button below to automatically fix supported formatting issues.
-            The system will:
-            - Fix page margins
-            - Correct title formatting
-            - Adjust body text font and size
-            - Fix heading styles
-            - Preserve special formatting (italic, underline, subscript, etc.)
-            - Re-check the corrected document and list any remaining issues
+            Auto-Fix only changes deterministic formatting properties that were detected by rules.
+            It does not rewrite content, move figures/tables, invent missing sections, or approve the manuscript.
             """)
+            display_auto_fix_preview(auto_fix_preview)
 
         with col2:
-            if st.button("Auto-Fix All", type="primary", use_container_width=True):
+            if st.button(
+                "Auto-Fix Supported Issues",
+                type="primary",
+                use_container_width=True,
+                disabled=not auto_fix_preview["can_run_auto_fix"],
+            ):
                 changes = handle_auto_fix()
                 if changes:
                     st.rerun()
+            if not auto_fix_preview["can_run_auto_fix"]:
+                st.caption("No deterministic auto-fix candidates were detected.")
 
         # Display comparison view if fixes have been applied
         if st.session_state.changes:

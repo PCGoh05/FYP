@@ -257,6 +257,52 @@ class ReviewGuidanceBuilder:
             "review_reason": review_reason,
         }
 
+    def build_auto_fix_preview(
+        self,
+        issues_by_category: Dict[str, Iterable[Any]],
+    ) -> Dict[str, Any]:
+        """Summarize which detected issues are auto-fixable before fixing."""
+        groups = self._group_issues(issues_by_category or {})
+        supported_groups = [
+            group for group in groups if group.get("auto_fix_supported")
+        ]
+        manual_groups = [
+            group for group in groups if not group.get("auto_fix_supported")
+        ]
+        supported_count = sum(int(group.get("count", 0) or 0) for group in supported_groups)
+        manual_count = sum(int(group.get("count", 0) or 0) for group in manual_groups)
+        total_issues = supported_count + manual_count
+
+        if total_issues == 0:
+            summary = "No detected issues need auto-fix."
+        elif supported_count and manual_count:
+            summary = (
+                f"{supported_count} detected issue"
+                f"{'s' if supported_count != 1 else ''} can be auto-fixed; "
+                f"{manual_count} issue"
+                f"{'s' if manual_count != 1 else ''} need manual review."
+            )
+        elif supported_count:
+            summary = (
+                f"All {supported_count} detected issue"
+                f"{'s' if supported_count != 1 else ''} are auto-fix candidates."
+            )
+        else:
+            summary = (
+                f"All {manual_count} detected issue"
+                f"{'s' if manual_count != 1 else ''} need manual review."
+            )
+
+        return {
+            "total_issues": total_issues,
+            "supported_count": supported_count,
+            "manual_count": manual_count,
+            "can_run_auto_fix": supported_count > 0,
+            "summary": summary,
+            "supported_groups": supported_groups[:8],
+            "manual_groups": manual_groups[:8],
+        }
+
     def build_pre_fix_fallback(self, payload: Dict[str, Any]) -> str:
         """Return useful pre-fix guidance without an API."""
         groups = payload.get("groups", [])

@@ -2,6 +2,7 @@ import unittest
 from types import SimpleNamespace
 
 from app import (
+    build_auto_fix_preview_record,
     build_issue_display_record,
     build_pre_fix_guidance_payload,
     build_post_fix_guidance_payload,
@@ -76,6 +77,24 @@ class ReviewGuidanceAppTest(unittest.TestCase):
         self.assertIn("font name", record["action_detail"])
         self.assertNotIn("jane@example.com", str(record))
         self.assertNotIn("0000-0002-1825-0097", str(record))
+
+    def test_builds_auto_fix_preview_record_for_app_display(self):
+        issue = SimpleNamespace(
+            category="body_text",
+            description="Body text font does not match template",
+            severity="warning",
+            location="Paragraph 7",
+            current_value="Calibri",
+            expected_value="Times New Roman",
+            text_preview="Body text.",
+            paragraph_index=6,
+        )
+
+        preview = build_auto_fix_preview_record({"body_text": [issue]})
+
+        self.assertEqual(preview["supported_count"], 1)
+        self.assertEqual(preview["manual_count"], 0)
+        self.assertTrue(preview["can_run_auto_fix"])
 
     def test_builds_pre_fix_payload_from_checker_result(self):
         payload = build_pre_fix_guidance_payload(

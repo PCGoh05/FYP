@@ -204,6 +204,36 @@ class ReviewGuidanceBuilderTest(unittest.TestCase):
         self.assertIn("[redacted email]", serialized)
         self.assertIn("[redacted ORCID]", serialized)
 
+    def test_builds_auto_fix_preview_summary(self):
+        issues_by_category = {
+            "body_text": [
+                _issue("body_text", "Body text font does not match template"),
+                _issue(
+                    "body_text",
+                    "Body text font does not match template",
+                    location="Paragraph 2",
+                ),
+            ],
+            "figures": [
+                _issue(
+                    "figures",
+                    "Figure caption should appear below the figure",
+                    location="Figure 1",
+                )
+            ],
+        }
+
+        preview = ReviewGuidanceBuilder().build_auto_fix_preview(issues_by_category)
+
+        self.assertEqual(preview["total_issues"], 3)
+        self.assertEqual(preview["supported_count"], 2)
+        self.assertEqual(preview["manual_count"], 1)
+        self.assertTrue(preview["can_run_auto_fix"])
+        self.assertEqual(preview["supported_groups"][0]["count"], 2)
+        self.assertEqual(preview["supported_groups"][0]["property_name"], "font_name")
+        self.assertEqual(preview["manual_groups"][0]["count"], 1)
+        self.assertIn("manual review", preview["summary"].lower())
+
     def test_capitalization_issues_are_auto_fix_candidates(self):
         payload = ReviewGuidanceBuilder().build_pre_fix_payload(
             _result({
