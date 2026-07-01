@@ -306,7 +306,6 @@ def get_system_capability_sections():
             "items": [
                 "DOCX is the primary supported workflow. PDF upload can be converted for checking, but final PDF export should be done with Microsoft Word to preserve journal layout.",
                 "AI explanations are optional. AI explains rule-detected issues only; it does not perform core checking, auto-fix, or approval.",
-                "FYP accuracy should be reported using labelled Precision, Recall, and F1 results, not only the UI compliance index.",
             ],
         },
     ]

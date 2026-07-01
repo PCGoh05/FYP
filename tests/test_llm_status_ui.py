@@ -166,7 +166,7 @@ class LLMStatusUITest(unittest.TestCase):
         self.assertIn("JIWE", combined_text)
         self.assertIn("rule-detected formatting", combined_text)
         self.assertIn("does not decide manuscript acceptance", combined_text)
-        self.assertIn("Precision, Recall, and F1", combined_text)
+        self.assertNotIn("Precision, Recall, and F1", combined_text)
 
 
 if __name__ == "__main__":
