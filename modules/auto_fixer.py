@@ -514,6 +514,49 @@ class AutoFixer:
         normalized = re.sub(r"[^a-z ]", " ", text.lower())
         return re.sub(r"\s+", " ", normalized).strip()
 
+    def _is_declaration_area_index(self, index: int) -> bool:
+        """Return True for paragraphs between the first declaration and references."""
+        declaration_aliases = {
+            alias
+            for values in self._declaration_aliases().values()
+            for alias in values
+        }
+        declaration_indices = [
+            cp.index
+            for cp in self.classifications
+            if self._normalize_declaration_heading(cp.text) in declaration_aliases
+        ]
+        if not declaration_indices:
+            return False
+
+        first_declaration = min(declaration_indices)
+        reference_index = None
+        for cp in self.classifications:
+            if cp.index <= first_declaration:
+                continue
+            normalized = self._normalize_declaration_heading(cp.text)
+            if normalized in {"references", "bibliography"}:
+                reference_index = cp.index
+                break
+
+        if reference_index is None:
+            return index >= first_declaration
+        return first_declaration <= index < reference_index
+
+    def _declaration_alignment_is_allowed(self, index: int, current_alignment: str) -> bool:
+        """Return True for JIWE declaration alignment values observed in the template."""
+        return current_alignment in {"LEFT", "JUSTIFY"} and self._is_declaration_area_index(index)
+
+    def _declaration_space_after_is_allowed(
+        self,
+        index: int,
+        current_space_after: Optional[float],
+    ) -> bool:
+        """Return True for JIWE declaration spacing values observed in the template."""
+        if current_space_after is None or not self._is_declaration_area_index(index):
+            return False
+        return any(abs(float(current_space_after) - allowed) <= 0.5 for allowed in (0.0, 7.5))
+
     def _paragraph_index(self, target_paragraph) -> int:
         """Return the current document index for a paragraph object."""
         for index, paragraph in enumerate(self.document.paragraphs):
@@ -1312,8 +1355,11 @@ class AutoFixer:
         ):
             current_space_after = get_space_after_pt(paragraph)
             if (
-                current_space_after is None
-                or abs(float(current_space_after) - float(expected_space_after)) > 0.5
+                (
+                    current_space_after is None
+                    or abs(float(current_space_after) - float(expected_space_after)) > 0.5
+                )
+                and not self._declaration_space_after_is_allowed(index, current_space_after)
             ):
                 paragraph.paragraph_format.space_after = Pt(float(expected_space_after))
                 changes.append({
@@ -1332,6 +1378,7 @@ class AutoFixer:
             expected_alignment
             and self._property_allowed("alignment", allowed_properties)
             and current_alignment != expected_alignment
+            and not self._declaration_alignment_is_allowed(index, current_alignment)
         ):
             paragraph.alignment = WD_ALIGN_PARAGRAPH(
                 ALIGNMENT_REVERSE_MAP.get(expected_alignment, 3)

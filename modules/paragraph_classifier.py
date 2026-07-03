@@ -424,7 +424,11 @@ class ParagraphClassifier:
         if re.match(rf"^(\d+(\.\d+)*\.?|[ivxlc]+\.?)\s+({heading_words})$", text_lower):
             return True
 
-        if re.match(r"^\d+\.\d+(\.\d+)*\.?\s+\S", text_lower) and len(text_clean) <= 100:
+        if (
+            re.match(r"^\d+\.\d+(\.\d+)*\.?\s+\S", text_lower)
+            and len(text_clean) <= 180
+            and not text_clean.endswith(".")
+        ):
             return True
 
         for term in section_terms:

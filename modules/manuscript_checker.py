@@ -630,7 +630,13 @@ class ManuscriptChecker:
 
                 if expected_space_after is not None:
                     current_space_after = get_space_after_pt(self.document.paragraphs[cp.index])
-                    if current_space_after is None or abs(float(current_space_after) - float(expected_space_after)) > 0.5:
+                    if (
+                        (
+                            current_space_after is None
+                            or abs(float(current_space_after) - float(expected_space_after)) > 0.5
+                        )
+                        and not self._declaration_space_after_is_allowed(cp, current_space_after)
+                    ):
                         space_after_mismatches.append(cp)
 
                 if (
@@ -1095,6 +1101,18 @@ class ManuscriptChecker:
         if cp.alignment not in {"LEFT", "JUSTIFY"}:
             return False
         return self._is_declaration_area_index(cp.index)
+
+    def _declaration_space_after_is_allowed(
+        self,
+        cp: ClassifiedParagraph,
+        current_space_after: Optional[float],
+    ) -> bool:
+        """Allow JIWE declaration bodies to follow the template's mixed 0pt/7.5pt spacing."""
+        if current_space_after is None:
+            return False
+        if not self._is_declaration_area_index(cp.index):
+            return False
+        return any(abs(float(current_space_after) - allowed) <= 0.5 for allowed in (0.0, 7.5))
 
     def _is_declaration_area_index(self, index: int) -> bool:
         """Return True for paragraphs between the first declaration and references."""

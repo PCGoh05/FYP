@@ -11,6 +11,7 @@ from docx.shared import Pt
 
 from modules.auto_fixer import AutoFixer
 from modules.manuscript_checker import ManuscriptChecker
+from modules.paragraph_classifier import ParagraphType
 from modules.utils import get_paragraph_font_info, get_sdt_reference_paragraphs
 
 
@@ -128,6 +129,79 @@ class JiweEdgeCasesTest(unittest.TestCase):
             ]
 
         self.assertNotIn("Heading bold formatting does not match template", heading_issues)
+
+    def test_long_numbered_research_question_subheading_is_not_body_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "long_research_question_subheading.docx"
+            document = Document()
+            _add_minimal_front_matter(document)
+            subheading = document.add_paragraph()
+            run = subheading.add_run(
+                "4.3 RQ3: What are the factors that play a main role in delaying web application vulnerability mitigations?"
+            )
+            run.font.name = "Times New Roman"
+            run.font.size = Pt(10)
+            run.font.italic = True
+            document.add_paragraph("The section text continues here.")
+            document.add_paragraph("CONCLUSION")
+            document.add_paragraph("Conclusion text.")
+            document.add_paragraph("REFERENCES")
+            document.add_paragraph("[1] Reference text.")
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+            classification = next(
+                cp
+                for cp in result.classifications
+                if cp.text.startswith("4.3 RQ3:")
+            )
+            fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+
+        self.assertEqual(classification.paragraph_type, ParagraphType.SECTION_HEADING)
+        self.assertFalse(any(
+            record.text_preview.startswith("4.3 RQ3:")
+            and record.change_type == "body"
+            for record in fixer.get_change_records()
+        ))
+
+    def test_declaration_left_aligned_template_text_is_not_auto_justified(self):
+        from modules.profile_loader import ProfileLoader
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "declaration_left_content.docx"
+            document = Document()
+            _add_minimal_front_matter(document)
+            document.add_paragraph("CONCLUSION")
+            document.add_paragraph("Conclusion text.")
+            document.add_paragraph("ACKNOWLEDGEMENT")
+            acknowledgement = document.add_paragraph(
+                "The authors would like to thank the anonymous reviewers for the suggestions to improve the paper."
+            )
+            acknowledgement.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            acknowledgement.paragraph_format.line_spacing = 1.0
+            acknowledgement.paragraph_format.space_after = Pt(7.5)
+            document.add_paragraph("FUNDING STATEMENT")
+            funding = document.add_paragraph(
+                "The authors received no funding from any party for the research and publication of this article."
+            )
+            funding.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            funding.paragraph_format.line_spacing = 1.0
+            funding.paragraph_format.space_after = Pt(7.5)
+            document.add_paragraph("REFERENCES")
+            document.add_paragraph("[1] Reference text.")
+            document.save(path)
+
+            rules = ProfileLoader().default_rules(ProfileLoader().load("jiwe"))
+            result = ManuscriptChecker(rules).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(rules, result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+
+        changed_previews = [record.text_preview for record in fixer.get_change_records()]
+        self.assertFalse(any("anonymous reviewers" in preview for preview in changed_previews))
+        self.assertFalse(any("received no funding" in preview for preview in changed_previews))
 
     def test_references_inside_word_content_controls_are_detected(self):
         with tempfile.TemporaryDirectory() as tmp:
