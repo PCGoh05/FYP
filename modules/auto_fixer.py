@@ -1048,6 +1048,7 @@ class AutoFixer:
                 "font_size",
                 "bold",
                 "italic",
+                "alignment",
                 "capitalization",
                 "number_font_name",
                 "number_font_size",
@@ -1059,6 +1060,7 @@ class AutoFixer:
         expected_size = heading_rules.get("font_size", 10)
         expected_bold = heading_rules.get("bold", None)
         expected_italic = heading_rules.get("italic", None)
+        expected_alignment = heading_rules.get("alignment")
         expected_all_caps = heading_rules.get("all_caps")
 
         changes.extend(self._fix_numbering_formatting(
@@ -1094,6 +1096,22 @@ class AutoFixer:
                 "current_value": current_text,
                 "target_value": target_text,
                 "evidence": "Heading capitalization did not match target rule",
+            })
+
+        current_alignment = get_paragraph_alignment(paragraph)
+        if (
+            expected_alignment
+            and self._property_allowed("alignment", allowed_properties)
+            and current_alignment != expected_alignment
+        ):
+            paragraph.alignment = WD_ALIGN_PARAGRAPH(
+                ALIGNMENT_REVERSE_MAP.get(expected_alignment, 0)
+            )
+            changes.append({
+                "property_name": "alignment",
+                "current_value": current_alignment,
+                "target_value": expected_alignment,
+                "evidence": "Heading alignment did not match target rule",
             })
 
         if changes:
@@ -1734,37 +1752,42 @@ class AutoFixer:
 
     @staticmethod
     def _normalize_reference_number_tab(paragraph) -> bool:
-        """Replace spaces after an IEEE reference number with one tab."""
-        for run in paragraph.runs:
+        """Normalize an IEEE reference number to exactly one tab before reference text."""
+        first_text_run_index = None
+        for index, run in enumerate(paragraph.runs):
+            if run.text and run.text.strip():
+                first_text_run_index = index
+                break
+
+        if first_text_run_index is None:
+            return False
+
+        first_run = paragraph.runs[first_text_run_index]
+        match = re.match(r"^(\s*\[\d+\])(\s*)(.*)$", first_run.text, flags=re.DOTALL)
+        if not match:
+            return False
+
+        changed = False
+        reference_number, separator, remainder = match.groups()
+        normalized_remainder = remainder.lstrip()
+        normalized_first_text = f"{reference_number}\t{normalized_remainder}"
+        if first_run.text != normalized_first_text:
+            first_run.text = normalized_first_text
+            changed = True
+        if separator != "\t" or remainder != normalized_remainder:
+            changed = True
+
+        for run in paragraph.runs[first_text_run_index + 1:]:
             if not run.text:
                 continue
-            if not run.text.strip():
-                continue
+            stripped = run.text.lstrip()
+            if stripped != run.text:
+                run.text = stripped
+                changed = True
+            if run.text.strip():
+                break
 
-            if re.match(r"^\s*\[\d+\]\t", run.text):
-                return False
-
-            updated_text = re.sub(
-                r"^(\s*\[\d+\])\s+(\S)",
-                r"\1\t\2",
-                run.text,
-                count=1,
-            )
-            if updated_text != run.text:
-                run.text = updated_text
-                return True
-
-            number_only_text = re.sub(
-                r"^(\s*\[\d+\])\s*$",
-                r"\1\t",
-                run.text,
-                count=1,
-            )
-            if number_only_text != run.text:
-                run.text = number_only_text
-                return True
-
-            return False
+        return changed
         return False
 
     def _fix_sdt_references(self):

@@ -78,7 +78,124 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertEqual(rules["reference"]["space_after"], 10.0)
         self.assertIsNone(rules["reference"]["left_indent"])
         self.assertAlmostEqual(rules["reference"]["hanging_indent"], 0.4444444444444444)
+        self.assertEqual(rules["heading"]["alignment"], "LEFT")
+        self.assertEqual(rules["subheading"]["alignment"], "LEFT")
         self.assertTrue(rules["reference"]["number_tab_required"])
+
+    def test_jiwe_heading_alignment_is_detected_and_fixed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "heading_alignment.docx"
+            document = Document()
+            _add_paragraph(document, "Journal of Informatics and", 24, WD_ALIGN_PARAGRAPH.CENTER, True)
+            _add_paragraph(document, "Web Engineering", 24, WD_ALIGN_PARAGRAPH.CENTER, True)
+            _add_paragraph(document, "Vol. 5 No. 2 (June 2026) eISSN: 2821-370X", 10, WD_ALIGN_PARAGRAPH.CENTER)
+            _add_paragraph(document, "A Test Paper Title for Heading Alignment", 24, WD_ALIGN_PARAGRAPH.CENTER)
+            _add_paragraph(document, "Abstract - " + "word " * 210, 9)
+            _add_paragraph(document, "Keywords - Template, Checking, Rules, References, Formatting", 9)
+            _add_paragraph(document, "1. INTRODUCTION", 10, WD_ALIGN_PARAGRAPH.CENTER, True)
+            subheading = _add_paragraph(document, "1.1 Experimental Setup", 10, WD_ALIGN_PARAGRAPH.CENTER)
+            for run in subheading.runs:
+                run.font.italic = True
+            _add_paragraph(document, "This body paragraph is correctly justified.")
+            _add_paragraph(document, "4. CONCLUSION", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            _add_paragraph(document, "Conclusion text for the manuscript.")
+            _add_paragraph(document, "5. REFERENCES", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            _add_paragraph(
+                document,
+                '[1]\tA. Author, "Article title," Journal of Testing, vol. 1, no. 1, pp. 1-5, 2026.',
+                9,
+            )
+            document.save(path)
+
+            rules = _jiwe_rules()
+            before = ManuscriptChecker(rules).load_manuscript(str(path)).check_all()
+            heading_descriptions = [
+                issue.description
+                for issue in before.issues_by_category.get("headings", [])
+            ]
+
+            fixer = AutoFixer(rules, before.classifications, before.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        self.assertIn("Heading alignment does not match template", heading_descriptions)
+        fixed_headings = {
+            paragraph.text: paragraph.alignment
+            for paragraph in fixed.paragraphs
+            if paragraph.text in {"1. INTRODUCTION", "1.1 Experimental Setup"}
+        }
+        self.assertEqual(fixed_headings["1. INTRODUCTION"], WD_ALIGN_PARAGRAPH.LEFT)
+        self.assertEqual(fixed_headings["1.1 Experimental Setup"], WD_ALIGN_PARAGRAPH.LEFT)
+
+    def test_jiwe_declaration_left_content_is_not_body_alignment_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "declaration_alignment.docx"
+            document = Document()
+            _add_paragraph(document, "Journal of Informatics and", 24, WD_ALIGN_PARAGRAPH.CENTER, True)
+            _add_paragraph(document, "Web Engineering", 24, WD_ALIGN_PARAGRAPH.CENTER, True)
+            _add_paragraph(document, "Vol. 5 No. 2 (June 2026) eISSN: 2821-370X", 10, WD_ALIGN_PARAGRAPH.CENTER)
+            _add_paragraph(document, "A Test Paper Title for Declaration Alignment", 24, WD_ALIGN_PARAGRAPH.CENTER)
+            _add_paragraph(document, "Abstract - " + "word " * 210, 9)
+            _add_paragraph(document, "Keywords - Template, Checking, Rules, References, Formatting", 9)
+            _add_paragraph(document, "1. INTRODUCTION", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            _add_paragraph(document, "This body paragraph is correctly justified.", 10, WD_ALIGN_PARAGRAPH.JUSTIFY)
+            _add_paragraph(document, "4. CONCLUSION", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            _add_paragraph(document, "Conclusion text for the manuscript.", 10, WD_ALIGN_PARAGRAPH.JUSTIFY)
+            _add_paragraph(document, "FUNDING STATEMENT", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            _add_paragraph(
+                document,
+                "The authors received no funding from any party for the research and publication of this article.",
+                10,
+                WD_ALIGN_PARAGRAPH.LEFT,
+            )
+            _add_paragraph(document, "CONFLICT OF INTERESTS", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            _add_paragraph(document, "No conflict of interests were disclosed.", 10, WD_ALIGN_PARAGRAPH.JUSTIFY)
+            _add_paragraph(document, "5. REFERENCES", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            _add_paragraph(
+                document,
+                '[1]\tA. Author, "Article title," Journal of Testing, vol. 1, no. 1, pp. 1-5, 2026.',
+                9,
+            )
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+
+        body_descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("body_text", [])
+        ]
+        self.assertNotIn("Body text alignment does not match template", body_descriptions)
+
+    def test_jiwe_inline_font_instruction_does_not_break_heading_capitalization(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "heading_instruction.docx"
+            document = Document()
+            _add_paragraph(document, "Journal of Informatics and", 24, WD_ALIGN_PARAGRAPH.CENTER, True)
+            _add_paragraph(document, "Web Engineering", 24, WD_ALIGN_PARAGRAPH.CENTER, True)
+            _add_paragraph(document, "Vol. 5 No. 2 (June 2026) eISSN: 2821-370X", 10, WD_ALIGN_PARAGRAPH.CENTER)
+            _add_paragraph(document, "A Test Paper Title for Heading Instruction", 24, WD_ALIGN_PARAGRAPH.CENTER)
+            _add_paragraph(document, "Abstract - " + "word " * 210, 9)
+            _add_paragraph(document, "Keywords - Template, Checking, Rules, References, Formatting", 9)
+            _add_paragraph(document, "INTRODUCTION (10-Font size, Times New Roman)", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            _add_paragraph(document, "This body paragraph is correctly justified.", 10, WD_ALIGN_PARAGRAPH.JUSTIFY)
+            _add_paragraph(document, "CONCLUSION (10-Font size, Times New Roman)", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            _add_paragraph(document, "Conclusion text for the manuscript.", 10, WD_ALIGN_PARAGRAPH.JUSTIFY)
+            _add_paragraph(document, "REFERENCES", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            _add_paragraph(
+                document,
+                '[1]\tA. Author, "Article title," Journal of Testing, vol. 1, no. 1, pp. 1-5, 2026.',
+                9,
+            )
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+
+        heading_descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("headings", [])
+        ]
+        self.assertNotIn("Heading capitalization does not match template", heading_descriptions)
 
     def test_checker_reports_body_spacing_and_reference_indent_mismatches(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -211,6 +328,31 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
             fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
 
         self.assertTrue(fixed.paragraphs[11].text.startswith("[1]\t"))
+
+    def test_auto_fix_collapses_duplicate_tabs_after_reference_number(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "reference_number_duplicate_tab_fix.docx"
+            _save_spacing_issue_document(path)
+            document = Document(path)
+            reference = document.paragraphs[11]
+            reference.runs[0].text = "[1]\t"
+            reference.add_run("\t")
+            reference.add_run('A. Author, "Article title," Journal of Testing, 2026.')
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            descriptions = [
+                issue.description
+                for issue in result.issues_by_category.get("references", [])
+            ]
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        self.assertIn("Reference number should be followed by a tab", descriptions)
+        self.assertTrue(fixed.paragraphs[11].text.startswith("[1]\t"))
+        self.assertFalse(fixed.paragraphs[11].text.startswith("[1]\t\t"))
 
     def test_checker_reports_caption_title_case_mismatch(self):
         with tempfile.TemporaryDirectory() as tmp:

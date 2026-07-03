@@ -412,7 +412,8 @@ class ParagraphClassifier:
     def _is_section_heading(self, text: str, allow_custom_all_caps: bool = True) -> bool:
         """Return True for common academic section headings."""
         text_clean = re.sub(r"\s+", " ", text.strip())
-        text_lower = text_clean.lower().strip(".")
+        text_for_match = self._strip_trailing_format_instruction(text_clean)
+        text_lower = text_for_match.lower().strip(".")
 
         section_terms = set(self.section_terms)
 
@@ -430,14 +431,25 @@ class ParagraphClassifier:
             if text_lower.startswith(f"{term} ") and re.search(r"\d+\.\d+", text_lower):
                 return True
 
-        if text_clean.isupper() and 4 <= len(text_clean) <= 80:
+        if text_for_match.isupper() and 4 <= len(text_for_match) <= 80:
             if any(word in text_lower for word in section_terms):
                 return True
 
-        if allow_custom_all_caps and self._is_custom_all_caps_section_heading(text_clean, text_lower):
+        if allow_custom_all_caps and self._is_custom_all_caps_section_heading(text_for_match, text_lower):
             return True
 
         return False
+
+    @staticmethod
+    def _strip_trailing_format_instruction(text: str) -> str:
+        """Remove JIWE template's inline formatting instruction from heading matching."""
+        stripped = re.sub(
+            r"\s*\([^)]*(?:font|times\s+new\s+roman|size)[^)]*\)\s*$",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        return stripped.strip() or text
 
     def _is_custom_all_caps_section_heading(self, text_clean: str, text_lower: str) -> bool:
         """Return True for short custom section headings that are not profile terms."""

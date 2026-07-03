@@ -620,7 +620,11 @@ class ManuscriptChecker:
                         )
                     issues_found += 1
 
-                if expected_alignment and cp.alignment != expected_alignment:
+                if (
+                    expected_alignment
+                    and cp.alignment != expected_alignment
+                    and not self._declaration_alignment_is_allowed(cp)
+                ):
                     alignment_mismatches.append(cp)
 
                 if expected_space_after is not None:
@@ -984,6 +988,7 @@ class ManuscriptChecker:
                 expected_size = heading_rules.get("font_size", 10)
                 expected_bold = heading_rules.get("bold")
                 expected_italic = heading_rules.get("italic")
+                expected_alignment = heading_rules.get("alignment")
                 font_info = cp.font_info
                 
                 # Check font
@@ -1041,6 +1046,22 @@ class ManuscriptChecker:
                         text_preview=cp.text
                     )
 
+                if (
+                    expected_alignment
+                    and cp.alignment != expected_alignment
+                    and not self._left_heading_alignment_is_visually_acceptable(cp)
+                ):
+                    self._add_issue(
+                        category="headings",
+                        location=f"Heading: {truncate_text(cp.text, 30)}",
+                        para_index=cp.index,
+                        description="Heading alignment does not match template",
+                        current=cp.alignment,
+                        expected=expected_alignment,
+                        severity="warning",
+                        text_preview=cp.text
+                    )
+
                 expected_all_caps = heading_rules.get("all_caps")
                 if expected_all_caps and not self._heading_text_is_all_caps(cp.text):
                     self._add_issue(
@@ -1068,6 +1089,75 @@ class ManuscriptChecker:
                         text_preview=cp.text
                     )
 
+    def _declaration_alignment_is_allowed(self, cp: ClassifiedParagraph) -> bool:
+        """Allow JIWE declaration bodies to follow the template's mixed left/justify layout."""
+        if cp.alignment not in {"LEFT", "JUSTIFY"}:
+            return False
+        return self._is_declaration_area_index(cp.index)
+
+    def _is_declaration_area_index(self, index: int) -> bool:
+        """Return True for paragraphs between the first declaration and references."""
+        declaration_indices = [
+            cp.index
+            for cp in self.classifications
+            if self._is_declaration_heading_text(cp.text)
+        ]
+        if not declaration_indices:
+            return False
+
+        first_declaration = min(declaration_indices)
+        reference_index = None
+        for cp in self.classifications:
+            if cp.index <= first_declaration:
+                continue
+            normalized = self._normalize_declaration_heading_text(cp.text)
+            if normalized in {"references", "bibliography"}:
+                reference_index = cp.index
+                break
+
+        if reference_index is None:
+            return index >= first_declaration
+        return first_declaration <= index < reference_index
+
+    def _is_declaration_heading_text(self, text: str) -> bool:
+        """Return True for required JIWE declaration headings."""
+        normalized = self._normalize_declaration_heading_text(text)
+        aliases = {
+            alias
+            for values in self._declaration_aliases().values()
+            for alias in values
+        }
+        return normalized in aliases
+
+    @staticmethod
+    def _normalize_declaration_heading_text(text: str) -> str:
+        """Normalize a possible declaration heading for deterministic matching."""
+        stripped = re.sub(r"\([^)]*\)", "", text or "")
+        stripped = re.sub(r"^\d+(?:\.\d+)*\.?\s+", "", stripped)
+        normalized = re.sub(r"[^a-z ]", " ", stripped.lower())
+        return re.sub(r"\s+", " ", normalized).strip()
+
+    @staticmethod
+    def _declaration_aliases() -> Dict[str, tuple]:
+        """Known JIWE declaration heading aliases."""
+        return {
+            "acknowledgement": ("acknowledgement", "acknowledgements", "acknowledgment", "acknowledgments"),
+            "funding_statement": ("funding statement", "funding"),
+            "author_contributions": ("author contributions", "authors contributions"),
+            "conflict_of_interests": (
+                "conflict of interests",
+                "conflict of interest",
+                "competing interests",
+            ),
+            "ethics_statements": ("ethics statements", "ethics statement", "ethical statement"),
+            "data_availability": ("data availability", "data availability statement"),
+        }
+
+    @staticmethod
+    def _left_heading_alignment_is_visually_acceptable(cp: ClassifiedParagraph) -> bool:
+        """Treat short justified headings as acceptable because Word renders them like left-aligned text."""
+        return cp.alignment == "JUSTIFY" and len((cp.text or "").strip()) <= 120
+
     def _heading_rules_for_text(self, text: str) -> Dict[str, Any]:
         """Return the correct heading rule for main headings or subheadings."""
         stripped = re.sub(r"\s+", " ", text.strip())
@@ -1078,7 +1168,13 @@ class ManuscriptChecker:
     @staticmethod
     def _heading_text_is_all_caps(text: str) -> bool:
         """Return True when heading words are uppercase after removing numbering."""
-        stripped = re.sub(r"^\s*\d+(?:\.\d+)*\.?\s+", "", text or "").strip()
+        stripped = re.sub(
+            r"\s*\([^)]*(?:font|times\s+new\s+roman|size)[^)]*\)\s*$",
+            "",
+            text or "",
+            flags=re.IGNORECASE,
+        )
+        stripped = re.sub(r"^\s*\d+(?:\.\d+)*\.?\s+", "", stripped).strip()
         letters = [char for char in stripped if char.isalpha()]
         return bool(letters) and all(char.isupper() for char in letters)
     
@@ -2207,9 +2303,11 @@ class ManuscriptChecker:
 
     @staticmethod
     def _reference_number_needs_tab(text: str) -> bool:
-        """Return True when an IEEE reference number is followed by spaces instead of a tab."""
-        return bool(re.match(r"^\s*\[\d+\]\s+\S", text)) and not bool(
-            re.match(r"^\s*\[\d+\]\t", text)
+        """Return True when an IEEE reference number is not followed by exactly one tab."""
+        if re.match(r"^\s*\[\d+\]\t{2,}", text or ""):
+            return True
+        return bool(re.match(r"^\s*\[\d+\]\s+\S", text or "")) and not bool(
+            re.match(r"^\s*\[\d+\]\t", text or "")
         )
 
     def _is_paragraph_mostly_bold(self, paragraph_index: int) -> bool:

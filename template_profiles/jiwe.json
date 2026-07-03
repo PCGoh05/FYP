@@ -195,13 +195,15 @@
       "font_name": "Times New Roman",
       "font_size": 10,
       "bold": true,
-      "all_caps": true
+      "all_caps": true,
+      "alignment": "LEFT"
     },
     "subheading": {
       "font_name": "Times New Roman",
       "font_size": 10,
       "bold": false,
-      "italic": true
+      "italic": true,
+      "alignment": "LEFT"
     },
     "abstract": {
       "font_name": "Times New Roman",
