@@ -76,7 +76,7 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertTrue(rules["caption"]["title_case"])
         self.assertEqual(rules["reference"]["line_spacing"], 1.15)
         self.assertEqual(rules["reference"]["space_after"], 10.0)
-        self.assertAlmostEqual(rules["reference"]["left_indent"], 0.4444444444444444)
+        self.assertIsNone(rules["reference"]["left_indent"])
         self.assertAlmostEqual(rules["reference"]["hanging_indent"], 0.4444444444444444)
         self.assertEqual(rules["heading"]["alignment"], "LEFT")
         self.assertEqual(rules["subheading"]["alignment"], "LEFT")
@@ -267,7 +267,7 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertFalse(paragraph_has_manual_line_breaks(fixed.paragraphs[7]))
         self.assertIn("naturally, not be forced", fixed.paragraphs[7].text)
 
-    def test_auto_fix_normalizes_reference_block_indent(self):
+    def test_auto_fix_clears_extra_reference_left_indent(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "reference_left_indent_fix.docx"
             _save_spacing_issue_document(path)
@@ -290,9 +290,9 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
             fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
 
         fixed_reference = fixed.paragraphs[11]
-        self.assertAlmostEqual(fixed_reference.paragraph_format.left_indent.inches, 0.44, places=2)
+        self.assertIsNone(fixed_reference.paragraph_format.left_indent)
         indentation = fixed_reference._p.pPr.ind
-        self.assertEqual(indentation.get(qn("w:left")), "640")
+        self.assertIsNone(indentation.get(qn("w:left")))
         self.assertAlmostEqual(abs(fixed_reference.paragraph_format.first_line_indent.inches), 0.44, places=2)
 
     def test_checker_reports_reference_number_space_instead_of_tab(self):

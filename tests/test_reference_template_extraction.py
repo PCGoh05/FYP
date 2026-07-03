@@ -75,7 +75,7 @@ class ReferenceTemplateExtractionTest(unittest.TestCase):
         self.assertEqual(rules["reference"]["font_size"], 9)
         self.assertEqual(rules["reference"]["alignment"], "JUSTIFY")
         self.assertEqual(rules["reference"]["line_spacing"], 1.15)
-        self.assertAlmostEqual(rules["reference"]["left_indent"], 0.4444444444444444)
+        self.assertIsNone(rules["reference"]["left_indent"])
         self.assertAlmostEqual(rules["reference"]["hanging_indent"], 0.4444444444444444)
         self.assertEqual(
             rules["_provenance"]["reference.line_spacing"]["source"],

@@ -67,6 +67,7 @@ def _append_sdt_paragraph(
     font_name="Calibri",
     font_size=11,
     alignment="CENTER",
+    hanging_twips=None,
 ):
     sdt = OxmlElement("w:sdt")
     content = OxmlElement("w:sdtContent")
@@ -75,6 +76,10 @@ def _append_sdt_paragraph(
     justification = OxmlElement("w:jc")
     justification.set(qn("w:val"), alignment.lower())
     paragraph_properties.append(justification)
+    if hanging_twips is not None:
+        indent = OxmlElement("w:ind")
+        indent.set(qn("w:hanging"), str(hanging_twips))
+        paragraph_properties.append(indent)
     paragraph.append(paragraph_properties)
     run = OxmlElement("w:r")
     run_properties = OxmlElement("w:rPr")
@@ -147,6 +152,43 @@ class JiweEdgeCasesTest(unittest.TestCase):
         self.assertIn("Reference font does not match template", reference_issues)
         self.assertIn("Reference font size does not match template", reference_issues)
         self.assertIn("Reference alignment does not match template", reference_issues)
+
+    def test_compliant_content_control_references_do_not_get_left_indent_fix(self):
+        from modules.profile_loader import ProfileLoader
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sdt_reference_compliant_indent.docx"
+            document = Document()
+            _add_minimal_front_matter(document)
+            document.add_paragraph("CONCLUSION")
+            document.add_paragraph("Conclusion text.")
+            document.add_paragraph("REFERENCES")
+            _append_sdt_paragraph(
+                document,
+                '[1]\tA. Author, "Article title," Journal of Testing, 2025.',
+                font_name="Times New Roman",
+                font_size=9,
+                alignment="both",
+                hanging_twips=640,
+            )
+            document.add_paragraph("BIOGRAPHIES OF AUTHORS")
+            document.save(path)
+
+            rules = ProfileLoader().default_rules(ProfileLoader().load("jiwe"))
+            result = ManuscriptChecker(rules).load_manuscript(str(path)).check_all()
+            reference_issues = [
+                issue.description
+                for issue in result.issues_by_category.get("references", [])
+            ]
+            fixer = AutoFixer(rules, result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+            fixed_reference = get_sdt_reference_paragraphs(fixed)[0]
+
+        self.assertNotIn("Reference left indent does not match template", reference_issues)
+        self.assertIsNone(fixed_reference._p.pPr.ind.get(qn("w:left")))
+        self.assertEqual(fixed_reference._p.pPr.ind.get(qn("w:hanging")), "640")
 
     def test_auto_fixer_formats_references_inside_word_content_controls(self):
         with tempfile.TemporaryDirectory() as tmp:
