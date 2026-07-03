@@ -2309,10 +2309,7 @@ class ManuscriptChecker:
                     for text_node in child.iter()
                     if text_node.tag == qn("w:t")
                 )
-                has_drawing = any(
-                    node.tag == qn("w:drawing")
-                    for node in child.iter()
-                )
+                has_drawing = self._block_has_image(child)
                 blocks.append({
                     "kind": "drawing" if has_drawing else "paragraph",
                     "text": re.sub(r"\s+", " ", text).strip(),
@@ -2341,10 +2338,50 @@ class ManuscriptChecker:
             index += direction
         return None
 
+    @staticmethod
+    def _block_has_image(block) -> bool:
+        """Return True when a document block contains a modern or legacy image."""
+        image_tags = {qn("w:drawing"), qn("w:pict")}
+        return any(node.tag in image_tags for node in block.iter())
+
+    @staticmethod
+    def _block_image_count(block) -> int:
+        """Count modern and legacy Word images inside a document block."""
+        image_tags = {qn("w:drawing"), qn("w:pict")}
+        return sum(1 for node in block.iter() if node.tag in image_tags)
+
+    @staticmethod
+    def _is_main_body_start(text: str) -> bool:
+        """Return True when a paragraph starts the manuscript body."""
+        normalized = re.sub(r"^\d+(?:\.\d+)*\.?\s*", "", text.lower()).strip()
+        return normalized.startswith("introduction")
+
+    @staticmethod
+    def _is_back_matter_start(text: str) -> bool:
+        """Return True when image counting should stop before back matter."""
+        normalized = re.sub(r"^\d+(?:\.\d+)*\.?\s*", "", text.lower()).strip()
+        return normalized.startswith((
+            "acknowledgement",
+            "acknowledgment",
+            "funding statement",
+            "author contributions",
+            "conflict of interests",
+            "conflict of interest",
+            "ethics statements",
+            "ethics statement",
+            "data availability",
+            "references",
+            "bibliography",
+            "works cited",
+            "biographies of authors",
+            "author biography",
+            "appendix",
+        ))
+
     def _count_body_images_before_back_matter(self) -> int:
         """Count body images while ignoring author photos in biography sections."""
         count = 0
-        seen_figure_caption = False
+        in_main_body = False
         for child in self.document.element.body.iterchildren():
             block_text = " ".join(
                 text_node.text or ""
@@ -2352,12 +2389,13 @@ class ManuscriptChecker:
                 if text_node.tag == qn("w:t")
             )
             normalized = re.sub(r"\s+", " ", block_text.lower()).strip()
-            if normalized.startswith(("biographies of authors", "appendix")):
+            if not in_main_body and self._is_main_body_start(normalized):
+                in_main_body = True
+                continue
+            if in_main_body and self._is_back_matter_start(normalized):
                 break
-            if re.match(r"^(figure|fig\.?)\s*\d+\s*[\.:]", normalized):
-                seen_figure_caption = True
-            if seen_figure_caption:
-                count += sum(1 for node in child.iter() if node.tag == qn("w:drawing"))
+            if in_main_body:
+                count += self._block_image_count(child)
         return count
 
     def _extract_reference_texts_from_body_xml(self) -> List[str]:

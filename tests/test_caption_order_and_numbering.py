@@ -23,6 +23,12 @@ def _add_drawing_paragraph(document):
     run._r.append(OxmlElement("w:drawing"))
 
 
+def _add_pict_paragraph(document):
+    paragraph = document.add_paragraph()
+    run = paragraph.add_run()
+    run._r.append(OxmlElement("w:pict"))
+
+
 class CaptionOrderAndNumberingTest(unittest.TestCase):
     def test_checker_accepts_correct_caption_positions_and_numbering(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -166,6 +172,56 @@ class CaptionOrderAndNumberingTest(unittest.TestCase):
         ]
         self.assertIn("Figure caption should appear below the figure", descriptions)
         self.assertEqual([], fixer.get_change_records())
+
+    def test_checker_reports_missing_caption_for_body_image_before_any_caption(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "body_image_without_caption.docx"
+            document = Document()
+            document.add_paragraph("1. INTRODUCTION")
+            _add_drawing_paragraph(document)
+            document.add_paragraph("Body text after the image.")
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+        descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("figures", [])
+        ]
+        self.assertIn("Some figures may be missing captions", descriptions)
+
+    def test_checker_ignores_front_matter_images_before_introduction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "front_matter_logo.docx"
+            document = Document()
+            _add_drawing_paragraph(document)
+            document.add_paragraph("1. INTRODUCTION")
+            document.add_paragraph("Body text with no figures.")
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+        descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("figures", [])
+        ]
+        self.assertNotIn("Some figures may be missing captions", descriptions)
+
+    def test_checker_detects_legacy_pict_for_caption_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "legacy_pict_caption_order.docx"
+            document = Document()
+            document.add_paragraph("Figure 1: Caption placed before the image")
+            _add_pict_paragraph(document)
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+        descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("figures", [])
+        ]
+        self.assertIn("Figure caption should appear below the figure", descriptions)
 
 
 if __name__ == "__main__":
