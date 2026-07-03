@@ -160,8 +160,8 @@ class ReportGenerator:
 
         note = self.document.add_paragraph()
         note.add_run(
-            "A highlighted running header usually means page-header tab spacing was normalized "
-            "to reduce wrapping in Microsoft Word; it does not mean the journal name itself is wrong."
+            "Hidden page-header spacing cleanup is listed in the summary report but is not highlighted "
+            "in the manuscript because the visible header text is unchanged."
         )
         note.runs[0].font.italic = True
         note.runs[0].font.color.rgb = RGBColor(96, 96, 96)

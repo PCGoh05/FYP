@@ -629,11 +629,11 @@ class AutoFixer:
                         location=f"{label} (Section {section_index + 1})",
                         change_type="page_header",
                         property_name="manual_tabs",
-                        current_value=truncate_text(original_text, 80),
-                        target_value=truncate_text(normalized_text, 80),
+                        current_value="Manual tabs/spaces between left and right header text",
+                        target_value="Single right-aligned tab stop; visible header text unchanged",
                         text_preview=truncate_text(normalized_text, 80),
                         paragraph_type="document_header",
-                        evidence="Detected page header manual tabs/spaces that may wrap in Word",
+                        evidence="Detected hidden page header spacing that may wrap in Word",
                     )
 
     def _has_unstable_header_tabs(self, text: str) -> bool:
@@ -1788,6 +1788,8 @@ class AutoFixer:
     def _highlight_page_header_change(self, document: Document, change: ChangeRecord) -> bool:
         """Highlight page header text for document-level header changes."""
         if change.change_type != "page_header":
+            return False
+        if change.property_name == "manual_tabs":
             return False
 
         highlighted = False

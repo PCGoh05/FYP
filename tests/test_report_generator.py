@@ -56,6 +56,7 @@ class ReportGeneratorTest(unittest.TestCase):
         self.assertIn("How to Use This Report", text)
         self.assertIn("Highlighted Corrected Manuscript", text)
         self.assertIn("marks applied-change locations in yellow", text)
+        self.assertIn("visible header text is unchanged", text)
 
     def test_report_includes_auto_fix_scope_limits(self):
         report = ReportGenerator(

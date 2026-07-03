@@ -105,6 +105,20 @@ class HeaderLayoutStabilityTest(unittest.TestCase):
             self.assertTrue(
                 any(change.property_name == "manual_tabs" for change in changes)
             )
+            header_changes = [
+                change
+                for change in changes
+                if change.change_type == "page_header" and change.property_name == "manual_tabs"
+            ]
+            self.assertTrue(header_changes)
+            self.assertEqual(
+                header_changes[0].current_value,
+                "Manual tabs/spaces between left and right header text",
+            )
+            self.assertEqual(
+                header_changes[0].target_value,
+                "Single right-aligned tab stop; visible header text unchanged",
+            )
 
     def test_auto_fixer_trims_journal_header_spaces_without_losing_run_formatting(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -234,7 +248,7 @@ class HeaderLayoutStabilityTest(unittest.TestCase):
                 any("<w:drawing" in run._r.xml for run in fixed_header.runs)
             )
 
-    def test_highlighted_document_marks_changed_page_header(self):
+    def test_highlighted_document_does_not_mark_hidden_page_header_spacing(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "unstable.docx"
             _save_unstable_docx(path)
@@ -253,7 +267,7 @@ class HeaderLayoutStabilityTest(unittest.TestCase):
             ]
 
             self.assertTrue(header_runs)
-            self.assertEqual(header_runs[0].font.highlight_color, WD_COLOR_INDEX.YELLOW)
+            self.assertIsNone(header_runs[0].font.highlight_color)
             self.assertEqual(
                 highlighted_doc.sections[0].header.paragraphs[0].text,
                 "Journal of Informatics and Web Engineering\tVol. 3 No. 3 (January 2026)",
