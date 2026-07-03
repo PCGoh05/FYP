@@ -12,7 +12,7 @@ from difflib import SequenceMatcher
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_alignment, get_paragraph_font_info,
     get_sdt_reference_paragraphs, get_margins, get_line_spacing,
-    get_space_after_pt, get_hanging_indent_inches,
+    get_space_after_pt, get_left_indent_inches, get_hanging_indent_inches,
     detect_reference_style, calculate_compliance_score, count_columns,
     truncate_text, is_font_equivalent, classify_author_info_role,
     to_journal_caption_title_case,
@@ -1491,6 +1491,7 @@ class ManuscriptChecker:
         expected_alignment = reference_rules.get("alignment")
         expected_line_spacing = reference_rules.get("line_spacing")
         expected_space_after = reference_rules.get("space_after")
+        expected_left_indent = reference_rules.get("left_indent")
         expected_hanging_indent = reference_rules.get("hanging_indent")
         publication_italic_required = reference_rules.get("publication_italic_required")
         if publication_italic_required is None:
@@ -1513,6 +1514,7 @@ class ManuscriptChecker:
                     expected_alignment,
                     expected_line_spacing,
                     expected_space_after,
+                    expected_left_indent,
                     expected_hanging_indent,
                     publication_italic_required,
                 )
@@ -1555,6 +1557,7 @@ class ManuscriptChecker:
         alignment_mismatches = []
         line_spacing_mismatches = []
         space_after_mismatches = []
+        left_indent_mismatches = []
         hanging_indent_mismatches = []
         for i, cp in enumerate(references):
             current_font = cp.font_info.get("font_name")
@@ -1613,6 +1616,12 @@ class ManuscriptChecker:
                     or abs(float(current_space_after) - float(expected_space_after)) > 0.5
                 ):
                     space_after_mismatches.append(cp)
+
+            if expected_left_indent is not None:
+                current_left_indent = get_left_indent_inches(self.document.paragraphs[cp.index])
+                effective_left_indent = 0.0 if current_left_indent is None else float(current_left_indent)
+                if abs(effective_left_indent - float(expected_left_indent)) > 0.03:
+                    left_indent_mismatches.append(cp)
 
             if expected_hanging_indent is not None:
                 current_hanging_indent = get_hanging_indent_inches(self.document.paragraphs[cp.index])
@@ -1696,6 +1705,22 @@ class ManuscriptChecker:
                 expected=f"{expected_hanging_indent}in",
                 severity="warning",
                 text_preview=truncate_text(hanging_indent_mismatches[0].text, 50)
+            )
+
+        if left_indent_mismatches:
+            current_left_indent = get_left_indent_inches(
+                self.document.paragraphs[left_indent_mismatches[0].index]
+            )
+            effective_left_indent = 0.0 if current_left_indent is None else float(current_left_indent)
+            self._add_issue(
+                category="references",
+                location="Reference Entries",
+                para_index=-1,
+                description="Reference left indent does not match template",
+                current=f"{effective_left_indent:.2f}in",
+                expected=f"{expected_left_indent}in",
+                severity="warning",
+                text_preview=truncate_text(left_indent_mismatches[0].text, 50)
             )
 
     def _check_equations(self) -> None:
@@ -1857,6 +1882,7 @@ class ManuscriptChecker:
         expected_alignment,
         expected_line_spacing,
         expected_space_after,
+        expected_left_indent,
         expected_hanging_indent,
         publication_italic_required,
     ):
@@ -1864,6 +1890,7 @@ class ManuscriptChecker:
         alignment_mismatches = []
         line_spacing_mismatches = []
         space_after_mismatches = []
+        left_indent_mismatches = []
         hanging_indent_mismatches = []
 
         for index, paragraph in enumerate(references):
@@ -1926,6 +1953,12 @@ class ManuscriptChecker:
                     or abs(float(current_space_after) - float(expected_space_after)) > 0.5
                 ):
                     space_after_mismatches.append(paragraph)
+
+            if expected_left_indent is not None:
+                current_left_indent = get_left_indent_inches(paragraph)
+                effective_left_indent = 0.0 if current_left_indent is None else float(current_left_indent)
+                if abs(effective_left_indent - float(expected_left_indent)) > 0.03:
+                    left_indent_mismatches.append(paragraph)
 
             if expected_hanging_indent is not None:
                 current_hanging_indent = get_hanging_indent_inches(paragraph)
@@ -2007,6 +2040,20 @@ class ManuscriptChecker:
                 expected=f"{expected_hanging_indent}in",
                 severity="warning",
                 text_preview=truncate_text(get_paragraph_text(hanging_indent_mismatches[0]), 50),
+            )
+
+        if left_indent_mismatches:
+            current_left_indent = get_left_indent_inches(left_indent_mismatches[0])
+            effective_left_indent = 0.0 if current_left_indent is None else float(current_left_indent)
+            self._add_issue(
+                category="references",
+                location="Reference Content Controls",
+                para_index=-1,
+                description="Reference left indent does not match template",
+                current=f"{effective_left_indent:.2f}in",
+                expected=f"{expected_left_indent}in",
+                severity="warning",
+                text_preview=truncate_text(get_paragraph_text(left_indent_mismatches[0]), 50),
             )
 
     def _is_paragraph_mostly_bold(self, paragraph_index: int) -> bool:

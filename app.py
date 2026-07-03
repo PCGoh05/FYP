@@ -284,7 +284,7 @@ def get_system_capability_sections():
             "title": "Can Detect",
             "items": [
                 "Margins, page size, journal header, paper title, author information, body text, headings, abstract rules, keywords, captions, references, citations, and required sections.",
-                "JIWE-specific checks include paragraph spacing after, caption title case, reference line spacing, and reference hanging indent.",
+                "JIWE-specific checks include paragraph spacing after, caption title case, reference line spacing, reference left indent, and reference hanging indent.",
                 "Some checks are exact formatting checks; others are warning-level structural or content-pattern checks that should be reviewed by a person.",
             ],
         },

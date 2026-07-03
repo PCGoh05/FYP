@@ -448,6 +448,8 @@ class ReviewGuidanceBuilder:
             return "line_spacing"
         if "spacing after" in lower or "after spacing" in lower:
             return "space_after"
+        if "left indent" in lower:
+            return "left_indent"
         if "hanging indent" in lower:
             return "hanging_indent"
         if "manual tab" in lower:
@@ -569,6 +571,8 @@ class ReviewGuidanceBuilder:
             ("references", "line_spacing"): "Reference line spacing was corrected.",
             ("reference", "space_after"): "Reference paragraph spacing after was corrected.",
             ("references", "space_after"): "Reference paragraph spacing after was corrected.",
+            ("reference", "left_indent"): "Reference left indent was corrected.",
+            ("references", "left_indent"): "Reference left indent was corrected.",
             ("reference", "hanging_indent"): "Reference hanging indent was corrected.",
             ("references", "hanging_indent"): "Reference hanging indent was corrected.",
             ("layout", "page_size"): "Page size was corrected.",
@@ -589,6 +593,7 @@ class ReviewGuidanceBuilder:
             "font_size": "font size",
             "line_spacing": "line spacing",
             "space_after": "paragraph spacing after",
+            "left_indent": "left indent",
             "hanging_indent": "hanging indent",
             "capitalization": "capitalization",
             "manual_tabs": "header spacing",

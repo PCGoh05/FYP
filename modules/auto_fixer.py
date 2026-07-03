@@ -18,7 +18,7 @@ from io import BytesIO
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_alignment, truncate_text,
     is_font_equivalent, get_run_font_info, get_sdt_reference_paragraphs,
-    classify_author_info_role, get_space_after_pt, get_hanging_indent_inches,
+    classify_author_info_role, get_space_after_pt, get_left_indent_inches, get_hanging_indent_inches,
     to_journal_caption_title_case
 )
 from .paragraph_classifier import (
@@ -234,6 +234,8 @@ class AutoFixer:
             return "line_spacing"
         if "spacing after" in description or "after spacing" in description:
             return "space_after"
+        if "left indent" in description:
+            return "left_indent"
         if "hanging indent" in description:
             return "hanging_indent"
         if "manual tab" in description or "manual tabs" in description:
@@ -1384,6 +1386,7 @@ class AutoFixer:
                 "alignment",
                 "line_spacing",
                 "space_after",
+                "left_indent",
                 "hanging_indent",
             ],
         )
@@ -1394,6 +1397,7 @@ class AutoFixer:
         expected_alignment = reference_rules.get("alignment")
         expected_line_spacing = reference_rules.get("line_spacing")
         expected_space_after = reference_rules.get("space_after")
+        expected_left_indent = reference_rules.get("left_indent")
         expected_hanging_indent = reference_rules.get("hanging_indent")
 
         for run in paragraph.runs:
@@ -1456,6 +1460,21 @@ class AutoFixer:
                     ),
                     "target_value": f"{expected_space_after}pt",
                     "evidence": "Reference paragraph spacing after did not match target rule",
+                })
+
+        if (
+            expected_left_indent is not None
+            and self._property_allowed("left_indent", allowed_properties)
+        ):
+            current_left_indent = get_left_indent_inches(paragraph)
+            effective_left_indent = 0.0 if current_left_indent is None else float(current_left_indent)
+            if abs(effective_left_indent - float(expected_left_indent)) > 0.03:
+                paragraph.paragraph_format.left_indent = Inches(float(expected_left_indent))
+                changes.append({
+                    "property_name": "left_indent",
+                    "current_value": f"{effective_left_indent:.2f}in",
+                    "target_value": f"{expected_left_indent}in",
+                    "evidence": "Reference left indent did not match target rule",
                 })
 
         if (

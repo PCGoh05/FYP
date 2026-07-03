@@ -492,6 +492,33 @@ def get_hanging_indent_inches(paragraph) -> Optional[float]:
     return None
 
 
+def get_left_indent_inches(paragraph) -> Optional[float]:
+    """Get effective left indent distance in inches."""
+    left_indent = paragraph.paragraph_format.left_indent
+    if left_indent is None and paragraph.style is not None:
+        left_indent = paragraph.style.paragraph_format.left_indent
+
+    base_style = paragraph.style.base_style if paragraph.style is not None else None
+    if left_indent is None and base_style is not None:
+        left_indent = base_style.paragraph_format.left_indent
+
+    if left_indent is not None:
+        return left_indent.inches
+
+    paragraph_properties = paragraph._p.pPr
+    if paragraph_properties is not None:
+        indentation = paragraph_properties.find(qn("w:ind"))
+        if indentation is not None:
+            left_value = indentation.get(qn("w:left"))
+            if left_value is not None:
+                try:
+                    return int(left_value) / 1440
+                except ValueError:
+                    return None
+
+    return None
+
+
 def get_margins(document) -> Dict[str, float]:
     """Extract page margins from document in inches"""
     try:

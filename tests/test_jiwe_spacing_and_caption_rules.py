@@ -74,6 +74,7 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertTrue(rules["caption"]["title_case"])
         self.assertEqual(rules["reference"]["line_spacing"], 1.15)
         self.assertEqual(rules["reference"]["space_after"], 10.0)
+        self.assertEqual(rules["reference"]["left_indent"], 0.0)
         self.assertAlmostEqual(rules["reference"]["hanging_indent"], 0.44, places=2)
 
     def test_checker_reports_body_spacing_and_reference_indent_mismatches(self):
@@ -113,6 +114,32 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertAlmostEqual(reference.paragraph_format.line_spacing, 1.15)
         self.assertAlmostEqual(reference.paragraph_format.space_after.pt, 10.0)
         self.assertAlmostEqual(abs(reference.paragraph_format.first_line_indent.inches), 0.44, places=2)
+
+    def test_auto_fix_clears_extra_reference_left_indent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "reference_left_indent_fix.docx"
+            _save_spacing_issue_document(path)
+            document = Document(path)
+            reference = document.paragraphs[11]
+            reference.paragraph_format.left_indent = Inches(0.89)
+            reference.paragraph_format.first_line_indent = Inches(-0.44)
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            descriptions = [
+                issue.description
+                for issue in result.issues_by_category.get("references", [])
+            ]
+            self.assertIn("Reference left indent does not match template", descriptions)
+
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        fixed_reference = fixed.paragraphs[11]
+        self.assertAlmostEqual(fixed_reference.paragraph_format.left_indent.inches, 0.0)
+        self.assertAlmostEqual(abs(fixed_reference.paragraph_format.first_line_indent.inches), 0.44, places=2)
 
     def test_checker_reports_caption_title_case_mismatch(self):
         with tempfile.TemporaryDirectory() as tmp:

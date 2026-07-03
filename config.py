@@ -102,6 +102,7 @@ DEFAULT_RULES = {
         "alignment": "JUSTIFY",
         "line_spacing": 1.15,
         "space_after": 10.0,
+        "left_indent": 0.0,
         "hanging_indent": 0.44,
         "publication_italic_required": True
     },
