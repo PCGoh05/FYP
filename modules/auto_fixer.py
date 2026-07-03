@@ -11,7 +11,6 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
-from copy import deepcopy
 import re
 from io import BytesIO
 
@@ -170,10 +169,18 @@ class AutoFixer:
     def load_manuscript(self, file_path_or_bytes):
         """Load the manuscript to fix"""
         self.document = load_document(file_path_or_bytes)
-        self.original_document = deepcopy(self.document)
+        self.original_document = self._clone_document(self.document)
         # Create index map for quick lookup
         self._classification_map = {cp.index: cp for cp in self.classifications}
         return self
+
+    @staticmethod
+    def _clone_document(source_document):
+        """Clone a DOCX through a real package round trip so saved run properties persist."""
+        buffer = BytesIO()
+        source_document.save(buffer)
+        buffer.seek(0)
+        return Document(buffer)
 
     def _build_issue_map(self):
         """Build paragraph-to-category and paragraph-to-property maps from detected issues."""
@@ -1853,7 +1860,7 @@ class AutoFixer:
         if not source_document:
             raise ValueError("No document to export")
 
-        highlighted_document = deepcopy(source_document)
+        highlighted_document = self._clone_document(source_document)
 
         for change in self.changes:
             index = change.paragraph_index

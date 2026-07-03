@@ -4,7 +4,7 @@ from io import BytesIO
 from pathlib import Path
 
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
 from docx.shared import Inches, Pt
 
 from modules.auto_fixer import AutoFixer
@@ -166,6 +166,27 @@ class ContentAndAlignmentRulesTest(unittest.TestCase):
         self.assertEqual(fixed.paragraphs[4].alignment, WD_ALIGN_PARAGRAPH.JUSTIFY)
         self.assertEqual(fixed.paragraphs[7].alignment, WD_ALIGN_PARAGRAPH.JUSTIFY)
         self.assertEqual(fixed.paragraphs[11].alignment, WD_ALIGN_PARAGRAPH.JUSTIFY)
+
+    def test_highlighted_document_marks_changed_body_paragraphs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "highlighted_alignment_fix.docx"
+            _save_manuscript(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            highlighted = Document(BytesIO(fixer.get_highlighted_document_bytes()))
+
+        body_runs = [
+            run
+            for run in highlighted.paragraphs[7].runs
+            if run.text.strip()
+        ]
+        self.assertTrue(body_runs)
+        self.assertTrue(
+            any(run.font.highlight_color == WD_COLOR_INDEX.YELLOW for run in body_runs)
+        )
 
 
 if __name__ == "__main__":
