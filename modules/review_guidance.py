@@ -232,10 +232,16 @@ class ReviewGuidanceBuilder:
 
         if auto_fix_supported:
             action_label = "Auto-fix supported"
-            action_detail = (
-                f"Can safely adjust {self._friendly_property_name(property_name)} "
-                "because this issue maps to a deterministic formatting property."
-            )
+            if property_name == "declaration_template":
+                action_detail = (
+                    "Can insert the configured JIWE declaration template wording. "
+                    "The author must review and edit the inserted statement before submission."
+                )
+            else:
+                action_detail = (
+                    f"Can safely adjust {self._friendly_property_name(property_name)} "
+                    "because this issue maps to a deterministic formatting property."
+                )
         else:
             action_label = "Manual review required"
             action_detail = review_reason
@@ -332,6 +338,14 @@ class ReviewGuidanceBuilder:
             )
         else:
             lines.append("No detected issues require correction.")
+        if any(group.get("category") == "references" for group in groups):
+            lines.append("")
+            lines.append("Reference note:")
+            lines.append(
+                "- JIWE expects IEEE-style references prepared with tools such as "
+                "Zotero, Mendeley, or EndNote. The system checks formatting and "
+                "citation consistency, but external reference metadata still needs manual review."
+            )
         lines.append("")
         lines.append("What this guidance cannot decide:")
         lines.append(
@@ -432,6 +446,8 @@ class ReviewGuidanceBuilder:
     ) -> Optional[str]:
         lower = description.lower()
         lower_location = str(location or "").lower()
+        if "missing required declaration section" in lower:
+            return "declaration_template"
         if any(pattern in lower for pattern in self._MANUAL_PATTERNS):
             return None
 
@@ -565,6 +581,7 @@ class ReviewGuidanceBuilder:
             ("headings", "bold"): "Section heading bold formatting was corrected.",
             ("caption", "capitalization"): "Caption capitalization was corrected to journal title case.",
             ("caption", "space_after"): "Caption paragraph spacing after was corrected.",
+            ("declaration", "declaration_template"): "JIWE declaration template wording was inserted for author review.",
             ("reference", "font_size"): "Reference font size was corrected.",
             ("references", "font_size"): "Reference font size was corrected.",
             ("reference", "line_spacing"): "Reference line spacing was corrected.",
@@ -597,6 +614,7 @@ class ReviewGuidanceBuilder:
             "hanging_indent": "hanging indent",
             "capitalization": "capitalization",
             "manual_tabs": "header spacing",
+            "declaration_template": "JIWE declaration template wording",
             "number_bold": "heading number bold formatting",
             "number_font_size": "heading number font size",
             "number_font_name": "heading number font",

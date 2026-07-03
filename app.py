@@ -72,6 +72,7 @@ def get_default_template_rules():
         "source": "default_profile",
         "required_sections": profile.get("required_sections", []),
         "required_declarations": profile.get("required_declarations", []),
+        "declaration_templates": profile.get("declaration_templates", {}),
         "classification_patterns": profile.get("classification_patterns", {}),
     }
     return rules
@@ -1599,7 +1600,8 @@ def main():
         with col1:
             st.write("""
             Auto-Fix only changes deterministic formatting properties that were detected by rules.
-            It does not rewrite content, move figures/tables, invent missing sections, or approve the manuscript.
+            For missing JIWE declaration sections, it can insert template wording for author review.
+            It does not verify research facts, move figures/tables, rewrite academic content, or approve the manuscript.
             """)
             display_auto_fix_preview(auto_fix_preview)
 

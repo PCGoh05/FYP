@@ -25,6 +25,49 @@
     "ethics_statements",
     "data_availability"
   ],
+  "declaration_templates": {
+    "acknowledgement": {
+      "heading": "ACKNOWLEDGEMENT",
+      "paragraphs": [
+        "The authors would like to thank the anonymous reviewers for the suggestions to improve the paper."
+      ]
+    },
+    "funding_statement": {
+      "heading": "FUNDING STATEMENT",
+      "paragraphs": [
+        "The authors received no funding from any party for the research and publication of this article."
+      ]
+    },
+    "author_contributions": {
+      "heading": "AUTHOR CONTRIBUTIONS",
+      "paragraphs": [
+        "AAA: Conceptualization, Data Curation, Methodology, Validation, Writing - Original Draft Preparation;",
+        "BBB: Project Administration, Writing - Review & Editing;",
+        "CCC: Project Administration, Supervision, Writing - Review & Editing."
+      ]
+    },
+    "conflict_of_interests": {
+      "heading": "CONFLICT OF INTERESTS",
+      "paragraphs": [
+        "No conflict of interests were disclosed."
+      ]
+    },
+    "ethics_statements": {
+      "heading": "ETHICS STATEMENTS",
+      "paragraphs": [
+        "Our publication ethics follow The Committee of Publication Ethics (COPE) guideline. https://publicationethics.org/",
+        "If your work involved human subjects, please include a statement here confirming that the relevant informed consent was obtained from those subjects:",
+        "If your work involved animal experiments, please include a statement here of the ethics permission or animal licenses. If animals were used but ethical approval was not required, a clear statement should be included stating why this approval was unnecessary.",
+        "If your work involved data collected from social media platforms, please include a statement here confirming that informed consent was obtained from participants or that participant data has been fully anonymized, and that the platform data redistribution policies were complied with."
+      ]
+    },
+    "data_availability": {
+      "heading": "DATA AVAILABILITY",
+      "paragraphs": [
+        "Data availability is not applicable to this paper as no new data were created or analyzed in this study."
+      ]
+    }
+  },
   "classification_patterns": {
     "journal_header": [
       "journal\\s+of\\s+informatics",

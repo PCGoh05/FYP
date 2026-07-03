@@ -266,6 +266,25 @@ class ReviewGuidanceBuilderTest(unittest.TestCase):
             "capitalization",
         )
 
+    def test_missing_required_declaration_can_insert_template_wording(self):
+        preview = ReviewGuidanceBuilder().build_auto_fix_preview({
+            "structure": [
+                _issue(
+                    "structure",
+                    "Missing required declaration section: Funding Statement",
+                    current="Not Found",
+                    expected="Funding Statement",
+                )
+            ]
+        })
+
+        self.assertTrue(preview["can_run_auto_fix"])
+        self.assertEqual(preview["supported_count"], 1)
+        self.assertEqual(
+            preview["supported_groups"][0]["property_name"],
+            "declaration_template",
+        )
+
     def test_fallback_has_required_sections_and_uses_payload_only(self):
         payload = ReviewGuidanceBuilder().build_pre_fix_payload(
             _result({
@@ -286,11 +305,13 @@ class ReviewGuidanceBuilderTest(unittest.TestCase):
             "Safe auto-fix candidates:",
             "Needs manual checking:",
             "Recommended review order:",
+            "Reference note:",
             "What this guidance cannot decide:",
         ]:
             self.assertIn(heading, fallback)
         self.assertIn("Body text alignment does not match template", fallback)
         self.assertIn("Reference numbering is not continuous", fallback)
+        self.assertIn("Zotero, Mendeley, or EndNote", fallback)
         self.assertNotIn("Priority issues:", fallback)
         self.assertNotIn("Quick fixes:", fallback)
         self.assertNotIn("Manual review:", fallback)

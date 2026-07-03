@@ -153,6 +153,7 @@ class AutoFixer:
             classifications: List of classified paragraphs from ParagraphClassifier
         """
         self.rules = rules
+        self.profile = rules.get("_profile", {})
         self.classifications = classifications
         self.issues_by_category = issues_by_category or {}
         self.changes: List[ChangeRecord] = []
@@ -272,6 +273,8 @@ class AutoFixer:
             return {"line_spacing"}
         if category == "other" and "manual tab" in (getattr(issue, "description", "") or "").lower():
             return {"manual_tabs"}
+        if category == "structure" and "missing required declaration section" in description:
+            return {"declaration_template"}
         return set()
 
     def _should_fix_category(self, index: int, categories: List[str]) -> bool:
@@ -382,8 +385,132 @@ class AutoFixer:
 
         if self._has_category_issue("references"):
             self._fix_sdt_references()
+        if (
+            self._has_explicit_issues
+            and self._category_allows_global_property("structure", "declaration_template")
+        ):
+            self._insert_missing_declaration_templates()
         
         return self.document, self.changes
+
+    def _insert_missing_declaration_templates(self):
+        """Insert configured journal declaration template text for missing sections."""
+        required = self.profile.get("required_declarations", [])
+        templates = self.profile.get("declaration_templates", {})
+        if not required or not templates:
+            return
+
+        anchor = self._find_references_anchor()
+        for declaration_key in required:
+            if self._document_has_declaration(declaration_key):
+                continue
+
+            template = templates.get(declaration_key)
+            if not isinstance(template, dict):
+                continue
+
+            heading = template.get("heading") or declaration_key.replace("_", " ").upper()
+            paragraphs = [
+                text for text in template.get("paragraphs", [])
+                if isinstance(text, str) and text.strip()
+            ]
+            if not paragraphs:
+                continue
+
+            inserted_heading = self._insert_template_paragraph(
+                anchor,
+                heading,
+                bold=True,
+                alignment=WD_ALIGN_PARAGRAPH.LEFT,
+            )
+            for paragraph_text in paragraphs:
+                self._insert_template_paragraph(
+                    anchor,
+                    paragraph_text,
+                    bold=False,
+                    alignment=WD_ALIGN_PARAGRAPH.JUSTIFY,
+                )
+
+            self._add_change_record(
+                paragraph_index=self._paragraph_index(inserted_heading),
+                location=heading.title(),
+                change_type="declaration",
+                property_name="declaration_template",
+                current_value="Missing",
+                target_value="JIWE template wording inserted for author review",
+                text_preview=truncate_text(" ".join([heading] + paragraphs), 60),
+                paragraph_type="declaration",
+                evidence="Missing required declaration section was detected",
+            )
+
+    def _find_references_anchor(self):
+        """Return the first references heading paragraph, or None to append at the end."""
+        for paragraph in self.document.paragraphs:
+            normalized = self._normalize_declaration_heading(paragraph.text)
+            if normalized in {"references", "bibliography", "works cited"}:
+                return paragraph
+        return None
+
+    def _insert_template_paragraph(self, anchor, text: str, bold: bool, alignment):
+        """Insert one formatted JIWE template paragraph before the anchor."""
+        paragraph = (
+            anchor.insert_paragraph_before(text)
+            if anchor is not None
+            else self.document.add_paragraph(text)
+        )
+        paragraph.alignment = alignment
+        paragraph.paragraph_format.line_spacing = 1.0
+        paragraph.paragraph_format.space_after = Pt(7.5)
+
+        for run in paragraph.runs:
+            run.font.name = "Times New Roman"
+            run.font.size = Pt(10)
+            run.font.bold = bold
+            run.font.italic = False
+        return paragraph
+
+    def _document_has_declaration(self, declaration_key: str) -> bool:
+        """Return True when a required declaration heading already exists."""
+        aliases = self._declaration_aliases().get(
+            declaration_key,
+            (declaration_key.replace("_", " "),),
+        )
+        for paragraph in self.document.paragraphs:
+            normalized = self._normalize_declaration_heading(paragraph.text)
+            if normalized in aliases:
+                return True
+        return False
+
+    @staticmethod
+    def _declaration_aliases() -> Dict[str, Tuple[str, ...]]:
+        """Return accepted heading aliases for JIWE declaration sections."""
+        return {
+            "acknowledgement": ("acknowledgement", "acknowledgements", "acknowledgment", "acknowledgments"),
+            "funding_statement": ("funding statement", "funding"),
+            "author_contributions": ("author contributions", "authors contributions"),
+            "conflict_of_interests": (
+                "conflict of interests",
+                "conflict of interest",
+                "competing interests",
+            ),
+            "ethics_statements": ("ethics statements", "ethics statement", "ethical statement"),
+            "data_availability": ("data availability", "data availability statement"),
+        }
+
+    @staticmethod
+    def _normalize_declaration_heading(text: str) -> str:
+        """Normalize a paragraph heading for declaration matching."""
+        text = re.sub(r"\([^)]*\)", "", text or "")
+        text = re.sub(r"^\d+(?:\.\d+)*\.?\s+", "", text)
+        normalized = re.sub(r"[^a-z ]", " ", text.lower())
+        return re.sub(r"\s+", " ", normalized).strip()
+
+    def _paragraph_index(self, target_paragraph) -> int:
+        """Return the current document index for a paragraph object."""
+        for index, paragraph in enumerate(self.document.paragraphs):
+            if paragraph._p is target_paragraph._p:
+                return index
+        return -1
 
     def _is_journal_title_header(self, text: str) -> bool:
         """Return True for journal title lines, excluding volume and ISSN metadata."""
