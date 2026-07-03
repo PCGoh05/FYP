@@ -6,6 +6,8 @@ import json
 import re
 from typing import Any, Dict, Iterable, List, Optional
 
+from .display_values import format_user_value
+
 
 EMAIL_PATTERN = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 ORCID_PATTERN = re.compile(r"\b\d{4}-\d{4}-\d{4}-\d{3}[\dXx]\b")
@@ -218,11 +220,11 @@ class ReviewGuidanceBuilder:
             else self._manual_review_reason(issue_category, description)
         )
         current_value = self.redact_text(
-            getattr(issue, "current_value", ""),
+            format_user_value(getattr(issue, "current_value", "")),
             120,
         ) or "Not available"
         expected_value = self.redact_text(
-            getattr(issue, "expected_value", ""),
+            format_user_value(getattr(issue, "expected_value", "")),
             120,
         ) or "Not available"
         text_preview = self.redact_text(

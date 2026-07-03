@@ -29,6 +29,7 @@ from modules.report_generator import ReportGenerator
 from modules.llm_integration import create_llm_integration, fallback_explain_issue
 from modules.profile_loader import ProfileLoader
 from modules.review_guidance import ReviewGuidanceBuilder
+from modules.display_values import format_user_value
 from modules.utils import (
     pdf_to_docx,
     docx_to_pdf,
@@ -301,6 +302,7 @@ def get_system_capability_sections():
             "items": [
                 "Margins, page size, journal header, paper title, author information, body text, headings, abstract rules, keywords, captions, references, citations, and required sections.",
                 "JIWE-specific checks include paragraph spacing after, caption title case, reference line spacing, reference left indent, and reference hanging indent.",
+                "Indent values are displayed with Word-friendly units, for example 0.44 in (1.13 cm) for the JIWE reference hanging indent.",
                 "Some checks are exact formatting checks; others are warning-level structural or content-pattern checks that should be reviewed by a person.",
             ],
         },
@@ -1244,9 +1246,7 @@ def handle_auto_fix():
 
 def format_change_display_value(value):
     """Return user-facing text for a recorded format-change value."""
-    if value == "(inherited)":
-        return "Uses Word style"
-    return value
+    return format_user_value(value)
 
 
 def display_comparison_view(changes):

@@ -56,6 +56,14 @@ class ReviewGuidanceAppTest(unittest.TestCase):
             format_change_display_value("(inherited)"),
             "Uses Word style",
         )
+        self.assertEqual(
+            format_change_display_value("0.44in"),
+            "0.44 in (1.13 cm)",
+        )
+        self.assertEqual(
+            format_change_display_value("1.00 in"),
+            "1 in (2.54 cm)",
+        )
         self.assertEqual(format_change_display_value("Times New Roman"), "Times New Roman")
 
     def test_builds_issue_display_record_with_action_guidance(self):
@@ -77,6 +85,23 @@ class ReviewGuidanceAppTest(unittest.TestCase):
         self.assertIn("font name", record["action_detail"])
         self.assertNotIn("jane@example.com", str(record))
         self.assertNotIn("0000-0002-1825-0097", str(record))
+
+    def test_builds_issue_display_record_with_user_friendly_measurements(self):
+        issue = SimpleNamespace(
+            category="references",
+            description="Reference hanging indent does not match template",
+            severity="warning",
+            location="Reference 1",
+            current_value="0.50in",
+            expected_value="0.44in",
+            text_preview="[1] A. Author, Article title.",
+            paragraph_index=10,
+        )
+
+        record = build_issue_display_record(issue, "references")
+
+        self.assertEqual(record["current_value"], "0.5 in (1.27 cm)")
+        self.assertEqual(record["expected_value"], "0.44 in (1.13 cm)")
 
     def test_builds_auto_fix_preview_record_for_app_display(self):
         issue = SimpleNamespace(

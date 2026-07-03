@@ -14,6 +14,7 @@ from io import BytesIO
 from datetime import datetime
 
 from .auto_fixer import ChangeRecord, summarize_remaining_issues
+from .display_values import format_user_value
 
 
 class ReportGenerator:
@@ -59,9 +60,7 @@ class ReportGenerator:
     @staticmethod
     def _format_change_value(value: str) -> str:
         """Return report-friendly text for raw change values."""
-        if value == "(inherited)":
-            return "Uses Word style"
-        return value
+        return format_user_value(value)
 
     def generate_comparison_report(self) -> Document:
         """Generate a detailed comparison report document"""
