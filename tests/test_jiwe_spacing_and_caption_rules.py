@@ -1,0 +1,161 @@
+import tempfile
+import unittest
+from io import BytesIO
+from pathlib import Path
+
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Inches, Pt
+
+from modules.auto_fixer import AutoFixer
+from modules.manuscript_checker import ManuscriptChecker
+from modules.profile_loader import ProfileLoader
+
+
+def _jiwe_rules():
+    return ProfileLoader().default_rules(ProfileLoader().load("jiwe"))
+
+
+def _add_paragraph(document, text, size=10, alignment=WD_ALIGN_PARAGRAPH.JUSTIFY, bold=False):
+    paragraph = document.add_paragraph()
+    paragraph.alignment = alignment
+    run = paragraph.add_run(text)
+    run.font.name = "Times New Roman"
+    run.font.size = Pt(size)
+    run.font.bold = bold
+    paragraph.paragraph_format.line_spacing = 1.0
+    paragraph.paragraph_format.space_after = Pt(7.5)
+    return paragraph
+
+
+def _add_drawing_paragraph(document):
+    from docx.oxml import OxmlElement
+
+    paragraph = document.add_paragraph()
+    run = paragraph.add_run()
+    run._r.append(OxmlElement("w:drawing"))
+    return paragraph
+
+
+def _save_spacing_issue_document(path: Path):
+    document = Document()
+    _add_paragraph(document, "Journal of Informatics and", 24, WD_ALIGN_PARAGRAPH.CENTER, True)
+    _add_paragraph(document, "Web Engineering", 24, WD_ALIGN_PARAGRAPH.CENTER, True)
+    _add_paragraph(document, "Vol. 5 No. 2 (June 2026) eISSN: 2821-370X", 10, WD_ALIGN_PARAGRAPH.CENTER)
+    _add_paragraph(document, "A Test Paper Title for Spacing Validation", 24, WD_ALIGN_PARAGRAPH.CENTER)
+    _add_paragraph(document, "Abstract - " + "word " * 210, 9)
+    _add_paragraph(document, "Keywords - Template, Checking, Rules, References, Formatting", 9)
+    _add_paragraph(document, "1. INTRODUCTION", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+    body = _add_paragraph(
+        document,
+        "This body paragraph cites reference [1] and intentionally has wrong paragraph spacing after.",
+    )
+    body.paragraph_format.space_after = Pt(0)
+    _add_paragraph(document, "4. CONCLUSION", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+    _add_paragraph(document, "Conclusion text for the manuscript.")
+    _add_paragraph(document, "5. REFERENCES", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+    reference = _add_paragraph(
+        document,
+        '[1]\tA. Author, "Article title," Journal of Testing, vol. 1, no. 1, pp. 1-5, 2026.',
+        9,
+    )
+    reference.paragraph_format.line_spacing = 1.0
+    reference.paragraph_format.space_after = Pt(0)
+    reference.paragraph_format.first_line_indent = Inches(-0.5)
+    document.save(path)
+
+
+class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
+    def test_jiwe_profile_contains_template_spacing_and_caption_case_rules(self):
+        rules = _jiwe_rules()
+
+        self.assertEqual(rules["body"]["space_after"], 7.5)
+        self.assertEqual(rules["caption"]["space_after"], 7.5)
+        self.assertTrue(rules["caption"]["title_case"])
+        self.assertEqual(rules["reference"]["line_spacing"], 1.15)
+        self.assertEqual(rules["reference"]["space_after"], 10.0)
+        self.assertAlmostEqual(rules["reference"]["hanging_indent"], 0.44, places=2)
+
+    def test_checker_reports_body_spacing_and_reference_indent_mismatches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "spacing_issues.docx"
+            _save_spacing_issue_document(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+
+        body_descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("body_text", [])
+        ]
+        reference_descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("references", [])
+        ]
+
+        self.assertIn("Body paragraph spacing after does not match template", body_descriptions)
+        self.assertIn("Reference paragraph spacing after does not match template", reference_descriptions)
+        self.assertIn("Reference hanging indent does not match template", reference_descriptions)
+
+    def test_auto_fix_applies_body_spacing_and_reference_indent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "spacing_fix.docx"
+            _save_spacing_issue_document(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        body = fixed.paragraphs[7]
+        reference = fixed.paragraphs[11]
+        self.assertAlmostEqual(body.paragraph_format.space_after.pt, 7.5)
+        self.assertAlmostEqual(reference.paragraph_format.line_spacing, 1.15)
+        self.assertAlmostEqual(reference.paragraph_format.space_after.pt, 10.0)
+        self.assertAlmostEqual(abs(reference.paragraph_format.first_line_indent.inches), 0.44, places=2)
+
+    def test_checker_reports_caption_title_case_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "caption_case.docx"
+            document = Document()
+            _add_drawing_paragraph(document)
+            caption = _add_paragraph(
+                document,
+                "Figure 3. top 20 features ranked by their chi-squared scores with the target variable",
+            )
+            caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+
+        descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("figures", [])
+        ]
+        self.assertIn("Figure caption capitalization does not match template", descriptions)
+
+    def test_auto_fix_applies_caption_title_case(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "caption_case_fix.docx"
+            document = Document()
+            _add_drawing_paragraph(document)
+            _add_paragraph(
+                document,
+                "Figure 3. top 20 features ranked by their chi-squared scores with the target variable",
+            )
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        self.assertEqual(
+            fixed.paragraphs[1].text,
+            "Figure 3. Top 20 Features Ranked by Their Chi-Squared Scores with the Target Variable",
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

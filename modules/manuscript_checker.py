@@ -12,8 +12,10 @@ from difflib import SequenceMatcher
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_alignment, get_paragraph_font_info,
     get_sdt_reference_paragraphs, get_margins, get_line_spacing,
+    get_space_after_pt, get_hanging_indent_inches,
     detect_reference_style, calculate_compliance_score, count_columns,
-    truncate_text, is_font_equivalent, classify_author_info_role
+    truncate_text, is_font_equivalent, classify_author_info_role,
+    to_journal_caption_title_case,
 )
 from .paragraph_classifier import ParagraphClassifier, ParagraphType, ClassifiedParagraph
 from config import REQUIRED_SECTIONS
@@ -536,6 +538,7 @@ class ManuscriptChecker:
         expected_size = body_rules.get("font_size", 12)
         expected_bold = body_rules.get("bold")
         expected_alignment = body_rules.get("alignment")
+        expected_space_after = body_rules.get("space_after")
         
         # Font size tolerance (allow +/-1.0pt difference for body text)
         size_tolerance = 1.0
@@ -563,6 +566,7 @@ class ManuscriptChecker:
         issues_found = 0
         max_issues_to_report = 10  # Limit to avoid too many issues
         alignment_mismatches = []
+        space_after_mismatches = []
         
         for cp in self.classifications:
             if cp.paragraph_type == ParagraphType.BODY:
@@ -618,6 +622,11 @@ class ManuscriptChecker:
                 if expected_alignment and cp.alignment != expected_alignment:
                     alignment_mismatches.append(cp)
 
+                if expected_space_after is not None:
+                    current_space_after = get_space_after_pt(self.document.paragraphs[cp.index])
+                    if current_space_after is None or abs(float(current_space_after) - float(expected_space_after)) > 0.5:
+                        space_after_mismatches.append(cp)
+
         if alignment_mismatches:
             self._add_issue(
                 category="body_text",
@@ -628,6 +637,23 @@ class ManuscriptChecker:
                 expected=expected_alignment,
                 severity="warning",
                 text_preview=truncate_text(alignment_mismatches[0].text, 50)
+            )
+
+        if space_after_mismatches:
+            current_space_after = get_space_after_pt(self.document.paragraphs[space_after_mismatches[0].index])
+            self._add_issue(
+                category="body_text",
+                location="Body Paragraphs",
+                para_index=-1,
+                description="Body paragraph spacing after does not match template",
+                current=(
+                    f"{len(space_after_mismatches)} paragraphs use another after spacing"
+                    if current_space_after is not None
+                    else "Inherited or missing after spacing"
+                ),
+                expected=f"{expected_space_after}pt after paragraph spacing",
+                severity="warning",
+                text_preview=truncate_text(space_after_mismatches[0].text, 50)
             )
         
         # Add summary if many issues
@@ -1267,6 +1293,8 @@ class ManuscriptChecker:
             expected_font = caption_rules.get("font_name", "Times New Roman")
             expected_size = caption_rules.get("font_size", 10)
             expected_italic = caption_rules.get("italic")
+            expected_space_after = caption_rules.get("space_after")
+            title_case_required = bool(caption_rules.get("title_case"))
 
             for cp in table_captions:
                 current_font = cp.font_info.get("font_name")
@@ -1309,6 +1337,41 @@ class ManuscriptChecker:
                         text_preview=truncate_text(cp.text, 50)
                     )
 
+                if expected_space_after is not None:
+                    current_space_after = get_space_after_pt(self.document.paragraphs[cp.index])
+                    if (
+                        current_space_after is None
+                        or abs(float(current_space_after) - float(expected_space_after)) > 0.5
+                    ):
+                        self._add_issue(
+                            category="tables",
+                            location=f"Caption: {truncate_text(cp.text, 30)}",
+                            para_index=cp.index,
+                            description="Table caption paragraph spacing after does not match template",
+                            current=(
+                                f"{current_space_after}pt"
+                                if current_space_after is not None
+                                else "Inherited or missing after spacing"
+                            ),
+                            expected=f"{expected_space_after}pt",
+                            severity="warning",
+                            text_preview=truncate_text(cp.text, 50)
+                        )
+
+                if title_case_required:
+                    expected_caption = to_journal_caption_title_case(cp.text)
+                    if expected_caption != cp.text:
+                        self._add_issue(
+                            category="tables",
+                            location=f"Caption: {truncate_text(cp.text, 30)}",
+                            para_index=cp.index,
+                            description="Table caption capitalization does not match template",
+                            current=truncate_text(cp.text, 80),
+                            expected=truncate_text(expected_caption, 80),
+                            severity="warning",
+                            text_preview=truncate_text(cp.text, 50)
+                        )
+
         self._check_caption_order_and_numbering("table")
     
     def _check_figures(self):
@@ -1338,6 +1401,8 @@ class ManuscriptChecker:
         expected_font = caption_rules.get("font_name", "Times New Roman")
         expected_size = caption_rules.get("font_size", 10)
         expected_italic = caption_rules.get("italic")
+        expected_space_after = caption_rules.get("space_after")
+        title_case_required = bool(caption_rules.get("title_case"))
         
         for cp in figure_captions:
             current_font = cp.font_info.get("font_name")
@@ -1380,6 +1445,41 @@ class ManuscriptChecker:
                     text_preview=truncate_text(cp.text, 50)
                 )
 
+            if expected_space_after is not None:
+                current_space_after = get_space_after_pt(self.document.paragraphs[cp.index])
+                if (
+                    current_space_after is None
+                    or abs(float(current_space_after) - float(expected_space_after)) > 0.5
+                ):
+                    self._add_issue(
+                        category="figures",
+                        location=f"Caption: {truncate_text(cp.text, 30)}",
+                        para_index=cp.index,
+                        description="Figure caption paragraph spacing after does not match template",
+                        current=(
+                            f"{current_space_after}pt"
+                            if current_space_after is not None
+                            else "Inherited or missing after spacing"
+                        ),
+                        expected=f"{expected_space_after}pt",
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 50)
+                    )
+
+            if title_case_required:
+                expected_caption = to_journal_caption_title_case(cp.text)
+                if expected_caption != cp.text:
+                    self._add_issue(
+                        category="figures",
+                        location=f"Caption: {truncate_text(cp.text, 30)}",
+                        para_index=cp.index,
+                        description="Figure caption capitalization does not match template",
+                        current=truncate_text(cp.text, 80),
+                        expected=truncate_text(expected_caption, 80),
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 50)
+                    )
+
         self._check_caption_order_and_numbering("figure")
     
     def _check_references(self):
@@ -1390,6 +1490,8 @@ class ManuscriptChecker:
         expected_bold = reference_rules.get("bold")
         expected_alignment = reference_rules.get("alignment")
         expected_line_spacing = reference_rules.get("line_spacing")
+        expected_space_after = reference_rules.get("space_after")
+        expected_hanging_indent = reference_rules.get("hanging_indent")
         publication_italic_required = reference_rules.get("publication_italic_required")
         if publication_italic_required is None:
             publication_italic_required = self.profile.get("name", "").lower() == "jiwe"
@@ -1410,6 +1512,8 @@ class ManuscriptChecker:
                     expected_bold,
                     expected_alignment,
                     expected_line_spacing,
+                    expected_space_after,
+                    expected_hanging_indent,
                     publication_italic_required,
                 )
                 return
@@ -1450,6 +1554,8 @@ class ManuscriptChecker:
         # Check font formatting for every reference entry.
         alignment_mismatches = []
         line_spacing_mismatches = []
+        space_after_mismatches = []
+        hanging_indent_mismatches = []
         for i, cp in enumerate(references):
             current_font = cp.font_info.get("font_name")
             current_size = cp.font_info.get("font_size")
@@ -1500,6 +1606,22 @@ class ManuscriptChecker:
                 if abs(effective_line_spacing - float(expected_line_spacing)) > 0.05:
                     line_spacing_mismatches.append(cp)
 
+            if expected_space_after is not None:
+                current_space_after = get_space_after_pt(self.document.paragraphs[cp.index])
+                if (
+                    current_space_after is None
+                    or abs(float(current_space_after) - float(expected_space_after)) > 0.5
+                ):
+                    space_after_mismatches.append(cp)
+
+            if expected_hanging_indent is not None:
+                current_hanging_indent = get_hanging_indent_inches(self.document.paragraphs[cp.index])
+                if (
+                    current_hanging_indent is None
+                    or abs(float(current_hanging_indent) - float(expected_hanging_indent)) > 0.03
+                ):
+                    hanging_indent_mismatches.append(cp)
+
             if (
                 publication_italic_required
                 and self._reference_likely_has_publication_source(cp.text)
@@ -1538,6 +1660,42 @@ class ManuscriptChecker:
                 expected=str(expected_line_spacing),
                 severity="warning",
                 text_preview=truncate_text(line_spacing_mismatches[0].text, 50)
+            )
+
+        if space_after_mismatches:
+            current_space_after = get_space_after_pt(self.document.paragraphs[space_after_mismatches[0].index])
+            self._add_issue(
+                category="references",
+                location="Reference Entries",
+                para_index=-1,
+                description="Reference paragraph spacing after does not match template",
+                current=(
+                    f"{len(space_after_mismatches)} references use another after spacing"
+                    if current_space_after is not None
+                    else "Inherited or missing after spacing"
+                ),
+                expected=f"{expected_space_after}pt",
+                severity="warning",
+                text_preview=truncate_text(space_after_mismatches[0].text, 50)
+            )
+
+        if hanging_indent_mismatches:
+            current_hanging_indent = get_hanging_indent_inches(
+                self.document.paragraphs[hanging_indent_mismatches[0].index]
+            )
+            self._add_issue(
+                category="references",
+                location="Reference Entries",
+                para_index=-1,
+                description="Reference hanging indent does not match template",
+                current=(
+                    f"{current_hanging_indent:.2f}in"
+                    if current_hanging_indent is not None
+                    else "No hanging indent"
+                ),
+                expected=f"{expected_hanging_indent}in",
+                severity="warning",
+                text_preview=truncate_text(hanging_indent_mismatches[0].text, 50)
             )
 
     def _check_equations(self) -> None:
@@ -1698,11 +1856,15 @@ class ManuscriptChecker:
         expected_bold,
         expected_alignment,
         expected_line_spacing,
+        expected_space_after,
+        expected_hanging_indent,
         publication_italic_required,
     ):
         """Check references stored inside Word content controls."""
         alignment_mismatches = []
         line_spacing_mismatches = []
+        space_after_mismatches = []
+        hanging_indent_mismatches = []
 
         for index, paragraph in enumerate(references):
             text = get_paragraph_text(paragraph)
@@ -1757,6 +1919,22 @@ class ManuscriptChecker:
                 if abs(effective_spacing - float(expected_line_spacing)) > 0.05:
                     line_spacing_mismatches.append(paragraph)
 
+            if expected_space_after is not None:
+                current_space_after = get_space_after_pt(paragraph)
+                if (
+                    current_space_after is None
+                    or abs(float(current_space_after) - float(expected_space_after)) > 0.5
+                ):
+                    space_after_mismatches.append(paragraph)
+
+            if expected_hanging_indent is not None:
+                current_hanging_indent = get_hanging_indent_inches(paragraph)
+                if (
+                    current_hanging_indent is None
+                    or abs(float(current_hanging_indent) - float(expected_hanging_indent)) > 0.03
+                ):
+                    hanging_indent_mismatches.append(paragraph)
+
             if (
                 publication_italic_required
                 and self._reference_likely_has_publication_source(text)
@@ -1795,6 +1973,40 @@ class ManuscriptChecker:
                 expected=str(expected_line_spacing),
                 severity="warning",
                 text_preview=truncate_text(get_paragraph_text(line_spacing_mismatches[0]), 50),
+            )
+
+        if space_after_mismatches:
+            current_space_after = get_space_after_pt(space_after_mismatches[0])
+            self._add_issue(
+                category="references",
+                location="Reference Content Controls",
+                para_index=-1,
+                description="Reference paragraph spacing after does not match template",
+                current=(
+                    f"{len(space_after_mismatches)} references use another after spacing"
+                    if current_space_after is not None
+                    else "Inherited or missing after spacing"
+                ),
+                expected=f"{expected_space_after}pt",
+                severity="warning",
+                text_preview=truncate_text(get_paragraph_text(space_after_mismatches[0]), 50),
+            )
+
+        if hanging_indent_mismatches:
+            current_hanging_indent = get_hanging_indent_inches(hanging_indent_mismatches[0])
+            self._add_issue(
+                category="references",
+                location="Reference Content Controls",
+                para_index=-1,
+                description="Reference hanging indent does not match template",
+                current=(
+                    f"{current_hanging_indent:.2f}in"
+                    if current_hanging_indent is not None
+                    else "No hanging indent"
+                ),
+                expected=f"{expected_hanging_indent}in",
+                severity="warning",
+                text_preview=truncate_text(get_paragraph_text(hanging_indent_mismatches[0]), 50),
             )
 
     def _is_paragraph_mostly_bold(self, paragraph_index: int) -> bool:

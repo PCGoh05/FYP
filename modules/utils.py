@@ -433,6 +433,65 @@ def get_line_spacing(paragraph) -> Optional[float]:
     return line_spacing
 
 
+def get_space_after_pt(paragraph) -> Optional[float]:
+    """Get effective paragraph spacing after in points."""
+    space_after = paragraph.paragraph_format.space_after
+    if space_after is None and paragraph.style is not None:
+        space_after = paragraph.style.paragraph_format.space_after
+
+    base_style = paragraph.style.base_style if paragraph.style is not None else None
+    if space_after is None and base_style is not None:
+        space_after = base_style.paragraph_format.space_after
+
+    if space_after is None:
+        document = getattr(paragraph.part, "document", None)
+        styles = document.styles.element if document is not None else None
+        doc_defaults = styles.find(qn("w:docDefaults")) if styles is not None else None
+        spacing = (
+            doc_defaults.find(
+                f"{qn('w:pPrDefault')}/{qn('w:pPr')}/{qn('w:spacing')}"
+            )
+            if doc_defaults is not None
+            else None
+        )
+        if spacing is not None:
+            after_value = spacing.get(qn("w:after"))
+            if after_value is not None:
+                try:
+                    return int(after_value) / 20
+                except ValueError:
+                    return None
+
+    return space_after.pt if space_after is not None else None
+
+
+def get_hanging_indent_inches(paragraph) -> Optional[float]:
+    """Get effective hanging indent distance in inches."""
+    first_line_indent = paragraph.paragraph_format.first_line_indent
+    if first_line_indent is None and paragraph.style is not None:
+        first_line_indent = paragraph.style.paragraph_format.first_line_indent
+
+    base_style = paragraph.style.base_style if paragraph.style is not None else None
+    if first_line_indent is None and base_style is not None:
+        first_line_indent = base_style.paragraph_format.first_line_indent
+
+    if first_line_indent is not None and first_line_indent.inches < 0:
+        return abs(first_line_indent.inches)
+
+    paragraph_properties = paragraph._p.pPr
+    if paragraph_properties is not None:
+        indentation = paragraph_properties.find(qn("w:ind"))
+        if indentation is not None:
+            hanging_value = indentation.get(qn("w:hanging"))
+            if hanging_value is not None:
+                try:
+                    return int(hanging_value) / 1440
+                except ValueError:
+                    return None
+
+    return None
+
+
 def get_margins(document) -> Dict[str, float]:
     """Extract page margins from document in inches"""
     try:
@@ -480,6 +539,59 @@ def truncate_text(text: str, max_length: int = 50) -> str:
     if len(text) <= max_length:
         return text
     return text[:max_length-3] + "..."
+
+
+CAPTION_LOWERCASE_WORDS = {
+    "a", "an", "the",
+    "and", "as", "but", "for", "nor", "or", "so", "yet",
+    "at", "by", "from", "in", "into", "of", "off", "on", "onto",
+    "out", "over", "per", "to", "up", "via", "with",
+}
+
+
+def to_journal_caption_title_case(text: str) -> str:
+    """Return JIWE-style caption title case while preserving the caption label."""
+    match = re.match(r"^(\s*)((?:fig\.?|figure|table)\s*\d+\s*[\.:]\s*)(.*)$", text or "", re.IGNORECASE)
+    if not match:
+        return text
+
+    leading, label, caption_body = match.groups()
+    label = re.sub(r"^(fig\.?|figure|table)", lambda item: item.group(1).capitalize(), label, count=1, flags=re.IGNORECASE)
+    words_seen = 0
+
+    def convert_word(match_obj):
+        nonlocal words_seen
+        token = match_obj.group(0)
+        words_seen += 1
+        force_capital = words_seen == 1
+        return _caption_title_case_token(token, force_capital)
+
+    converted_body = re.sub(r"[A-Za-z][A-Za-z'’]*(?:[-–][A-Za-z][A-Za-z'’]*)*", convert_word, caption_body)
+    return f"{leading}{label}{converted_body}"
+
+
+def _caption_title_case_token(token: str, force_capital: bool = False) -> str:
+    """Title-case one caption token, preserving acronyms and small joining words."""
+    if re.fullmatch(r"[A-Z0-9]{2,}(?:[-–][A-Z0-9]{2,})*", token):
+        return token
+
+    parts = re.split(r"([-–])", token)
+    converted = []
+    for index, part in enumerate(parts):
+        if part in {"-", "–"}:
+            converted.append(part)
+            continue
+        lower = part.lower()
+        should_lower = (
+            not force_capital
+            and index == 0
+            and lower in CAPTION_LOWERCASE_WORDS
+        )
+        if should_lower:
+            converted.append(lower)
+        else:
+            converted.append(lower[:1].upper() + lower[1:])
+    return "".join(converted)
 
 
 def is_empty_paragraph(paragraph) -> bool:

@@ -53,6 +53,7 @@ DEFAULT_RULES = {
         "font_size": 10,
         "bold": False,
         "line_spacing": 1.0,
+        "space_after": 7.5,
         "alignment": "JUSTIFY"
     },
     "heading": {
@@ -90,7 +91,9 @@ DEFAULT_RULES = {
     "caption": {
         "font_name": "Times New Roman",
         "font_size": 10,
-        "italic": False
+        "italic": False,
+        "space_after": 7.5,
+        "title_case": True
     },
     "reference": {
         "font_name": "Times New Roman",
@@ -98,6 +101,8 @@ DEFAULT_RULES = {
         "bold": False,
         "alignment": "JUSTIFY",
         "line_spacing": 1.15,
+        "space_after": 10.0,
+        "hanging_indent": 0.44,
         "publication_italic_required": True
     },
     "layout": {

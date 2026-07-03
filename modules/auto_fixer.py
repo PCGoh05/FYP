@@ -18,7 +18,8 @@ from io import BytesIO
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_alignment, truncate_text,
     is_font_equivalent, get_run_font_info, get_sdt_reference_paragraphs,
-    classify_author_info_role
+    classify_author_info_role, get_space_after_pt, get_hanging_indent_inches,
+    to_journal_caption_title_case
 )
 from .paragraph_classifier import (
     ParagraphType, ClassifiedParagraph
@@ -231,6 +232,10 @@ class AutoFixer:
 
         if "line spacing" in description:
             return "line_spacing"
+        if "spacing after" in description or "after spacing" in description:
+            return "space_after"
+        if "hanging indent" in description:
+            return "hanging_indent"
         if "manual tab" in description or "manual tabs" in description:
             return "manual_tabs"
         if "capitalization" in description or "all capital" in description:
@@ -1050,13 +1055,14 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["body_text", "line_spacing"],
-            fallback=["font_name", "font_size", "bold", "line_spacing", "alignment"],
+            fallback=["font_name", "font_size", "bold", "line_spacing", "alignment", "space_after"],
         )
 
         expected_font = body_rules.get("font_name", "Times New Roman")
         expected_size = body_rules.get("font_size", 12)
         expected_bold = body_rules.get("bold", None)
         expected_alignment = body_rules.get("alignment")
+        expected_space_after = body_rules.get("space_after")
 
         for run in paragraph.runs:
             if run.text.strip():
@@ -1079,6 +1085,27 @@ class AutoFixer:
                     "current_value": str(current_spacing) if current_spacing is not None else "(inherited)",
                     "target_value": str(expected_spacing),
                     "evidence": "Paragraph line spacing did not match target rule",
+                })
+
+        if (
+            expected_space_after is not None
+            and self._property_allowed("space_after", allowed_properties)
+        ):
+            current_space_after = get_space_after_pt(paragraph)
+            if (
+                current_space_after is None
+                or abs(float(current_space_after) - float(expected_space_after)) > 0.5
+            ):
+                paragraph.paragraph_format.space_after = Pt(float(expected_space_after))
+                changes.append({
+                    "property_name": "space_after",
+                    "current_value": (
+                        f"{current_space_after}pt"
+                        if current_space_after is not None
+                        else "(inherited)"
+                    ),
+                    "target_value": f"{expected_space_after}pt",
+                    "evidence": "Body paragraph spacing after did not match target rule",
                 })
 
         current_alignment = get_paragraph_alignment(paragraph)
@@ -1114,13 +1141,17 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["body_text", "line_spacing"],
-            fallback=["font_name", "font_size", "bold", "line_spacing", "alignment"],
+            fallback=["font_name", "font_size", "bold", "line_spacing", "alignment", "space_after"],
         )
 
         expected_font = abstract_rules.get("font_name", "Times New Roman")
         expected_size = abstract_rules.get("font_size", 9)
         expected_bold = abstract_rules.get("bold", None)
         expected_alignment = abstract_rules.get("alignment")
+        expected_space_after = abstract_rules.get(
+            "space_after",
+            self.rules.get("body", {}).get("space_after"),
+        )
 
         for run in paragraph.runs:
             if run.text.strip():
@@ -1143,6 +1174,27 @@ class AutoFixer:
                     "current_value": str(current_spacing) if current_spacing is not None else "(inherited)",
                     "target_value": str(expected_spacing),
                     "evidence": "Abstract line spacing did not match target rule",
+                })
+
+        if (
+            expected_space_after is not None
+            and self._property_allowed("space_after", allowed_properties)
+        ):
+            current_space_after = get_space_after_pt(paragraph)
+            if (
+                current_space_after is None
+                or abs(float(current_space_after) - float(expected_space_after)) > 0.5
+            ):
+                paragraph.paragraph_format.space_after = Pt(float(expected_space_after))
+                changes.append({
+                    "property_name": "space_after",
+                    "current_value": (
+                        f"{current_space_after}pt"
+                        if current_space_after is not None
+                        else "(inherited)"
+                    ),
+                    "target_value": f"{expected_space_after}pt",
+                    "evidence": "Abstract paragraph spacing after did not match target rule",
                 })
 
         current_alignment = get_paragraph_alignment(paragraph)
@@ -1252,12 +1304,14 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["figures", "tables"],
-            fallback=["font_name", "font_size", "italic"],
+            fallback=["font_name", "font_size", "italic", "space_after", "capitalization"],
         )
 
         expected_font = caption_rules.get("font_name", "Times New Roman")
         expected_size = caption_rules.get("font_size", 10)
         expected_italic = caption_rules.get("italic", None)
+        expected_space_after = caption_rules.get("space_after")
+        title_case_required = bool(caption_rules.get("title_case"))
 
         for run in paragraph.runs:
             if run.text.strip():
@@ -1269,6 +1323,42 @@ class AutoFixer:
                     expected_italic,
                     allowed_properties=allowed_properties,
                 ))
+
+        if (
+            expected_space_after is not None
+            and self._property_allowed("space_after", allowed_properties)
+        ):
+            current_space_after = get_space_after_pt(paragraph)
+            if (
+                current_space_after is None
+                or abs(float(current_space_after) - float(expected_space_after)) > 0.5
+            ):
+                paragraph.paragraph_format.space_after = Pt(float(expected_space_after))
+                changes.append({
+                    "property_name": "space_after",
+                    "current_value": (
+                        f"{current_space_after}pt"
+                        if current_space_after is not None
+                        else "(inherited)"
+                    ),
+                    "target_value": f"{expected_space_after}pt",
+                    "evidence": "Caption paragraph spacing after did not match target rule",
+                })
+
+        current_text = get_paragraph_text(paragraph)
+        if (
+            title_case_required
+            and self._property_allowed("capitalization", allowed_properties)
+        ):
+            target_text = to_journal_caption_title_case(current_text)
+            if target_text != current_text:
+                self._replace_paragraph_text_preserving_first_run(paragraph, target_text)
+                changes.append({
+                    "property_name": "capitalization",
+                    "current_value": current_text,
+                    "target_value": target_text,
+                    "evidence": "Caption capitalization did not match target rule",
+                })
 
         if changes:
             self._add_property_changes(
@@ -1287,7 +1377,15 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["references"],
-            fallback=["font_name", "font_size", "bold", "alignment", "line_spacing"],
+            fallback=[
+                "font_name",
+                "font_size",
+                "bold",
+                "alignment",
+                "line_spacing",
+                "space_after",
+                "hanging_indent",
+            ],
         )
 
         expected_font = reference_rules.get("font_name", "Times New Roman")
@@ -1295,6 +1393,8 @@ class AutoFixer:
         expected_bold = reference_rules.get("bold", None)
         expected_alignment = reference_rules.get("alignment")
         expected_line_spacing = reference_rules.get("line_spacing")
+        expected_space_after = reference_rules.get("space_after")
+        expected_hanging_indent = reference_rules.get("hanging_indent")
 
         for run in paragraph.runs:
             if run.text.strip():
@@ -1335,6 +1435,48 @@ class AutoFixer:
                     "current_value": str(current_line_spacing) if current_line_spacing is not None else "(inherited)",
                     "target_value": str(expected_line_spacing),
                     "evidence": "Reference line spacing did not match target rule",
+                })
+
+        if (
+            expected_space_after is not None
+            and self._property_allowed("space_after", allowed_properties)
+        ):
+            current_space_after = get_space_after_pt(paragraph)
+            if (
+                current_space_after is None
+                or abs(float(current_space_after) - float(expected_space_after)) > 0.5
+            ):
+                paragraph.paragraph_format.space_after = Pt(float(expected_space_after))
+                changes.append({
+                    "property_name": "space_after",
+                    "current_value": (
+                        f"{current_space_after}pt"
+                        if current_space_after is not None
+                        else "(inherited)"
+                    ),
+                    "target_value": f"{expected_space_after}pt",
+                    "evidence": "Reference paragraph spacing after did not match target rule",
+                })
+
+        if (
+            expected_hanging_indent is not None
+            and self._property_allowed("hanging_indent", allowed_properties)
+        ):
+            current_hanging_indent = get_hanging_indent_inches(paragraph)
+            if (
+                current_hanging_indent is None
+                or abs(float(current_hanging_indent) - float(expected_hanging_indent)) > 0.03
+            ):
+                paragraph.paragraph_format.first_line_indent = Inches(-float(expected_hanging_indent))
+                changes.append({
+                    "property_name": "hanging_indent",
+                    "current_value": (
+                        f"{current_hanging_indent:.2f}in"
+                        if current_hanging_indent is not None
+                        else "No hanging indent"
+                    ),
+                    "target_value": f"{expected_hanging_indent}in",
+                    "evidence": "Reference hanging indent did not match target rule",
                 })
 
         if changes:

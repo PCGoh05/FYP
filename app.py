@@ -284,13 +284,14 @@ def get_system_capability_sections():
             "title": "Can Detect",
             "items": [
                 "Margins, page size, journal header, paper title, author information, body text, headings, abstract rules, keywords, captions, references, citations, and required sections.",
+                "JIWE-specific checks include paragraph spacing after, caption title case, reference line spacing, and reference hanging indent.",
                 "Some checks are exact formatting checks; others are warning-level structural or content-pattern checks that should be reviewed by a person.",
             ],
         },
         {
             "title": "Auto-Fix Can Change",
             "items": [
-                "Only rule-detected formatting properties such as font, font size, bold, italic, alignment, line spacing, margins, page size, capitalization, and stable header spacing.",
+                "Only rule-detected formatting properties such as font, font size, bold, italic, alignment, line spacing, spacing after, hanging indent, margins, page size, capitalization, and stable header spacing.",
                 "Auto-Fix re-checks the corrected document and reports remaining issues after supported changes are applied.",
             ],
         },
@@ -721,7 +722,12 @@ def display_sidebar():
             # Body style
             st.markdown("**Body Text Style:**")
             body = rules.get("body", {})
-            st.caption(f"Font: {body.get('font_name', 'Times New Roman')} | Size: {body.get('font_size', 12)}pt")
+            body_spacing = body.get("space_after")
+            spacing_text = f" | After: {body_spacing}pt" if body_spacing is not None else ""
+            st.caption(
+                f"Font: {body.get('font_name', 'Times New Roman')} | "
+                f"Size: {body.get('font_size', 12)}pt{spacing_text}"
+            )
 
             # Heading style
             st.markdown("**Heading Style:**")
@@ -734,7 +740,10 @@ def display_sidebar():
                 margins = rules.get("margins", {})
                 st.caption(f"L: {margins.get('left', 1.0):.2f}in | R: {margins.get('right', 1.0):.2f}in | T: {margins.get('top', 1.0):.2f}in | B: {margins.get('bottom', 1.0):.2f}in")
         else:
-            st.info("Upload a template file to extract formatting rules")
+            st.info(
+                "Use the official JIWE template or the default JIWE rules. "
+                "Other journal templates are experimental and should be validated before use."
+            )
 
         st.divider()
 
@@ -780,12 +789,22 @@ def handle_template_upload(uploaded_file):
                 st.session_state.template_uploaded = True
 
                 summary = rules.get("_extraction_summary", {})
+                profile = rules.get("_profile", {})
                 st.success(
                     "Template rules processed: "
                     f"{summary.get('extracted', 0)} extracted, "
                     f"{summary.get('inferred', 0)} inferred, "
                     f"{summary.get('default', 0)} defaulted."
                 )
+                if str(profile.get("name", "")).upper() == "JIWE":
+                    st.info(
+                        "Validated profile: JIWE. Auto-Fix remains conservative and only changes deterministic formatting issues."
+                    )
+                else:
+                    st.warning(
+                        "This template was not matched to the validated JIWE profile. "
+                        "Checking can still run, but auto-fix results should be manually validated."
+                    )
 
                 # Display summary - user-friendly view
                 with st.expander("View Extracted Rules Summary", expanded=True):
@@ -826,7 +845,10 @@ def handle_manuscript_check(uploaded_file):
 
                 # Warn user if using default rules
                 if not st.session_state.template_rules:
-                    st.warning("No template uploaded. Using default formatting rules (JIWE style). For accurate results, please upload a template file first.")
+                    st.info(
+                        "No template uploaded. The checker is using the validated default JIWE rules. "
+                        "Upload the official JIWE template when you want the rules to be re-extracted from the template file."
+                    )
 
                 # Core checking is rule-based. LLM is not used for compliance decisions.
                 checker = ManuscriptChecker(rules, None)
@@ -1351,10 +1373,9 @@ def display_download_section():
         st.info(pdf_notice)
     labels = get_download_result_labels(download_format)
     st.caption(
-        "Corrected Manuscript applies supported formatting fixes. Marked Original keeps the submitted manuscript "
-        "and highlights changed locations in yellow. Yellow does not mean the issue remains; a highlighted running "
-        "header usually means header tab spacing was normalized. Fix Summary Report lists the changes and remaining "
-        "manual-review items."
+        "Corrected Manuscript is the fixed file. Marked Original is not fixed; it is an audit copy of the submitted "
+        "manuscript with changed locations highlighted in yellow. Yellow means the location was changed or reviewed, "
+        "not necessarily that the issue remains. Fix Summary Report lists applied changes and remaining manual-review items."
     )
 
     output_timestamp = st.session_state.output_timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1476,22 +1497,25 @@ def main():
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("1. Upload Template")
-        st.write("Upload a journal template (.docx or .pdf) to extract formatting rules")
+        st.subheader("1. Upload JIWE Template")
+        st.write(
+            "Upload the official JIWE template (.docx or .pdf) to extract formatting rules. "
+            "Other MMU Press journal templates are future-work scope and may need manual validation."
+        )
 
         template_file = st.file_uploader(
-            "Choose template file",
+            "Choose JIWE template file",
             type=["docx", "pdf"] if PDF2DOCX_AVAILABLE else ["docx"],
             key="template_uploader",
-            help="Upload the journal's template document (DOCX or PDF)"
+            help="Use the official JIWE template for validated results. Other templates are experimental."
         )
 
         if template_file:
             handle_template_upload(template_file)
 
-        # Option to use default rules
+        # Option to use default JIWE rules
         if not st.session_state.template_uploaded:
-            if st.button("Use Default Rules"):
+            if st.button("Use Default JIWE Rules"):
                 st.session_state.template_rules = get_default_template_rules()
                 st.session_state.template_uploaded = True
                 st.success("Using default JIWE formatting rules")

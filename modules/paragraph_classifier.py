@@ -215,6 +215,7 @@ class ParagraphClassifier:
             "in_abstract": False,
             "in_keywords": False,
             "in_references": False,
+            "past_author_block": False,
         }
 
         for data in para_data:
@@ -243,21 +244,26 @@ class ParagraphClassifier:
         if paragraph_type == ParagraphType.ABSTRACT_LABEL:
             context["in_abstract"] = True
             context["in_keywords"] = False
+            context["past_author_block"] = True
 
         if paragraph_type == ParagraphType.ABSTRACT_CONTENT:
             context["in_abstract"] = True
+            context["past_author_block"] = True
 
         if paragraph_type == ParagraphType.KEYWORDS_LABEL:
             context["in_abstract"] = False
             context["in_keywords"] = True
+            context["past_author_block"] = True
 
         if paragraph_type == ParagraphType.KEYWORDS_CONTENT:
             context["in_abstract"] = False
             context["in_keywords"] = False
+            context["past_author_block"] = True
 
         if paragraph_type == ParagraphType.SECTION_HEADING:
             context["in_abstract"] = False
             context["in_keywords"] = False
+            context["past_author_block"] = True
             if "reference" in text_lower or "bibliography" in text_lower:
                 context["in_references"] = True
             elif context.get("in_references"):
@@ -271,6 +277,7 @@ class ParagraphClassifier:
                 "in_abstract": False,
                 "in_keywords": False,
                 "in_references": False,
+                "past_author_block": False,
             }
 
         text = data["text"].strip()
@@ -287,6 +294,9 @@ class ParagraphClassifier:
 
         if self._is_journal_header(text_lower, index):
             return self._create_classification(data, ParagraphType.JOURNAL_HEADER, 0.95, "Journal header")
+
+        if self._is_caption(text_lower):
+            return self._create_classification(data, ParagraphType.CAPTION, 0.90, "Caption")
 
         if self._is_probable_title(text, font_info, alignment, index, context):
             return self._create_classification(data, ParagraphType.PAPER_TITLE, 0.92, "Paper title")
@@ -314,9 +324,6 @@ class ParagraphClassifier:
 
         if self._is_author_info(text, text_lower, index, alignment, context):
             return self._create_classification(data, ParagraphType.AUTHOR_INFO, 0.90, "Author information")
-
-        if self._is_caption(text_lower):
-            return self._create_classification(data, ParagraphType.CAPTION, 0.90, "Caption")
 
         if self._is_algorithm(text, text_lower):
             return self._create_classification(data, ParagraphType.ALGORITHM, 0.88, "Algorithm or pseudocode")
@@ -350,6 +357,9 @@ class ParagraphClassifier:
     def _is_author_info(self, text: str, text_lower: str, index: int, alignment: str, context: Dict) -> bool:
         """Return True for author names, affiliations, emails, and ORCID lines."""
         if index > 25:
+            return False
+
+        if context.get("past_author_block"):
             return False
 
         if re.search(r"[\w\.-]+@[\w\.-]+\.\w+", text):

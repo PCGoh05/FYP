@@ -446,6 +446,10 @@ class ReviewGuidanceBuilder:
 
         if "line spacing" in lower:
             return "line_spacing"
+        if "spacing after" in lower or "after spacing" in lower:
+            return "space_after"
+        if "hanging indent" in lower:
+            return "hanging_indent"
         if "manual tab" in lower:
             return "manual_tabs"
         if "capitalization" in lower:
@@ -546,6 +550,8 @@ class ReviewGuidanceBuilder:
         labels = {
             ("body", "alignment"): "Body text alignment was corrected to match the template.",
             ("body_text", "alignment"): "Body text alignment was corrected to match the template.",
+            ("body", "space_after"): "Body paragraph spacing after was corrected.",
+            ("body_text", "space_after"): "Body paragraph spacing after was corrected.",
             ("page_header", "manual_tabs"): "Page header spacing was adjusted.",
             ("journal_header", "manual_tabs"): "Page header spacing was adjusted.",
             ("author_info", "bold"): "Author information bold formatting was corrected.",
@@ -555,10 +561,16 @@ class ReviewGuidanceBuilder:
             ("title", "font_name"): "Paper title font was corrected.",
             ("heading", "bold"): "Section heading bold formatting was corrected.",
             ("headings", "bold"): "Section heading bold formatting was corrected.",
+            ("caption", "capitalization"): "Caption capitalization was corrected to journal title case.",
+            ("caption", "space_after"): "Caption paragraph spacing after was corrected.",
             ("reference", "font_size"): "Reference font size was corrected.",
             ("references", "font_size"): "Reference font size was corrected.",
             ("reference", "line_spacing"): "Reference line spacing was corrected.",
             ("references", "line_spacing"): "Reference line spacing was corrected.",
+            ("reference", "space_after"): "Reference paragraph spacing after was corrected.",
+            ("references", "space_after"): "Reference paragraph spacing after was corrected.",
+            ("reference", "hanging_indent"): "Reference hanging indent was corrected.",
+            ("references", "hanging_indent"): "Reference hanging indent was corrected.",
             ("layout", "page_size"): "Page size was corrected.",
             ("layout", "orientation"): "Page orientation was corrected.",
             ("margins", "margins"): "Page margins were corrected.",
@@ -576,6 +588,9 @@ class ReviewGuidanceBuilder:
             "font_name": "font name",
             "font_size": "font size",
             "line_spacing": "line spacing",
+            "space_after": "paragraph spacing after",
+            "hanging_indent": "hanging indent",
+            "capitalization": "capitalization",
             "manual_tabs": "header spacing",
             "number_bold": "heading number bold formatting",
             "number_font_size": "heading number font size",

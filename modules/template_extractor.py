@@ -12,7 +12,7 @@ from .profile_loader import ProfileLoader
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_font_info,
     get_paragraph_alignment, get_margins, get_line_spacing,
-    get_sdt_reference_paragraphs,
+    get_space_after_pt, get_hanging_indent_inches, get_sdt_reference_paragraphs,
     count_columns, get_run_font_info
 )
 from config import DEFAULT_RULES, SECTION_HEADING_PATTERNS
@@ -781,6 +781,7 @@ Answer with ONLY "yes" or "no"."""
         font_names = []
         font_sizes = []
         line_spacings = []
+        space_afters = []
         alignments = []
         
         # Analyze ALL runs in body paragraphs to get accurate font info
@@ -818,6 +819,9 @@ Answer with ONLY "yes" or "no"."""
             spacing = get_line_spacing(para)
             if spacing:
                 line_spacings.append(spacing)
+            space_after = get_space_after_pt(para)
+            if space_after is not None:
+                space_afters.append(round(space_after, 2))
             if para.alignment is not None:
                 alignments.append(get_paragraph_alignment(para))
         
@@ -826,6 +830,7 @@ Answer with ONLY "yes" or "no"."""
             "font_name": Counter(font_names).most_common(1)[0][0] if font_names else self._profile_default("body", DEFAULT_RULES["body"]).get("font_name", "Times New Roman"),
             "font_size": Counter(font_sizes).most_common(1)[0][0] if font_sizes else self._profile_default("body", DEFAULT_RULES["body"]).get("font_size", 10),
             "line_spacing": Counter(line_spacings).most_common(1)[0][0] if line_spacings else self._profile_default("body", DEFAULT_RULES["body"]).get("line_spacing", 1.0),
+            "space_after": Counter(space_afters).most_common(1)[0][0] if space_afters else self._profile_default("body", DEFAULT_RULES["body"]).get("space_after"),
             "alignment": Counter(alignments).most_common(1)[0][0] if alignments else self._profile_default("body", DEFAULT_RULES["body"]).get("alignment"),
         }
         
@@ -1049,14 +1054,19 @@ Answer with ONLY "yes" or "no"."""
             return {
                 "font_name": Counter(caption_fonts).most_common(1)[0][0] if caption_fonts else default_caption.get("font_name", "Times New Roman"),
                 "font_size": Counter(caption_sizes).most_common(1)[0][0] if caption_sizes else default_caption.get("font_size", 10),
-                "italic": Counter(caption_italic).most_common(1)[0][0] if caption_italic else default_caption.get("italic", False)
+                "italic": Counter(caption_italic).most_common(1)[0][0] if caption_italic else default_caption.get("italic", False),
+                "space_after": default_caption.get("space_after"),
+                "title_case": default_caption.get("title_case"),
             }
 
         if instruction_fonts or instruction_sizes:
+            default_caption = self._profile_default("caption", DEFAULT_RULES["caption"])
             return {
-                "font_name": Counter(instruction_fonts).most_common(1)[0][0] if instruction_fonts else self._profile_default("caption", DEFAULT_RULES["caption"]).get("font_name", "Times New Roman"),
-                "font_size": Counter(instruction_sizes).most_common(1)[0][0] if instruction_sizes else self._profile_default("caption", DEFAULT_RULES["caption"]).get("font_size", 10),
-                "italic": False
+                "font_name": Counter(instruction_fonts).most_common(1)[0][0] if instruction_fonts else default_caption.get("font_name", "Times New Roman"),
+                "font_size": Counter(instruction_sizes).most_common(1)[0][0] if instruction_sizes else default_caption.get("font_size", 10),
+                "italic": default_caption.get("italic", False),
+                "space_after": default_caption.get("space_after"),
+                "title_case": default_caption.get("title_case"),
             }
         
         return self._profile_default("caption", DEFAULT_RULES.get("caption", {"font_name": "Times New Roman", "font_size": 10, "italic": False}))
@@ -1068,6 +1078,8 @@ Answer with ONLY "yes" or "no"."""
         ref_sizes = []
         ref_alignments = []
         ref_line_spacings = []
+        ref_space_afters = []
+        ref_hanging_indents = []
         
         for para in self.document.paragraphs:
             text = get_paragraph_text(para)
@@ -1100,6 +1112,12 @@ Answer with ONLY "yes" or "no"."""
                     spacing = get_line_spacing(para)
                     if spacing:
                         ref_line_spacings.append(spacing)
+                    space_after = get_space_after_pt(para)
+                    if space_after is not None:
+                        ref_space_afters.append(round(space_after, 2))
+                    hanging_indent = get_hanging_indent_inches(para)
+                    if hanging_indent is not None:
+                        ref_hanging_indents.append(round(hanging_indent, 2))
         
         content_control_references = get_sdt_reference_paragraphs(self.document)
         for para in content_control_references:
@@ -1112,14 +1130,23 @@ Answer with ONLY "yes" or "no"."""
             spacing = get_line_spacing(para)
             if spacing is not None:
                 ref_line_spacings.append(spacing)
+            space_after = get_space_after_pt(para)
+            if space_after is not None:
+                ref_space_afters.append(round(space_after, 2))
+            hanging_indent = get_hanging_indent_inches(para)
+            if hanging_indent is not None:
+                ref_hanging_indents.append(round(hanging_indent, 2))
 
-        if ref_fonts or ref_sizes or ref_alignments or ref_line_spacings:
+        if ref_fonts or ref_sizes or ref_alignments or ref_line_spacings or ref_space_afters or ref_hanging_indents:
             default_rule = self._profile_default("reference", DEFAULT_RULES["reference"])
             return {
                 "font_name": Counter(ref_fonts).most_common(1)[0][0] if ref_fonts else default_rule.get("font_name", "Times New Roman"),
                 "font_size": Counter(ref_sizes).most_common(1)[0][0] if ref_sizes else default_rule.get("font_size", 9),
                 "alignment": Counter(ref_alignments).most_common(1)[0][0] if ref_alignments else default_rule.get("alignment"),
                 "line_spacing": Counter(ref_line_spacings).most_common(1)[0][0] if ref_line_spacings else default_rule.get("line_spacing"),
+                "space_after": Counter(ref_space_afters).most_common(1)[0][0] if ref_space_afters else default_rule.get("space_after"),
+                "hanging_indent": Counter(ref_hanging_indents).most_common(1)[0][0] if ref_hanging_indents else default_rule.get("hanging_indent"),
+                "publication_italic_required": default_rule.get("publication_italic_required"),
             }
         
         return self._profile_default("reference", DEFAULT_RULES.get("reference", {"font_name": "Times New Roman", "font_size": 9}))
