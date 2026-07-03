@@ -4,12 +4,14 @@ from io import BytesIO
 from pathlib import Path
 
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
 from modules.auto_fixer import AutoFixer
 from modules.manuscript_checker import ManuscriptChecker
 from modules.profile_loader import ProfileLoader
+from modules.utils import paragraph_has_manual_line_breaks
 
 
 def _jiwe_rules():
@@ -74,7 +76,7 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertTrue(rules["caption"]["title_case"])
         self.assertEqual(rules["reference"]["line_spacing"], 1.15)
         self.assertEqual(rules["reference"]["space_after"], 10.0)
-        self.assertEqual(rules["reference"]["left_indent"], 0.0)
+        self.assertIsNone(rules["reference"]["left_indent"])
         self.assertAlmostEqual(rules["reference"]["hanging_indent"], 0.44, places=2)
 
     def test_checker_reports_body_spacing_and_reference_indent_mismatches(self):
@@ -115,6 +117,37 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertAlmostEqual(reference.paragraph_format.space_after.pt, 10.0)
         self.assertAlmostEqual(abs(reference.paragraph_format.first_line_indent.inches), 0.44, places=2)
 
+    def test_auto_fix_replaces_body_manual_line_breaks_before_justifying(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "manual_line_breaks.docx"
+            _save_spacing_issue_document(path)
+            document = Document(path)
+            body = document.paragraphs[7]
+            body.clear()
+            run = body.add_run("This sentence should wrap naturally,")
+            run.add_break(WD_BREAK.LINE)
+            body.add_run("not be forced onto a stretched justified line.")
+            body.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            descriptions = [
+                issue.description
+                for issue in result.issues_by_category.get("body_text", [])
+            ]
+            self.assertIn(
+                "Body paragraph contains manual line breaks that can stretch justified text",
+                descriptions,
+            )
+
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        self.assertFalse(paragraph_has_manual_line_breaks(fixed.paragraphs[7]))
+        self.assertIn("naturally, not be forced", fixed.paragraphs[7].text)
+
     def test_auto_fix_clears_extra_reference_left_indent(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "reference_left_indent_fix.docx"
@@ -138,7 +171,9 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
             fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
 
         fixed_reference = fixed.paragraphs[11]
-        self.assertAlmostEqual(fixed_reference.paragraph_format.left_indent.inches, 0.0)
+        self.assertIsNone(fixed_reference.paragraph_format.left_indent)
+        indentation = fixed_reference._p.pPr.ind
+        self.assertIsNone(indentation.get(qn("w:left")))
         self.assertAlmostEqual(abs(fixed_reference.paragraph_format.first_line_indent.inches), 0.44, places=2)
 
     def test_checker_reports_caption_title_case_mismatch(self):

@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import app
 from app import (
+    get_default_template_rules,
     get_download_result_labels,
     get_issue_explanation_button_label,
     get_llm_status_notice,
@@ -124,8 +125,15 @@ class LLMStatusUITest(unittest.TestCase):
         labels = get_download_result_labels("DOCX (Word)")
 
         self.assertEqual(labels["corrected"], "Download Corrected Manuscript (DOCX)")
-        self.assertEqual(labels["highlighted"], "Download Marked Original for Review (DOCX)")
+        self.assertEqual(labels["highlighted"], "Download Highlighted Corrected Manuscript (DOCX)")
         self.assertEqual(labels["report"], "Download Fix Summary Report (DOCX)")
+
+    def test_default_jiwe_rules_include_structure_metadata(self):
+        rules = get_default_template_rules()
+
+        self.assertIn("required_declarations", rules["_profile"])
+        self.assertIn("acknowledgement", rules["_profile"]["required_declarations"])
+        self.assertIn("ethics_statements", rules["_profile"]["required_declarations"])
 
     def test_issue_explanation_button_is_available_without_ai(self):
         self.assertEqual(

@@ -44,7 +44,7 @@ class ReportGeneratorTest(unittest.TestCase):
         self.assertIn("Issues after auto-fix: 1", text)
         self.assertIn("Remaining Issues After Auto-Fix", text)
 
-    def test_report_explains_difference_from_marked_original(self):
+    def test_report_explains_highlighted_corrected_output(self):
         report = ReportGenerator(
             rules={},
             changes=[],
@@ -54,8 +54,8 @@ class ReportGeneratorTest(unittest.TestCase):
         text = "\n".join(paragraph.text for paragraph in report.paragraphs)
 
         self.assertIn("How to Use This Report", text)
-        self.assertIn("Marked Original", text)
-        self.assertIn("yellow highlights mark changed locations", text)
+        self.assertIn("Highlighted Corrected Manuscript", text)
+        self.assertIn("marks applied-change locations in yellow", text)
 
     def test_report_includes_auto_fix_scope_limits(self):
         report = ReportGenerator(

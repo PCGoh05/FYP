@@ -18,8 +18,9 @@ from io import BytesIO
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_alignment, truncate_text,
     is_font_equivalent, get_run_font_info, get_sdt_reference_paragraphs,
-    classify_author_info_role, get_space_after_pt, get_left_indent_inches, get_hanging_indent_inches,
-    to_journal_caption_title_case
+    classify_author_info_role, get_space_after_pt, get_direct_left_indent_inches, get_hanging_indent_inches,
+    to_journal_caption_title_case, paragraph_has_manual_line_breaks,
+    replace_manual_line_breaks_with_spaces
 )
 from .paragraph_classifier import (
     ParagraphType, ClassifiedParagraph
@@ -238,6 +239,8 @@ class AutoFixer:
             return "left_indent"
         if "hanging indent" in description:
             return "hanging_indent"
+        if "manual line break" in description or "manual line breaks" in description:
+            return "manual_line_breaks"
         if "manual tab" in description or "manual tabs" in description:
             return "manual_tabs"
         if "capitalization" in description or "all capital" in description:
@@ -263,6 +266,8 @@ class AutoFixer:
         description = (getattr(issue, "description", "") or "").lower()
         if category == "body_text" and "body text formatting issues" in description:
             return {"font_name", "font_size", "bold"}
+        if category == "body_text" and "manual line break" in description:
+            return {"manual_line_breaks"}
         if category == "line_spacing":
             return {"line_spacing"}
         if category == "other" and "manual tab" in (getattr(issue, "description", "") or "").lower():
@@ -558,10 +563,47 @@ class AutoFixer:
             return
 
         first_run = paragraph.runs[first_index]
-        first_run.text = text
+        self._set_run_text_preserving_drawings(first_run, text)
         for index, run in enumerate(paragraph.runs):
             if index != first_index:
-                run.text = ""
+                self._clear_run_text_preserving_drawings(run)
+
+    def _run_has_drawing_or_pict(self, run) -> bool:
+        """Return True when a run contains a Word drawing/picture object."""
+        xml = run._r.xml
+        return "<w:drawing" in xml or "<w:pict" in xml or "AlternateContent" in xml
+
+    def _clear_run_text_preserving_drawings(self, run):
+        """Clear text, tabs, and line breaks while preserving drawing objects."""
+        if not self._run_has_drawing_or_pict(run):
+            run.text = ""
+            return
+
+        removable_tags = {
+            qn("w:t"),
+            qn("w:tab"),
+            qn("w:br"),
+            qn("w:cr"),
+            qn("w:noBreakHyphen"),
+            qn("w:softHyphen"),
+        }
+        for child in list(run._r):
+            if child.tag in removable_tags:
+                run._r.remove(child)
+
+    def _set_run_text_preserving_drawings(self, run, text: str):
+        """Set run text without deleting embedded header lines or images."""
+        if not self._run_has_drawing_or_pict(run):
+            run.text = text
+            return
+
+        self._clear_run_text_preserving_drawings(run)
+        text_node = OxmlElement("w:t")
+        if text.startswith(" ") or text.endswith(" "):
+            text_node.set(qn("xml:space"), "preserve")
+        text_node.text = text
+        insert_at = 1 if run._r.rPr is not None else 0
+        run._r.insert(insert_at, text_node)
 
     def _add_change_record(
         self,
@@ -1057,7 +1099,15 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["body_text", "line_spacing"],
-            fallback=["font_name", "font_size", "bold", "line_spacing", "alignment", "space_after"],
+            fallback=[
+                "font_name",
+                "font_size",
+                "bold",
+                "line_spacing",
+                "alignment",
+                "space_after",
+                "manual_line_breaks",
+            ],
         )
 
         expected_font = body_rules.get("font_name", "Times New Roman")
@@ -1075,6 +1125,19 @@ class AutoFixer:
                     expected_bold,
                     allowed_properties=allowed_properties,
                 ))
+
+        if (
+            self._property_allowed("manual_line_breaks", allowed_properties)
+            and paragraph_has_manual_line_breaks(paragraph)
+        ):
+            replacements = replace_manual_line_breaks_with_spaces(paragraph)
+            if replacements:
+                changes.append({
+                    "property_name": "manual_line_breaks",
+                    "current_value": f"{replacements} manual line break(s)",
+                    "target_value": "Normal paragraph wrapping",
+                    "evidence": "Body paragraph contained manual line breaks that can stretch justified text",
+                })
 
         expected_spacing = body_rules.get("line_spacing")
         if expected_spacing and self._property_allowed("line_spacing", allowed_properties):
@@ -1397,6 +1460,7 @@ class AutoFixer:
         expected_alignment = reference_rules.get("alignment")
         expected_line_spacing = reference_rules.get("line_spacing")
         expected_space_after = reference_rules.get("space_after")
+        has_left_indent_rule = "left_indent" in reference_rules
         expected_left_indent = reference_rules.get("left_indent")
         expected_hanging_indent = reference_rules.get("hanging_indent")
 
@@ -1462,20 +1526,27 @@ class AutoFixer:
                     "evidence": "Reference paragraph spacing after did not match target rule",
                 })
 
-        if (
-            expected_left_indent is not None
-            and self._property_allowed("left_indent", allowed_properties)
-        ):
-            current_left_indent = get_left_indent_inches(paragraph)
-            effective_left_indent = 0.0 if current_left_indent is None else float(current_left_indent)
-            if abs(effective_left_indent - float(expected_left_indent)) > 0.03:
-                paragraph.paragraph_format.left_indent = Inches(float(expected_left_indent))
-                changes.append({
-                    "property_name": "left_indent",
-                    "current_value": f"{effective_left_indent:.2f}in",
-                    "target_value": f"{expected_left_indent}in",
-                    "evidence": "Reference left indent did not match target rule",
-                })
+        if has_left_indent_rule and self._property_allowed("left_indent", allowed_properties):
+            current_left_indent = get_direct_left_indent_inches(paragraph)
+            if expected_left_indent is None:
+                if current_left_indent is not None:
+                    paragraph.paragraph_format.left_indent = None
+                    changes.append({
+                        "property_name": "left_indent",
+                        "current_value": f"{float(current_left_indent):.2f}in",
+                        "target_value": "No explicit left indent",
+                        "evidence": "Reference left indent did not match target rule",
+                    })
+            else:
+                effective_left_indent = 0.0 if current_left_indent is None else float(current_left_indent)
+                if abs(effective_left_indent - float(expected_left_indent)) > 0.03:
+                    paragraph.paragraph_format.left_indent = Inches(float(expected_left_indent))
+                    changes.append({
+                        "property_name": "left_indent",
+                        "current_value": f"{effective_left_indent:.2f}in",
+                        "target_value": f"{expected_left_indent}in",
+                        "evidence": "Reference left indent did not match target rule",
+                    })
 
         if (
             expected_hanging_indent is not None
@@ -1588,11 +1659,12 @@ class AutoFixer:
         return True
 
     def _highlight_page_header_change(self, document: Document, change: ChangeRecord) -> bool:
-        """Highlight original page header text for document-level header changes."""
+        """Highlight page header text for document-level header changes."""
         if change.change_type != "page_header":
             return False
 
         highlighted = False
+        target_text = (change.target_value or "").strip()
         for section in document.sections:
             headers = [
                 section.header,
@@ -1603,7 +1675,10 @@ class AutoFixer:
                 for paragraph in header.paragraphs:
                     if not paragraph.text.strip():
                         continue
-                    if not self._has_unstable_header_tabs(paragraph.text):
+                    paragraph_text = paragraph.text.strip()
+                    matches_original = self._has_unstable_header_tabs(paragraph.text)
+                    matches_fixed = target_text and paragraph_text == target_text
+                    if not (matches_original or matches_fixed):
                         continue
                     for run in paragraph.runs:
                         if run.text.strip():
@@ -1613,16 +1688,17 @@ class AutoFixer:
 
     def get_highlighted_document_bytes(self) -> bytes:
         """
-        Get the original document with highlighted changed locations.
+        Get the corrected document with highlighted changed locations.
         Changed runs are highlighted in yellow without adding summary content.
         
         Returns:
-            Document bytes with yellow highlighting on original changed locations
+            Document bytes with yellow highlighting on corrected changed locations
         """
-        if not self.original_document:
+        source_document = self.document or self.original_document
+        if not source_document:
             raise ValueError("No document to export")
 
-        highlighted_document = deepcopy(self.original_document)
+        highlighted_document = deepcopy(source_document)
 
         for change in self.changes:
             index = change.paragraph_index

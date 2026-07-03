@@ -13,9 +13,11 @@ def _rules():
             "name": "JIWE",
             "required_sections": ["abstract", "keywords", "introduction", "conclusion", "references"],
             "required_declarations": [
+                "acknowledgement",
                 "funding_statement",
                 "author_contributions",
                 "conflict_of_interests",
+                "ethics_statements",
                 "data_availability",
             ],
         },
@@ -94,8 +96,8 @@ class DeclarationSectionsTest(unittest.TestCase):
         self.assertIn("Missing required declaration section: Author Contributions", descriptions)
         self.assertIn("Missing required declaration section: Conflict Of Interests", descriptions)
         self.assertIn("Missing required declaration section: Data Availability", descriptions)
-        self.assertNotIn("Missing required declaration section: Acknowledgement", descriptions)
-        self.assertNotIn("Missing required declaration section: Ethics Statements", descriptions)
+        self.assertIn("Missing required declaration section: Acknowledgement", descriptions)
+        self.assertIn("Missing required declaration section: Ethics Statements", descriptions)
 
 
 if __name__ == "__main__":

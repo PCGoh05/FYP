@@ -5,6 +5,7 @@ from pathlib import Path
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
+from docx.oxml import OxmlElement
 from docx.shared import Pt
 from docx.shared import RGBColor
 
@@ -208,6 +209,31 @@ class HeaderLayoutStabilityTest(unittest.TestCase):
             self.assertEqual(visible_runs[0].font.size.pt, 9)
             self.assertTrue(visible_runs[0].font.italic)
 
+    def test_auto_fixer_preserves_header_line_drawing_when_normalizing_tabs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "header_line.docx"
+            _save_unstable_docx(path)
+            document = Document(path)
+            header = document.sections[0].header.paragraphs[0]
+            drawing_run = header.add_run()
+            drawing_run._r.append(OxmlElement("w:drawing"))
+            document.save(path)
+
+            checker = ManuscriptChecker(_rules()).load_manuscript(str(path))
+            result = checker.check_all()
+            fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixed_doc, _ = fixer.fix_all()
+
+            fixed_header = fixed_doc.sections[0].header.paragraphs[0]
+            self.assertIn(
+                "Journal of Informatics and Web Engineering\tVol. 3 No. 3 (January 2026)",
+                fixed_header.text,
+            )
+            self.assertTrue(
+                any("<w:drawing" in run._r.xml for run in fixed_header.runs)
+            )
+
     def test_highlighted_document_marks_changed_page_header(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "unstable.docx"
@@ -228,6 +254,10 @@ class HeaderLayoutStabilityTest(unittest.TestCase):
 
             self.assertTrue(header_runs)
             self.assertEqual(header_runs[0].font.highlight_color, WD_COLOR_INDEX.YELLOW)
+            self.assertEqual(
+                highlighted_doc.sections[0].header.paragraphs[0].text,
+                "Journal of Informatics and Web Engineering\tVol. 3 No. 3 (January 2026)",
+            )
 
     def test_highlighted_document_preserves_original_body_without_inserted_summary(self):
         with tempfile.TemporaryDirectory() as tmp:

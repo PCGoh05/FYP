@@ -56,6 +56,13 @@ class ReportGenerator:
         self.post_fix_result = post_fix_result
         self.document = None
 
+    @staticmethod
+    def _format_change_value(value: str) -> str:
+        """Return report-friendly text for raw change values."""
+        if value == "(inherited)":
+            return "Uses Word style"
+        return value
+
     def generate_comparison_report(self) -> Document:
         """Generate a detailed comparison report document"""
         self.document = Document()
@@ -134,8 +141,8 @@ class ReportGenerator:
                 "contains supported formatting fixes that were applied automatically.",
             ),
             (
-                "Marked Original",
-                "keeps the submitted manuscript layout; yellow highlights mark changed locations, not necessarily remaining errors.",
+                "Highlighted Corrected Manuscript",
+                "uses the corrected manuscript and marks applied-change locations in yellow for quick comparison.",
             ),
             (
                 "Fix Summary Report",
@@ -431,7 +438,7 @@ class ReportGenerator:
             before_cell = row.cells[3]
             self._set_cell_background(before_cell, self.LIGHT_RED)
             before_para = before_cell.paragraphs[0]
-            run = before_para.add_run(change.current_value or change.before)
+            run = before_para.add_run(self._format_change_value(change.current_value or change.before))
             run.font.color.rgb = self.RED
             run.font.size = Pt(9)
 
@@ -439,7 +446,7 @@ class ReportGenerator:
             after_cell = row.cells[4]
             self._set_cell_background(after_cell, self.LIGHT_GREEN)
             after_para = after_cell.paragraphs[0]
-            run = after_para.add_run(change.target_value or change.after)
+            run = after_para.add_run(self._format_change_value(change.target_value or change.after))
             run.font.color.rgb = self.GREEN
             run.font.size = Pt(9)
 

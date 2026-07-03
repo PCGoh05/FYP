@@ -54,7 +54,7 @@ class ReviewGuidanceAppTest(unittest.TestCase):
     def test_formats_inherited_change_value_for_users(self):
         self.assertEqual(
             format_change_display_value("(inherited)"),
-            "Inherited from Word style",
+            "Uses Word style",
         )
         self.assertEqual(format_change_display_value("Times New Roman"), "Times New Roman")
 

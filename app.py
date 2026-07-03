@@ -6,6 +6,7 @@ Main Application Entry Point
 """
 
 import streamlit as st
+import hashlib
 import html
 import inspect
 import os
@@ -69,6 +70,9 @@ def get_default_template_rules():
     rules["_profile"] = {
         "name": profile.get("name", "JIWE"),
         "source": "default_profile",
+        "required_sections": profile.get("required_sections", []),
+        "required_declarations": profile.get("required_declarations", []),
+        "classification_patterns": profile.get("classification_patterns", {}),
     }
     return rules
 
@@ -225,14 +229,25 @@ def get_download_result_labels(download_format: str):
     if download_format == "DOCX (Word)":
         return {
             "corrected": "Download Corrected Manuscript (DOCX)",
-            "highlighted": "Download Marked Original for Review (DOCX)",
+            "highlighted": "Download Highlighted Corrected Manuscript (DOCX)",
             "report": "Download Fix Summary Report (DOCX)",
         }
     return {
         "corrected": "Convert Corrected Manuscript to PDF",
-        "highlighted": "Download Marked Original for Review (DOCX)",
+        "highlighted": "Download Highlighted Corrected Manuscript (DOCX)",
         "report": "Convert Fix Summary Report to PDF",
     }
+
+
+def get_uploaded_file_signature(uploaded_file) -> str:
+    """Build a stable signature for an uploaded file without consuming its stream."""
+    if uploaded_file is None:
+        return ""
+
+    file_bytes = uploaded_file.getvalue()
+    sample = file_bytes[:4096] + file_bytes[-4096:]
+    digest = hashlib.sha256(sample).hexdigest()[:16]
+    return f"{uploaded_file.name}:{len(file_bytes)}:{digest}"
 
 
 def get_issue_explanation_button_label(ai_enabled: bool, connected: bool) -> str:
@@ -526,6 +541,8 @@ def init_session_state():
         st.session_state.template_rules = None
     if "template_uploaded" not in st.session_state:
         st.session_state.template_uploaded = False
+    if "last_template_signature" not in st.session_state:
+        st.session_state.last_template_signature = ""
     if "manuscript_uploaded" not in st.session_state:
         st.session_state.manuscript_uploaded = False
     if "check_result" not in st.session_state:
@@ -558,6 +575,8 @@ def init_session_state():
         st.session_state.manuscript_bytes = None
     if "manuscript_filename" not in st.session_state:
         st.session_state.manuscript_filename = "manuscript.docx"
+    if "last_checked_manuscript_signature" not in st.session_state:
+        st.session_state.last_checked_manuscript_signature = ""
     if "highlighted_doc_bytes" not in st.session_state:
         st.session_state.highlighted_doc_bytes = None
     if "output_timestamp" not in st.session_state:
@@ -766,7 +785,15 @@ def handle_template_upload(uploaded_file):
     """Handle template file upload and rule extraction"""
     if uploaded_file:
         try:
-            file_bytes = uploaded_file.read()
+            signature = get_uploaded_file_signature(uploaded_file)
+            if (
+                signature
+                and signature == st.session_state.last_template_signature
+                and st.session_state.template_rules
+            ):
+                return
+
+            file_bytes = uploaded_file.getvalue()
             original_filename = uploaded_file.name
             file_name = original_filename.lower()
 
@@ -787,6 +814,8 @@ def handle_template_upload(uploaded_file):
 
                 st.session_state.template_rules = rules
                 st.session_state.template_uploaded = True
+                st.session_state.last_template_signature = signature
+                st.session_state.last_checked_manuscript_signature = ""
 
                 summary = rules.get("_extraction_summary", {})
                 profile = rules.get("_profile", {})
@@ -808,7 +837,13 @@ def handle_template_upload(uploaded_file):
 
                 # Display summary - user-friendly view
                 with st.expander("View Extracted Rules Summary", expanded=True):
-                    st.text(extractor.get_rules_summary())
+                    st.text_area(
+                        "Extracted rules summary",
+                        extractor.get_rules_summary(),
+                        height=320,
+                        disabled=True,
+                        label_visibility="collapsed",
+                    )
 
         except Exception as e:
             display_exception("Error extracting template rules", e)
@@ -819,7 +854,7 @@ def handle_manuscript_check(uploaded_file):
     if uploaded_file:
         try:
             # Store manuscript bytes and filename for later use
-            manuscript_bytes = uploaded_file.read()
+            manuscript_bytes = uploaded_file.getvalue()
             original_filename = uploaded_file.name
             file_name = original_filename.lower()
 
@@ -1209,7 +1244,7 @@ def handle_auto_fix():
 def format_change_display_value(value):
     """Return user-facing text for a recorded format-change value."""
     if value == "(inherited)":
-        return "Inherited from Word style"
+        return "Uses Word style"
     return value
 
 
@@ -1373,9 +1408,9 @@ def display_download_section():
         st.info(pdf_notice)
     labels = get_download_result_labels(download_format)
     st.caption(
-        "Corrected Manuscript is the fixed file. Marked Original is not fixed; it is an audit copy of the submitted "
-        "manuscript with changed locations highlighted in yellow. Yellow means the location was changed or reviewed, "
-        "not necessarily that the issue remains. Fix Summary Report lists applied changes and remaining manual-review items."
+        "Corrected Manuscript is the clean fixed file. Highlighted Corrected Manuscript is the same corrected file "
+        "with changed locations marked in yellow for quick comparison. Fix Summary Report lists applied changes "
+        "and remaining manual-review items."
     )
 
     output_timestamp = st.session_state.output_timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1426,10 +1461,10 @@ def display_download_section():
                 file_name=f"highlighted_{base_filename}_{output_timestamp}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 use_container_width=True,
-                help="This copy keeps the original text/layout and marks changed or review-needed locations in yellow."
+                help="This copy uses the corrected manuscript and marks applied-change locations in yellow."
             )
         else:
-            st.button("Download Marked Original for Review", disabled=True, use_container_width=True)
+            st.button("Download Highlighted Corrected Manuscript", disabled=True, use_container_width=True)
 
     with col3:
         if st.session_state.report_bytes:
@@ -1532,10 +1567,20 @@ def main():
             help="Upload your manuscript document to check (DOCX or PDF)"
         )
 
-        if manuscript_file and st.button("Check Format", type="primary"):
-            result = handle_manuscript_check(manuscript_file)
-            if result:
-                st.rerun()
+        if manuscript_file:
+            manuscript_signature = get_uploaded_file_signature(manuscript_file)
+            if not st.session_state.template_uploaded:
+                st.info("Choose a template or use the default JIWE rules before checking the manuscript.")
+            elif manuscript_signature != st.session_state.last_checked_manuscript_signature:
+                result = handle_manuscript_check(manuscript_file)
+                st.session_state.last_checked_manuscript_signature = manuscript_signature
+                if result:
+                    st.rerun()
+            elif st.button("Re-check Format", type="secondary"):
+                result = handle_manuscript_check(manuscript_file)
+                st.session_state.last_checked_manuscript_signature = manuscript_signature
+                if result:
+                    st.rerun()
 
     # Display results if check has been performed
     if st.session_state.check_result:

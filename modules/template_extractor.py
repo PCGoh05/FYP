@@ -12,7 +12,7 @@ from .profile_loader import ProfileLoader
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_font_info,
     get_paragraph_alignment, get_margins, get_line_spacing,
-    get_space_after_pt, get_left_indent_inches, get_hanging_indent_inches, get_sdt_reference_paragraphs,
+    get_space_after_pt, get_direct_left_indent_inches, get_hanging_indent_inches, get_sdt_reference_paragraphs,
     count_columns, get_run_font_info
 )
 from config import DEFAULT_RULES, SECTION_HEADING_PATTERNS
@@ -1116,7 +1116,7 @@ Answer with ONLY "yes" or "no"."""
                     space_after = get_space_after_pt(para)
                     if space_after is not None:
                         ref_space_afters.append(round(space_after, 2))
-                    left_indent = get_left_indent_inches(para)
+                    left_indent = get_direct_left_indent_inches(para)
                     if left_indent is not None:
                         ref_left_indents.append(round(left_indent, 2))
                     hanging_indent = get_hanging_indent_inches(para)
@@ -1137,7 +1137,7 @@ Answer with ONLY "yes" or "no"."""
             space_after = get_space_after_pt(para)
             if space_after is not None:
                 ref_space_afters.append(round(space_after, 2))
-            left_indent = get_left_indent_inches(para)
+            left_indent = get_direct_left_indent_inches(para)
             if left_indent is not None:
                 ref_left_indents.append(round(left_indent, 2))
             hanging_indent = get_hanging_indent_inches(para)

@@ -5,6 +5,7 @@ Utility functions for the Academic Manuscript Format Checker
 from docx import Document
 from docx.shared import Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.text.paragraph import Paragraph
 from collections import Counter
@@ -517,6 +518,53 @@ def get_left_indent_inches(paragraph) -> Optional[float]:
                     return None
 
     return None
+
+
+def get_direct_left_indent_inches(paragraph) -> Optional[float]:
+    """Get directly stored paragraph left indent in inches, without style fallback."""
+    left_indent = paragraph.paragraph_format.left_indent
+    if left_indent is not None:
+        return left_indent.inches
+
+    paragraph_properties = paragraph._p.pPr
+    if paragraph_properties is not None:
+        indentation = paragraph_properties.find(qn("w:ind"))
+        if indentation is not None:
+            left_value = indentation.get(qn("w:left"))
+            if left_value is not None:
+                try:
+                    return int(left_value) / 1440
+                except ValueError:
+                    return None
+
+    return None
+
+
+def paragraph_has_manual_line_breaks(paragraph) -> bool:
+    """Return True when a paragraph contains manual line breaks."""
+    break_tags = {qn("w:br"), qn("w:cr")}
+    return any(node.tag in break_tags for node in paragraph._p.iter())
+
+
+def replace_manual_line_breaks_with_spaces(paragraph) -> int:
+    """Replace manual line breaks inside a paragraph with spaces."""
+    break_tags = {qn("w:br"), qn("w:cr")}
+    replacements = 0
+
+    for run in paragraph.runs:
+        run_element = run._r
+        for child in list(run_element):
+            if child.tag not in break_tags:
+                continue
+            text_node = OxmlElement("w:t")
+            text_node.set(qn("xml:space"), "preserve")
+            text_node.text = " "
+            insert_at = list(run_element).index(child)
+            run_element.remove(child)
+            run_element.insert(insert_at, text_node)
+            replacements += 1
+
+    return replacements
 
 
 def get_margins(document) -> Dict[str, float]:
