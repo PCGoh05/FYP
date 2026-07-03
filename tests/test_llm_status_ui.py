@@ -173,6 +173,8 @@ class LLMStatusUITest(unittest.TestCase):
         self.assertIn("PDF and AI Boundaries", titles)
         self.assertIn("JIWE", combined_text)
         self.assertIn("rule-detected formatting", combined_text)
+        self.assertIn("Zotero, Mendeley, EndNote", combined_text)
+        self.assertIn("grey Word content-control boxes are not recreated", combined_text)
         self.assertIn("does not decide manuscript acceptance", combined_text)
         self.assertNotIn("Precision, Recall, and F1", combined_text)
 

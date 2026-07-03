@@ -16,6 +16,7 @@ from .utils import (
     detect_reference_style, calculate_compliance_score, count_columns,
     truncate_text, is_font_equivalent, classify_author_info_role,
     to_journal_caption_title_case, paragraph_has_manual_line_breaks,
+    paragraph_has_reference_manager_markup,
 )
 from .paragraph_classifier import ParagraphClassifier, ParagraphType, ClassifiedParagraph
 from config import REQUIRED_SECTIONS
@@ -1766,6 +1767,7 @@ class ManuscriptChecker:
             if (
                 publication_italic_required
                 and self._reference_likely_has_publication_source(cp.text)
+                and not paragraph_has_reference_manager_markup(self.document.paragraphs[cp.index])
                 and not self._paragraph_has_italic_publication_source(cp.index)
             ):
                 publication_italic_mismatches.append(cp)
@@ -2153,6 +2155,7 @@ class ManuscriptChecker:
             if (
                 publication_italic_required
                 and self._reference_likely_has_publication_source(text)
+                and not paragraph_has_reference_manager_markup(paragraph)
                 and not self._paragraph_object_has_italic_publication_source(paragraph)
             ):
                 publication_italic_mismatches.append(paragraph)

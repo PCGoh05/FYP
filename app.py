@@ -303,6 +303,7 @@ def get_system_capability_sections():
                 "Margins, page size, journal header, paper title, author information, body text, headings, abstract rules, keywords, captions, references, citations, and required sections.",
                 "JIWE-specific checks include paragraph spacing after, caption title case, reference line spacing, reference left indent, and reference hanging indent.",
                 "Indent values are displayed with Word-friendly units, for example 0.44 in (1.13 cm) for the JIWE reference hanging indent.",
+                "Common Zotero, Mendeley, EndNote, and CSL field markers can be detected when they are stored in the DOCX XML.",
                 "Some checks are exact formatting checks; others are warning-level structural or content-pattern checks that should be reviewed by a person.",
             ],
         },
@@ -317,6 +318,7 @@ def get_system_capability_sections():
             "title": "Needs Manual Review",
             "items": [
                 "Missing sections, missing captions, figure/table movement, equation numbering, citation meaning, reference source selection, author identity, and research content.",
+                "Reference-manager fields or grey Word content-control boxes are not recreated; the system checks visible reference formatting and flags ambiguous source italics for review.",
                 "The system does not decide manuscript acceptance, research quality, novelty, or language quality.",
             ],
         },
@@ -1049,6 +1051,15 @@ def display_check_results(result):
     for tab_idx, category in category_map.items():
         with tabs[tab_idx]:
             issues = result.issues_by_category.get(category, [])
+            if category == "references":
+                st.info(
+                    "References are checked using visible Word formatting. "
+                    "When Zotero, Mendeley, EndNote, or CSL field markers are detectable, "
+                    "the system treats the reference metadata as tool-managed. It does not "
+                    "recreate grey Word content-control boxes. Yellow highlighting marks "
+                    "paragraphs with detected changes or review evidence, not necessarily "
+                    "that every highlighted word is wrong."
+                )
             if not issues:
                 st.success(f"No {category.replace('_', ' ')} issues found")
             else:

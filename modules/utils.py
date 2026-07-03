@@ -404,6 +404,45 @@ def get_sdt_reference_paragraphs(document) -> List[Paragraph]:
     return references
 
 
+REFERENCE_MANAGER_MARKERS = (
+    "ZOTERO",
+    "MENDELEY",
+    "ENDNOTE",
+    "EN.CITE",
+    "EN.REFLIST",
+    "CSL_CITATION",
+    "CSL_BIBLIOGRAPHY",
+    "ADDIN CSL",
+    "ADDIN ZOTERO",
+    "ADDIN EN.",
+)
+
+
+def paragraph_has_reference_manager_markup(paragraph) -> bool:
+    """Return True when a paragraph contains common reference-manager field markup."""
+    nodes_to_scan = [paragraph._p]
+    parent = paragraph._p.getparent()
+    while parent is not None:
+        if parent.tag == qn("w:sdt"):
+            nodes_to_scan.append(parent)
+            break
+        parent = parent.getparent()
+
+    for root in nodes_to_scan:
+        for node in root.iter():
+            candidates = []
+            if node.text:
+                candidates.append(node.text)
+            for value in node.attrib.values():
+                if value:
+                    candidates.append(value)
+
+            haystack = " ".join(candidates).upper()
+            if any(marker in haystack for marker in REFERENCE_MANAGER_MARKERS):
+                return True
+    return False
+
+
 def get_line_spacing(paragraph) -> Optional[float]:
     """Get effective line spacing from direct, style, or document defaults."""
     line_spacing = paragraph.paragraph_format.line_spacing
