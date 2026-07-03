@@ -64,7 +64,7 @@ def _save_document(path: Path):
     _add(document, "CONCLUSION", 10, True)
     _add(document, "Conclusion text.")
     _add(document, "REFERENCES", 10, True)
-    _add(document, "[1] Reference text.", 9)
+    _add(document, "[1]\tReference text.", 9)
     document.save(path)
 
 

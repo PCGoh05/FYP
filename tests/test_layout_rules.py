@@ -50,7 +50,7 @@ def _save_document(path: Path):
         "CONCLUSION",
         "Conclusion text.",
         "REFERENCES",
-        "[1] Reference text.",
+        "[1]\tReference text.",
     ]:
         document.add_paragraph(text)
     document.save(path)

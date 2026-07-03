@@ -103,7 +103,8 @@ DEFAULT_RULES = {
         "line_spacing": 1.15,
         "space_after": 10.0,
         "left_indent": None,
-        "hanging_indent": 0.44,
+        "hanging_indent": 0.4444444444444444,
+        "number_tab_required": True,
         "publication_italic_required": True
     },
     "layout": {

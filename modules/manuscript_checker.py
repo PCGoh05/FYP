@@ -1515,6 +1515,10 @@ class ManuscriptChecker:
         has_left_indent_rule = "left_indent" in reference_rules
         expected_left_indent = reference_rules.get("left_indent")
         expected_hanging_indent = reference_rules.get("hanging_indent")
+        number_tab_required = reference_rules.get(
+            "number_tab_required",
+            self.profile.get("name", "").lower() == "jiwe",
+        )
         publication_italic_required = reference_rules.get("publication_italic_required")
         if publication_italic_required is None:
             publication_italic_required = self.profile.get("name", "").lower() == "jiwe"
@@ -1539,6 +1543,7 @@ class ManuscriptChecker:
                     has_left_indent_rule,
                     expected_left_indent,
                     expected_hanging_indent,
+                    number_tab_required,
                     publication_italic_required,
                 )
                 return
@@ -1582,6 +1587,7 @@ class ManuscriptChecker:
         space_after_mismatches = []
         left_indent_mismatches = []
         hanging_indent_mismatches = []
+        number_tab_mismatches = []
         for i, cp in enumerate(references):
             current_font = cp.font_info.get("font_name")
             current_size = cp.font_info.get("font_size")
@@ -1657,6 +1663,9 @@ class ManuscriptChecker:
                     or abs(float(current_hanging_indent) - float(expected_hanging_indent)) > 0.03
                 ):
                     hanging_indent_mismatches.append(cp)
+
+            if number_tab_required and self._reference_number_needs_tab(cp.text):
+                number_tab_mismatches.append(cp)
 
             if (
                 publication_italic_required
@@ -1757,6 +1766,18 @@ class ManuscriptChecker:
                 expected=expected_text,
                 severity="warning",
                 text_preview=truncate_text(left_indent_mismatches[0].text, 50)
+            )
+
+        if number_tab_mismatches:
+            self._add_issue(
+                category="references",
+                location="Reference Entries",
+                para_index=-1,
+                description="Reference number should be followed by a tab",
+                current=f"{len(number_tab_mismatches)} references use spaces after the number",
+                expected="Use one tab between the reference number and reference text",
+                severity="warning",
+                text_preview=truncate_text(number_tab_mismatches[0].text, 50),
             )
 
     def _check_equations(self) -> None:
@@ -1921,6 +1942,7 @@ class ManuscriptChecker:
         has_left_indent_rule,
         expected_left_indent,
         expected_hanging_indent,
+        number_tab_required,
         publication_italic_required,
     ):
         """Check references stored inside Word content controls."""
@@ -1929,6 +1951,7 @@ class ManuscriptChecker:
         space_after_mismatches = []
         left_indent_mismatches = []
         hanging_indent_mismatches = []
+        number_tab_mismatches = []
 
         for index, paragraph in enumerate(references):
             text = get_paragraph_text(paragraph)
@@ -2008,6 +2031,9 @@ class ManuscriptChecker:
                     or abs(float(current_hanging_indent) - float(expected_hanging_indent)) > 0.03
                 ):
                     hanging_indent_mismatches.append(paragraph)
+
+            if number_tab_required and self._reference_number_needs_tab(text):
+                number_tab_mismatches.append(paragraph)
 
             if (
                 publication_italic_required
@@ -2105,6 +2131,25 @@ class ManuscriptChecker:
                 severity="warning",
                 text_preview=truncate_text(get_paragraph_text(left_indent_mismatches[0]), 50),
             )
+
+        if number_tab_mismatches:
+            self._add_issue(
+                category="references",
+                location="Reference Content Controls",
+                para_index=-1,
+                description="Reference number should be followed by a tab",
+                current=f"{len(number_tab_mismatches)} references use spaces after the number",
+                expected="Use one tab between the reference number and reference text",
+                severity="warning",
+                text_preview=truncate_text(get_paragraph_text(number_tab_mismatches[0]), 50),
+            )
+
+    @staticmethod
+    def _reference_number_needs_tab(text: str) -> bool:
+        """Return True when an IEEE reference number is followed by spaces instead of a tab."""
+        return bool(re.match(r"^\s*\[\d+\]\s+\S", text)) and not bool(
+            re.match(r"^\s*\[\d+\]\t", text)
+        )
 
     def _is_paragraph_mostly_bold(self, paragraph_index: int) -> bool:
         """Return True when most visible paragraph text is explicitly bold."""

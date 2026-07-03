@@ -1121,7 +1121,7 @@ Answer with ONLY "yes" or "no"."""
                         ref_left_indents.append(round(left_indent, 2))
                     hanging_indent = get_hanging_indent_inches(para)
                     if hanging_indent is not None:
-                        ref_hanging_indents.append(round(hanging_indent, 2))
+                        ref_hanging_indents.append(round(hanging_indent, 6))
         
         content_control_references = get_sdt_reference_paragraphs(self.document)
         for para in content_control_references:
@@ -1142,7 +1142,7 @@ Answer with ONLY "yes" or "no"."""
                 ref_left_indents.append(round(left_indent, 2))
             hanging_indent = get_hanging_indent_inches(para)
             if hanging_indent is not None:
-                ref_hanging_indents.append(round(hanging_indent, 2))
+                ref_hanging_indents.append(round(hanging_indent, 6))
 
         if ref_fonts or ref_sizes or ref_alignments or ref_line_spacings or ref_space_afters or ref_left_indents or ref_hanging_indents:
             default_rule = self._profile_default("reference", DEFAULT_RULES["reference"])
@@ -1154,6 +1154,7 @@ Answer with ONLY "yes" or "no"."""
                 "space_after": Counter(ref_space_afters).most_common(1)[0][0] if ref_space_afters else default_rule.get("space_after"),
                 "left_indent": Counter(ref_left_indents).most_common(1)[0][0] if ref_left_indents else default_rule.get("left_indent"),
                 "hanging_indent": Counter(ref_hanging_indents).most_common(1)[0][0] if ref_hanging_indents else default_rule.get("hanging_indent"),
+                "number_tab_required": default_rule.get("number_tab_required", True),
                 "publication_italic_required": default_rule.get("publication_italic_required"),
             }
         

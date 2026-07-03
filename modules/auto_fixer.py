@@ -247,6 +247,8 @@ class AutoFixer:
             return "left_indent"
         if "hanging indent" in description:
             return "hanging_indent"
+        if "reference number should be followed by a tab" in description:
+            return "reference_number_tab"
         if "manual line break" in description or "manual line breaks" in description:
             return "manual_line_breaks"
         if "manual tab" in description or "manual tabs" in description:
@@ -1585,6 +1587,7 @@ class AutoFixer:
                 "space_after",
                 "left_indent",
                 "hanging_indent",
+                "reference_number_tab",
             ],
         )
 
@@ -1597,6 +1600,22 @@ class AutoFixer:
         has_left_indent_rule = "left_indent" in reference_rules
         expected_left_indent = reference_rules.get("left_indent")
         expected_hanging_indent = reference_rules.get("hanging_indent")
+        number_tab_required = reference_rules.get(
+            "number_tab_required",
+            self.profile.get("name", "").lower() == "jiwe",
+        )
+
+        if (
+            number_tab_required
+            and self._property_allowed("reference_number_tab", allowed_properties)
+            and self._normalize_reference_number_tab(paragraph)
+        ):
+            changes.append({
+                "property_name": "reference_number_tab",
+                "current_value": "Spaces after reference number",
+                "target_value": "Tab after reference number",
+                "evidence": "JIWE reference numbers use one tab before the reference text",
+            })
 
         for run in paragraph.runs:
             if run.text.strip():
@@ -1712,6 +1731,41 @@ class AutoFixer:
                 text_preview=truncate_text(get_paragraph_text(paragraph), 40),
                 paragraph_type=ParagraphType.REFERENCE.value,
             )
+
+    @staticmethod
+    def _normalize_reference_number_tab(paragraph) -> bool:
+        """Replace spaces after an IEEE reference number with one tab."""
+        for run in paragraph.runs:
+            if not run.text:
+                continue
+            if not run.text.strip():
+                continue
+
+            if re.match(r"^\s*\[\d+\]\t", run.text):
+                return False
+
+            updated_text = re.sub(
+                r"^(\s*\[\d+\])\s+(\S)",
+                r"\1\t\2",
+                run.text,
+                count=1,
+            )
+            if updated_text != run.text:
+                run.text = updated_text
+                return True
+
+            number_only_text = re.sub(
+                r"^(\s*\[\d+\])\s*$",
+                r"\1\t",
+                run.text,
+                count=1,
+            )
+            if number_only_text != run.text:
+                run.text = number_only_text
+                return True
+
+            return False
+        return False
 
     def _fix_sdt_references(self):
         """Fix reference paragraphs stored inside Word content controls."""

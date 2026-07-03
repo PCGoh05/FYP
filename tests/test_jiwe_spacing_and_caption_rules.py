@@ -77,7 +77,8 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertEqual(rules["reference"]["line_spacing"], 1.15)
         self.assertEqual(rules["reference"]["space_after"], 10.0)
         self.assertIsNone(rules["reference"]["left_indent"])
-        self.assertAlmostEqual(rules["reference"]["hanging_indent"], 0.44, places=2)
+        self.assertAlmostEqual(rules["reference"]["hanging_indent"], 0.4444444444444444)
+        self.assertTrue(rules["reference"]["number_tab_required"])
 
     def test_checker_reports_body_spacing_and_reference_indent_mismatches(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -116,6 +117,7 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertAlmostEqual(reference.paragraph_format.line_spacing, 1.15)
         self.assertAlmostEqual(reference.paragraph_format.space_after.pt, 10.0)
         self.assertAlmostEqual(abs(reference.paragraph_format.first_line_indent.inches), 0.44, places=2)
+        self.assertEqual(reference._p.pPr.ind.get(qn("w:hanging")), "640")
 
     def test_auto_fix_replaces_body_manual_line_breaks_before_justifying(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -175,6 +177,40 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         indentation = fixed_reference._p.pPr.ind
         self.assertIsNone(indentation.get(qn("w:left")))
         self.assertAlmostEqual(abs(fixed_reference.paragraph_format.first_line_indent.inches), 0.44, places=2)
+
+    def test_checker_reports_reference_number_space_instead_of_tab(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "reference_number_tab.docx"
+            _save_spacing_issue_document(path)
+            document = Document(path)
+            reference = document.paragraphs[11]
+            reference.runs[0].text = reference.runs[0].text.replace("[1]\t", "[1] ", 1)
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+
+        descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("references", [])
+        ]
+        self.assertIn("Reference number should be followed by a tab", descriptions)
+
+    def test_auto_fix_replaces_reference_number_spaces_with_tab(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "reference_number_tab_fix.docx"
+            _save_spacing_issue_document(path)
+            document = Document(path)
+            reference = document.paragraphs[11]
+            reference.runs[0].text = reference.runs[0].text.replace("[1]\t", "[1] ", 1)
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        self.assertTrue(fixed.paragraphs[11].text.startswith("[1]\t"))
 
     def test_checker_reports_caption_title_case_mismatch(self):
         with tempfile.TemporaryDirectory() as tmp:
