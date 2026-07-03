@@ -76,7 +76,7 @@
       "eissn|pissn|issn"
     ],
     "caption": [
-      "^(figure|fig\\.?|table)\\s*\\d+"
+      "^(figure|fig\\.?|table)\\s*\\d+(?:\\s*[\\.:]\\s*|\\s+[A-Z0-9(])"
     ],
     "reference": [
       "^\\[\\d+\\]"

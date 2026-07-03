@@ -94,7 +94,7 @@ class ParagraphClassifier:
             r"www\.",
         ],
         "caption": [
-            r"^(figure|fig\.?|table|chart|diagram|image)\s*\d+",
+            r"^(figure|fig\.?|table|chart|diagram|image)\s*\d+(?:\s*[\.:]\s*|\s+[A-Z0-9(])",
         ],
         "reference": [
             r"^\[\d+\]",
@@ -295,7 +295,7 @@ class ParagraphClassifier:
         if self._is_journal_header(text_lower, index):
             return self._create_classification(data, ParagraphType.JOURNAL_HEADER, 0.95, "Journal header")
 
-        if self._is_caption(text_lower):
+        if self._is_caption(text):
             return self._create_classification(data, ParagraphType.CAPTION, 0.90, "Caption")
 
         if self._is_probable_title(text, font_info, alignment, index, context):
@@ -464,9 +464,26 @@ class ParagraphClassifier:
         """Return True for template-only formatting instructions."""
         return bool(re.match(r"^\(?\s*\d+(?:\.\d+)?\s*[-\s]*(?:font size|point|pt)", text_lower))
 
-    def _is_caption(self, text_lower: str) -> bool:
+    def _is_caption(self, text: str) -> bool:
         """Return True for figure and table captions."""
-        return self._matches_pattern_group("caption", text_lower)
+        return self._looks_like_numbered_caption(text) or self._matches_pattern_group(
+            "caption",
+            text,
+        )
+
+    @staticmethod
+    def _looks_like_numbered_caption(text: str) -> bool:
+        """Return True for captions without treating body figure/table mentions as captions."""
+        match = re.match(r"^\s*(?:figure|fig\.?|table|chart|diagram|image)\s*\d+(.*)$", text or "", re.IGNORECASE)
+        if not match:
+            return False
+        tail = match.group(1)
+        stripped_tail = tail.lstrip()
+        if not stripped_tail:
+            return False
+        if stripped_tail[0] in ".:":
+            return True
+        return stripped_tail[0].isupper() or stripped_tail[0].isdigit() or stripped_tail[0] == "("
 
     def _is_reference_entry(self, text: str, in_references: bool) -> bool:
         """Return True for bibliography entries."""

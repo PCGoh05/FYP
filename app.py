@@ -1274,17 +1274,18 @@ def display_comparison_view(changes):
             st.write(f"- **{change_type.replace('_', ' ').title()}**: {count} properties")
 
     table_data = []
-    for index, change in enumerate(changes, 1):
-        text_preview = change.text_preview[:60] + "..." if len(change.text_preview) > 60 else change.text_preview
+    display_changes = ReportGenerator._group_repeated_changes(changes)
+    for index, change in enumerate(display_changes, 1):
+        text_preview = change["text_preview"][:60] + "..." if len(change["text_preview"]) > 60 else change["text_preview"]
         table_data.append({
             "#": index,
-            "Paragraph": change.paragraph_index + 1 if change.paragraph_index >= 0 else "Document",
-            "Type": change.change_type,
-            "Property": change.property_name,
-            "Current Value": format_change_display_value(change.current_value or change.before),
-            "Target Value": format_change_display_value(change.target_value or change.after),
+            "Location": change["location"],
+            "Type": change["change_type"],
+            "Property": change["property_name"],
+            "Current Value": format_change_display_value(change["current_value"]),
+            "Target Value": format_change_display_value(change["target_value"]),
             "Text": text_preview,
-            "Evidence": change.evidence,
+            "Evidence": change["evidence"],
         })
 
     import pandas as pd

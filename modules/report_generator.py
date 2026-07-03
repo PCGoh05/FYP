@@ -407,8 +407,10 @@ class ReportGenerator:
 
         self._style_header_row(table.rows[0])
 
+        display_changes = self._group_repeated_changes(self.changes)
+
         # Data rows
-        for i, change in enumerate(self.changes, 1):
+        for i, change in enumerate(display_changes, 1):
             row = table.add_row()
 
             # Number
@@ -417,12 +419,12 @@ class ReportGenerator:
             # Location
             location_cell = row.cells[1]
             location_para = location_cell.paragraphs[0]
-            run = location_para.add_run(change.location)
+            run = location_para.add_run(change["location"])
             run.font.size = Pt(9)
 
-            if change.text_preview:
+            if change["text_preview"]:
                 location_para.add_run("\n")
-                preview_run = location_para.add_run(f'"{change.text_preview}"')
+                preview_run = location_para.add_run(f'"{change["text_preview"]}"')
                 preview_run.font.size = Pt(8)
                 preview_run.font.italic = True
                 preview_run.font.color.rgb = RGBColor(128, 128, 128)
@@ -430,14 +432,14 @@ class ReportGenerator:
             # Property
             property_cell = row.cells[2]
             property_para = property_cell.paragraphs[0]
-            run = property_para.add_run(change.property_name or change.change_type)
+            run = property_para.add_run(change["property_name"])
             run.font.size = Pt(9)
 
             # Current value (red background)
             before_cell = row.cells[3]
             self._set_cell_background(before_cell, self.LIGHT_RED)
             before_para = before_cell.paragraphs[0]
-            run = before_para.add_run(self._format_change_value(change.current_value or change.before))
+            run = before_para.add_run(self._format_change_value(change["current_value"]))
             run.font.color.rgb = self.RED
             run.font.size = Pt(9)
 
@@ -445,7 +447,7 @@ class ReportGenerator:
             after_cell = row.cells[4]
             self._set_cell_background(after_cell, self.LIGHT_GREEN)
             after_para = after_cell.paragraphs[0]
-            run = after_para.add_run(self._format_change_value(change.target_value or change.after))
+            run = after_para.add_run(self._format_change_value(change["target_value"]))
             run.font.color.rgb = self.GREEN
             run.font.size = Pt(9)
 
@@ -458,6 +460,63 @@ class ReportGenerator:
             row.cells[4].width = Inches(1.8)
 
         self.document.add_paragraph()  # Spacing
+
+    @staticmethod
+    def _group_repeated_changes(changes: List[ChangeRecord]) -> List[Dict[str, str]]:
+        """Group repeated reference/content-control changes so reports stay readable."""
+        grouped = {}
+        order = []
+        for change in changes:
+            key = None
+            if change.change_type == "reference" and change.property_name in {
+                "font_name",
+                "font_size",
+                "bold",
+                "left_indent",
+                "hanging_indent",
+                "line_spacing",
+                "space_after",
+                "reference_number_tab",
+            }:
+                key = (
+                    change.change_type,
+                    change.property_name,
+                    change.current_value or change.before,
+                    change.target_value or change.after,
+                )
+
+            if key is None:
+                order.append({
+                    "location": change.location,
+                    "change_type": change.change_type,
+                    "property_name": change.property_name or change.change_type,
+                    "current_value": change.current_value or change.before,
+                    "target_value": change.target_value or change.after,
+                    "text_preview": change.text_preview,
+                    "evidence": change.evidence,
+                })
+                continue
+
+            if key not in grouped:
+                grouped[key] = {
+                    "location": "Reference entries",
+                    "change_type": change.change_type,
+                    "property_name": change.property_name or change.change_type,
+                    "current_value": change.current_value or change.before,
+                    "target_value": change.target_value or change.after,
+                    "text_preview": change.text_preview,
+                    "evidence": change.evidence,
+                    "count": 0,
+                }
+                order.append(grouped[key])
+            grouped[key]["count"] += 1
+
+        for item in order:
+            count = item.pop("count", None)
+            if count and count > 1:
+                item["location"] = f"{item['location']} ({count} changes)"
+
+        return order
 
     def _add_legend(self):
         """Add color legend"""

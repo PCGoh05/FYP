@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from docx import Document
+from docx.shared import Pt
 
 from config import DEFAULT_RULES
 from modules.manuscript_checker import ManuscriptChecker
@@ -285,6 +286,40 @@ class ReferenceDetectionTest(unittest.TestCase):
             ]
 
         self.assertIn("Reference publication source may need italic formatting", descriptions)
+
+    def test_reference_font_size_warnings_are_grouped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "grouped_reference_font_size.docx"
+            document = Document()
+            document.add_paragraph("Journal of Informatics and")
+            document.add_paragraph("Web Engineering")
+            document.add_paragraph("Vol. 3 No. 3 (January 2026)\teISSN: 2821-370X")
+            document.add_paragraph("A Test Paper Title for Format Validation")
+            document.add_paragraph("Abstract - This is the abstract.")
+            document.add_paragraph("Keywords - checking, template")
+            document.add_paragraph("INTRODUCTION")
+            document.add_paragraph("Body text.")
+            document.add_paragraph("CONCLUSION")
+            document.add_paragraph("Conclusion text.")
+            document.add_paragraph("REFERENCES")
+            for index in range(1, 4):
+                paragraph = document.add_paragraph()
+                run = paragraph.add_run(f"[{index}]\tReference text {index}.")
+                run.font.name = "Times New Roman"
+                run.font.size = Pt(10)
+            document.save(path)
+
+            checker = ManuscriptChecker(_rules()).load_manuscript(str(path))
+            result = checker.check_all()
+
+            size_issues = [
+                issue
+                for issue in result.issues_by_category.get("references", [])
+                if issue.description == "Reference font size does not match template"
+            ]
+
+        self.assertEqual(len(size_issues), 1)
+        self.assertIn("3 references", size_issues[0].current_value)
 
 
 if __name__ == "__main__":

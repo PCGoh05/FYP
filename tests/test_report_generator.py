@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from modules.auto_fixer import PostFixValidationResult
+from modules.auto_fixer import ChangeRecord, PostFixValidationResult
 from modules.report_generator import ReportGenerator
 
 
@@ -70,6 +70,30 @@ class ReportGeneratorTest(unittest.TestCase):
         self.assertIn("Auto-Fix Scope", text)
         self.assertIn("Automatic fixes are limited to detected formatting properties", text)
         self.assertIn("manual review", text)
+
+    def test_report_groups_repeated_reference_changes(self):
+        changes = [
+            ChangeRecord(
+                paragraph_index=-1,
+                location=f"Reference Content Control {index}",
+                change_type="reference",
+                before="0.49in",
+                after="0.444444in",
+                text_preview="[1] Example reference",
+                property_name="hanging_indent",
+                current_value="0.49in",
+                target_value="0.444444in",
+                paragraph_type="reference",
+                evidence="Reference hanging indent did not match target rule",
+            )
+            for index in range(1, 6)
+        ]
+
+        grouped = ReportGenerator._group_repeated_changes(changes)
+
+        self.assertEqual(len(grouped), 1)
+        self.assertEqual(grouped[0]["location"], "Reference entries (5 changes)")
+        self.assertEqual(grouped[0]["property_name"], "hanging_indent")
 
 
 if __name__ == "__main__":

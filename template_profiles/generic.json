@@ -29,7 +29,7 @@
       "www\\."
     ],
     "caption": [
-      "^(figure|fig\\.?|table|chart|diagram|image)\\s*\\d+"
+      "^(figure|fig\\.?|table|chart|diagram|image)\\s*\\d+(?:\\s*[\\.:]\\s*|\\s+[A-Z0-9(])"
     ],
     "reference": [
       "^\\[\\d+\\]",

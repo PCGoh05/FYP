@@ -254,6 +254,50 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
             "Figure 3. Top 20 Features Ranked by Their Chi-Squared Scores with the Target Variable",
         )
 
+    def test_caption_title_case_preserves_acronyms(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "caption_acronyms.docx"
+            document = Document()
+            _add_drawing_paragraph(document)
+            _add_paragraph(
+                document,
+                "Figure 1. AI-Based OWASP WCSS rPPG and ROI Results",
+            )
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        self.assertEqual(
+            fixed.paragraphs[1].text,
+            "Figure 1. AI-Based OWASP WCSS rPPG and ROI Results",
+        )
+
+    def test_caption_title_case_preserves_numeric_expressions_and_vs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "caption_numeric_expression.docx"
+            document = Document()
+            _add_drawing_paragraph(document)
+            _add_paragraph(
+                document,
+                "Figure 1. Visualization of the 36x36 ROI preprocessing pipeline vs. baseline",
+            )
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        self.assertEqual(
+            fixed.paragraphs[1].text,
+            "Figure 1. Visualization of the 36x36 ROI Preprocessing Pipeline vs. Baseline",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

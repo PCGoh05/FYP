@@ -23,6 +23,13 @@ def _add_drawing_paragraph(document):
     run._r.append(OxmlElement("w:drawing"))
 
 
+def _add_multi_drawing_paragraph(document, count=2, text=""):
+    paragraph = document.add_paragraph(text)
+    run = paragraph.add_run()
+    for _ in range(count):
+        run._r.append(OxmlElement("w:drawing"))
+
+
 def _add_pict_paragraph(document):
     paragraph = document.add_paragraph()
     run = paragraph.add_run()
@@ -222,6 +229,75 @@ class CaptionOrderAndNumberingTest(unittest.TestCase):
             for issue in result.issues_by_category.get("figures", [])
         ]
         self.assertIn("Figure caption should appear below the figure", descriptions)
+
+    def test_checker_does_not_treat_body_figure_mentions_as_captions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "body_figure_mentions.docx"
+            document = Document()
+            document.add_paragraph("1. INTRODUCTION")
+            document.add_paragraph("Figure 1 and Figure 2 show the proposed workflow in detail.")
+            _add_drawing_paragraph(document)
+            document.add_paragraph("Figure 1. Proposed Workflow")
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+        figure_descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("figures", [])
+        ]
+        self.assertNotIn("Figure numbering is not continuous", figure_descriptions)
+        self.assertNotIn("Figure caption should appear below the figure", figure_descriptions)
+
+    def test_checker_accepts_caption_without_period_when_title_starts_after_number(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "caption_without_period.docx"
+            document = Document()
+            document.add_paragraph("1. INTRODUCTION")
+            _add_drawing_paragraph(document)
+            document.add_paragraph("Figure 1 Proposed Workflow")
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+        figure_descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("figures", [])
+        ]
+        self.assertNotIn("Some figures may be missing captions", figure_descriptions)
+
+    def test_checker_counts_multi_drawing_block_as_one_figure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "multi_drawing_one_figure.docx"
+            document = Document()
+            document.add_paragraph("1. INTRODUCTION")
+            _add_multi_drawing_paragraph(document, count=3)
+            document.add_paragraph("Figure 1. Combined Result Panels")
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+        figure_descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("figures", [])
+        ]
+        self.assertNotIn("Some figures may be missing captions", figure_descriptions)
+
+    def test_checker_does_not_count_equation_drawing_as_missing_figure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "equation_drawing.docx"
+            document = Document()
+            document.add_paragraph("1. INTRODUCTION")
+            _add_multi_drawing_paragraph(document, count=2, text="Equation (7) defines the model.")
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+
+        figure_descriptions = [
+            issue.description
+            for issue in result.issues_by_category.get("figures", [])
+        ]
+        self.assertNotIn("Some figures may be missing captions", figure_descriptions)
 
 
 if __name__ == "__main__":

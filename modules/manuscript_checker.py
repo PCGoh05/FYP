@@ -1294,7 +1294,7 @@ class ManuscriptChecker:
             table_captions = [
                 cp for cp in self.classifications
                 if cp.paragraph_type == ParagraphType.CAPTION
-                and re.match(r"^table\s*\d+\s*[\.:]", cp.text.lower())
+                and self._is_numbered_caption_text(cp.text, "table")
             ]
             caption_count = len(table_captions)
             expected_caption_count = self._count_captionable_tables()
@@ -1400,8 +1400,8 @@ class ManuscriptChecker:
         # Count figure captions
         figure_captions = [
             cp for cp in self.classifications
-            if cp.paragraph_type == ParagraphType.CAPTION and
-            re.match(r'^(figure|fig\.?)\s*\d+\s*[\.:]', cp.text.lower())
+            if cp.paragraph_type == ParagraphType.CAPTION
+            and self._is_numbered_caption_text(cp.text, "figure")
         ]
         
         image_count = self._count_body_images_before_back_matter()
@@ -1502,7 +1502,30 @@ class ManuscriptChecker:
                     )
 
         self._check_caption_order_and_numbering("figure")
-    
+
+    @staticmethod
+    def _is_numbered_caption_text(text: str, caption_type: str) -> bool:
+        """Return True for numbered captions, excluding body sentences that cite figures or tables."""
+        return ManuscriptChecker._extract_numbered_caption_value(text, caption_type) is not None
+
+    @staticmethod
+    def _extract_numbered_caption_value(text: str, caption_type: str) -> Optional[int]:
+        """Extract a caption number only when the text looks like a real caption."""
+        if caption_type == "table":
+            pattern = r"^\s*table\s*(\d+)(.*)$"
+        else:
+            pattern = r"^\s*(?:figure|fig\.?)\s*(\d+)(.*)$"
+        match = re.match(pattern, text or "", re.IGNORECASE)
+        if not match:
+            return None
+
+        tail = match.group(2).lstrip()
+        if not tail:
+            return None
+        if tail[0] in ".:" or tail[0].isupper() or tail[0].isdigit() or tail[0] == "(":
+            return int(match.group(1))
+        return None
+
     def _check_references(self):
         """Check references section formatting"""
         reference_rules = self.rules.get("reference", {})
@@ -1582,52 +1605,29 @@ class ManuscriptChecker:
             )
         
         # Check font formatting for every reference entry.
+        font_mismatches = []
+        size_mismatches = []
+        bold_mismatches = []
         alignment_mismatches = []
         line_spacing_mismatches = []
         space_after_mismatches = []
         left_indent_mismatches = []
         hanging_indent_mismatches = []
         number_tab_mismatches = []
+        publication_italic_mismatches = []
         for i, cp in enumerate(references):
             current_font = cp.font_info.get("font_name")
             current_size = cp.font_info.get("font_size")
             
             if current_font and not is_font_equivalent(current_font, expected_font):
-                self._add_issue(
-                    category="references",
-                    location=f"Reference {i + 1}",
-                    para_index=cp.index,
-                    description="Reference font does not match template",
-                    current=current_font,
-                    expected=expected_font,
-                    severity="warning",
-                    text_preview=truncate_text(cp.text, 50)
-                )
+                font_mismatches.append((cp, current_font))
 
             if current_size and current_size != expected_size:
-                self._add_issue(
-                    category="references",
-                    location=f"Reference {i + 1}",
-                    para_index=cp.index,
-                    description="Reference font size does not match template",
-                    current=f"{current_size}pt",
-                    expected=f"{expected_size}pt",
-                    severity="warning",
-                    text_preview=truncate_text(cp.text, 50)
-                )
+                size_mismatches.append((cp, current_size))
 
             current_bold = self._is_paragraph_mostly_bold(cp.index)
             if expected_bold is not None and current_bold != bool(expected_bold):
-                self._add_issue(
-                    category="references",
-                    location=f"Reference {i + 1}",
-                    para_index=cp.index,
-                    description="Reference bold formatting does not match template",
-                    current="Bold" if current_bold else "Not Bold",
-                    expected="Bold" if expected_bold else "Not Bold",
-                    severity="warning",
-                    text_preview=truncate_text(cp.text, 50)
-                )
+                bold_mismatches.append((cp, current_bold))
 
             if expected_alignment and cp.alignment != expected_alignment:
                 alignment_mismatches.append(cp)
@@ -1672,16 +1672,58 @@ class ManuscriptChecker:
                 and self._reference_likely_has_publication_source(cp.text)
                 and not self._paragraph_has_italic_publication_source(cp.index)
             ):
-                self._add_issue(
-                    category="references",
-                    location=f"Reference {i + 1}",
-                    para_index=cp.index,
-                    description="Reference publication source may need italic formatting",
-                    current="No italic publication source segment detected",
-                    expected="Italic journal, conference, book, or proceedings source segment",
-                    severity="warning",
-                    text_preview=truncate_text(cp.text, 50)
-                )
+                publication_italic_mismatches.append(cp)
+
+        if font_mismatches:
+            first_cp, first_font = font_mismatches[0]
+            self._add_issue(
+                category="references",
+                location="Reference Entries",
+                para_index=-1,
+                description="Reference font does not match template",
+                current=f"{len(font_mismatches)} references use {first_font} or another font",
+                expected=expected_font,
+                severity="warning",
+                text_preview=truncate_text(first_cp.text, 50),
+            )
+
+        if size_mismatches:
+            first_cp, first_size = size_mismatches[0]
+            self._add_issue(
+                category="references",
+                location="Reference Entries",
+                para_index=-1,
+                description="Reference font size does not match template",
+                current=f"{len(size_mismatches)} references use {first_size}pt or another size",
+                expected=f"{expected_size}pt",
+                severity="warning",
+                text_preview=truncate_text(first_cp.text, 50),
+            )
+
+        if bold_mismatches:
+            first_cp, first_bold = bold_mismatches[0]
+            self._add_issue(
+                category="references",
+                location="Reference Entries",
+                para_index=-1,
+                description="Reference bold formatting does not match template",
+                current=f"{len(bold_mismatches)} references are {'bold' if first_bold else 'not bold'} or mixed",
+                expected="Bold" if expected_bold else "Not Bold",
+                severity="warning",
+                text_preview=truncate_text(first_cp.text, 50),
+            )
+
+        if publication_italic_mismatches:
+            self._add_issue(
+                category="references",
+                location="Reference Publication Sources",
+                para_index=-1,
+                description="Reference publication source may need italic formatting",
+                current=f"{len(publication_italic_mismatches)} references have no detected italic source segment",
+                expected="Italic journal, conference, book, or proceedings source segment",
+                severity="warning",
+                text_preview=truncate_text(publication_italic_mismatches[0].text, 50),
+            )
 
         if alignment_mismatches:
             self._add_issue(
@@ -1946,12 +1988,16 @@ class ManuscriptChecker:
         publication_italic_required,
     ):
         """Check references stored inside Word content controls."""
+        font_mismatches = []
+        size_mismatches = []
+        bold_mismatches = []
         alignment_mismatches = []
         line_spacing_mismatches = []
         space_after_mismatches = []
         left_indent_mismatches = []
         hanging_indent_mismatches = []
         number_tab_mismatches = []
+        publication_italic_mismatches = []
 
         for index, paragraph in enumerate(references):
             text = get_paragraph_text(paragraph)
@@ -1961,40 +2007,13 @@ class ManuscriptChecker:
             current_bold = bool(font_info.get("bold"))
 
             if current_font and not is_font_equivalent(current_font, expected_font):
-                self._add_issue(
-                    category="references",
-                    location=f"Reference Content Control {index + 1}",
-                    para_index=-1,
-                    description="Reference font does not match template",
-                    current=current_font,
-                    expected=expected_font,
-                    severity="warning",
-                    text_preview=truncate_text(text, 50),
-                )
+                font_mismatches.append((paragraph, current_font))
 
             if current_size and current_size != expected_size:
-                self._add_issue(
-                    category="references",
-                    location=f"Reference Content Control {index + 1}",
-                    para_index=-1,
-                    description="Reference font size does not match template",
-                    current=f"{current_size}pt",
-                    expected=f"{expected_size}pt",
-                    severity="warning",
-                    text_preview=truncate_text(text, 50),
-                )
+                size_mismatches.append((paragraph, current_size))
 
             if expected_bold is not None and current_bold != bool(expected_bold):
-                self._add_issue(
-                    category="references",
-                    location=f"Reference Content Control {index + 1}",
-                    para_index=-1,
-                    description="Reference bold formatting does not match template",
-                    current="Bold" if current_bold else "Not Bold",
-                    expected="Bold" if expected_bold else "Not Bold",
-                    severity="warning",
-                    text_preview=truncate_text(text, 50),
-                )
+                bold_mismatches.append((paragraph, current_bold))
 
             current_alignment = get_paragraph_alignment(paragraph)
             if expected_alignment and current_alignment != expected_alignment:
@@ -2040,16 +2059,58 @@ class ManuscriptChecker:
                 and self._reference_likely_has_publication_source(text)
                 and not self._paragraph_object_has_italic_publication_source(paragraph)
             ):
-                self._add_issue(
-                    category="references",
-                    location=f"Reference Content Control {index + 1}",
-                    para_index=-1,
-                    description="Reference publication source may need italic formatting",
-                    current="No italic publication source segment detected",
-                    expected="Italic journal, conference, book, or proceedings source segment",
-                    severity="warning",
-                    text_preview=truncate_text(text, 50),
-                )
+                publication_italic_mismatches.append(paragraph)
+
+        if font_mismatches:
+            first_paragraph, first_font = font_mismatches[0]
+            self._add_issue(
+                category="references",
+                location="Reference Content Controls",
+                para_index=-1,
+                description="Reference font does not match template",
+                current=f"{len(font_mismatches)} references use {first_font} or another font",
+                expected=expected_font,
+                severity="warning",
+                text_preview=truncate_text(get_paragraph_text(first_paragraph), 50),
+            )
+
+        if size_mismatches:
+            first_paragraph, first_size = size_mismatches[0]
+            self._add_issue(
+                category="references",
+                location="Reference Content Controls",
+                para_index=-1,
+                description="Reference font size does not match template",
+                current=f"{len(size_mismatches)} references use {first_size}pt or another size",
+                expected=f"{expected_size}pt",
+                severity="warning",
+                text_preview=truncate_text(get_paragraph_text(first_paragraph), 50),
+            )
+
+        if bold_mismatches:
+            first_paragraph, first_bold = bold_mismatches[0]
+            self._add_issue(
+                category="references",
+                location="Reference Content Controls",
+                para_index=-1,
+                description="Reference bold formatting does not match template",
+                current=f"{len(bold_mismatches)} references are {'bold' if first_bold else 'not bold'} or mixed",
+                expected="Bold" if expected_bold else "Not Bold",
+                severity="warning",
+                text_preview=truncate_text(get_paragraph_text(first_paragraph), 50),
+            )
+
+        if publication_italic_mismatches:
+            self._add_issue(
+                category="references",
+                location="Reference Publication Sources",
+                para_index=-1,
+                description="Reference publication source may need italic formatting",
+                current=f"{len(publication_italic_mismatches)} references have no detected italic source segment",
+                expected="Italic journal, conference, book, or proceedings source segment",
+                severity="warning",
+                text_preview=truncate_text(get_paragraph_text(publication_italic_mismatches[0]), 50),
+            )
 
         if alignment_mismatches:
             self._add_issue(
@@ -2287,13 +2348,11 @@ class ManuscriptChecker:
         """Check JIWE caption placement and numbering in body XML order."""
         blocks = self._get_body_blocks()
         if caption_type == "table":
-            caption_pattern = re.compile(r"^table\s*(\d+)\b", re.IGNORECASE)
             expected_side = "above"
             object_kind = "table"
             category = "tables"
             label = "Table"
         else:
-            caption_pattern = re.compile(r"^(?:figure|fig\.?)\s*(\d+)\b", re.IGNORECASE)
             expected_side = "below"
             object_kind = "drawing"
             category = "figures"
@@ -2301,9 +2360,12 @@ class ManuscriptChecker:
 
         captions = []
         for index, block in enumerate(blocks):
-            match = caption_pattern.match(block["text"])
-            if match:
-                captions.append((index, block, int(match.group(1))))
+            caption_number = self._extract_numbered_caption_value(
+                block["text"],
+                caption_type,
+            )
+            if caption_number is not None:
+                captions.append((index, block, caption_number))
 
         numbers = [number for _, _, number in captions]
         expected_numbers = list(range(1, len(numbers) + 1))
@@ -2395,6 +2457,20 @@ class ManuscriptChecker:
         image_tags = {qn("w:drawing"), qn("w:pict")}
         return sum(1 for node in block.iter() if node.tag in image_tags)
 
+    def _block_is_captionable_image(self, block) -> bool:
+        """Return True when a block looks like a manuscript figure image."""
+        if not self._block_has_image(block):
+            return False
+        block_text = " ".join(
+            text_node.text or ""
+            for text_node in block.iter()
+            if text_node.tag == qn("w:t")
+        )
+        normalized = re.sub(r"\s+", " ", block_text.lower()).strip()
+        if re.search(r"\bequation\s*\(?\d+\)?", normalized):
+            return False
+        return True
+
     @staticmethod
     def _is_main_body_start(text: str) -> bool:
         """Return True when a paragraph starts the manuscript body."""
@@ -2439,8 +2515,8 @@ class ManuscriptChecker:
                 continue
             if in_main_body and self._is_back_matter_start(normalized):
                 break
-            if in_main_body:
-                count += self._block_image_count(child)
+            if in_main_body and self._block_is_captionable_image(child):
+                count += 1
         return count
 
     def _extract_reference_texts_from_body_xml(self) -> List[str]:

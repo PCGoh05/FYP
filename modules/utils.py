@@ -620,7 +620,7 @@ CAPTION_LOWERCASE_WORDS = {
     "a", "an", "the",
     "and", "as", "but", "for", "nor", "or", "so", "yet",
     "at", "by", "from", "in", "into", "of", "off", "on", "onto",
-    "out", "over", "per", "to", "up", "via", "with",
+    "out", "over", "per", "to", "up", "via", "with", "vs", "versus",
 }
 
 
@@ -637,6 +637,8 @@ def to_journal_caption_title_case(text: str) -> str:
     def convert_word(match_obj):
         nonlocal words_seen
         token = match_obj.group(0)
+        if _caption_token_is_inside_numeric_expression(caption_body, match_obj.start(), match_obj.end()):
+            return token
         words_seen += 1
         force_capital = words_seen == 1
         return _caption_title_case_token(token, force_capital)
@@ -656,6 +658,9 @@ def _caption_title_case_token(token: str, force_capital: bool = False) -> str:
         if part in {"-", "–"}:
             converted.append(part)
             continue
+        if _caption_part_is_acronym(part):
+            converted.append(part)
+            continue
         lower = part.lower()
         should_lower = (
             not force_capital
@@ -667,6 +672,25 @@ def _caption_title_case_token(token: str, force_capital: bool = False) -> str:
         else:
             converted.append(lower[:1].upper() + lower[1:])
     return "".join(converted)
+
+
+def _caption_part_is_acronym(part: str) -> bool:
+    """Return True for acronym-like caption word parts such as AI, OWASP, WCSS, or rPPG."""
+    letters = re.findall(r"[A-Za-z]", part)
+    if len(letters) < 2:
+        return False
+    uppercase_count = sum(1 for letter in letters if letter.isupper())
+    return uppercase_count >= 2
+
+
+def _caption_token_is_inside_numeric_expression(text: str, start: int, end: int) -> bool:
+    """Return True for tokens such as the x in 36x36, which should keep their original case."""
+    token = text[start:end]
+    if len(token) != 1:
+        return False
+    previous_char = text[start - 1] if start > 0 else ""
+    next_char = text[end] if end < len(text) else ""
+    return previous_char.isdigit() and next_char.isdigit()
 
 
 def is_empty_paragraph(paragraph) -> bool:
