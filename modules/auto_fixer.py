@@ -1815,6 +1815,32 @@ class AutoFixer:
                             highlighted = True
         return highlighted
 
+    @staticmethod
+    def _paragraph_matches_change_preview(paragraph, change: ChangeRecord) -> bool:
+        """Return True when an embedded paragraph matches a recorded change preview."""
+        preview = re.sub(r"\s+", " ", (change.text_preview or "")).strip()
+        paragraph_text = re.sub(r"\s+", " ", get_paragraph_text(paragraph)).strip()
+        if not preview or not paragraph_text:
+            return False
+        if preview.endswith("..."):
+            return paragraph_text.startswith(preview[:-3])
+        return paragraph_text == preview or paragraph_text.startswith(preview)
+
+    def _highlight_embedded_reference_change(self, document: Document, change: ChangeRecord) -> bool:
+        """Highlight reference changes stored outside document.paragraphs."""
+        if change.change_type != "reference":
+            return False
+
+        highlighted = False
+        for paragraph in get_sdt_reference_paragraphs(document):
+            if not self._paragraph_matches_change_preview(paragraph, change):
+                continue
+            for run in paragraph.runs:
+                if run.text.strip():
+                    run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+                    highlighted = True
+        return highlighted
+
     def get_highlighted_document_bytes(self) -> bytes:
         """
         Get the corrected document with highlighted changed locations.
@@ -1832,7 +1858,8 @@ class AutoFixer:
         for change in self.changes:
             index = change.paragraph_index
             if index < 0 or index >= len(highlighted_document.paragraphs):
-                self._highlight_page_header_change(highlighted_document, change)
+                if not self._highlight_page_header_change(highlighted_document, change):
+                    self._highlight_embedded_reference_change(highlighted_document, change)
                 continue
 
             paragraph = highlighted_document.paragraphs[index]

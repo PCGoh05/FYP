@@ -4,7 +4,7 @@ from io import BytesIO
 from pathlib import Path
 
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt
@@ -177,6 +177,36 @@ class JiweEdgeCasesTest(unittest.TestCase):
             self.assertEqual(font_info["font_name"], "Times New Roman")
             self.assertEqual(font_info["font_size"], 9)
             self.assertEqual(paragraph.alignment, WD_ALIGN_PARAGRAPH.JUSTIFY)
+
+    def test_highlighted_document_marks_reference_content_control_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sdt_reference_highlight.docx"
+            document = Document()
+            _add_minimal_front_matter(document)
+            document.add_paragraph("CONCLUSION")
+            document.add_paragraph("Conclusion text.")
+            document.add_paragraph("REFERENCES")
+            _append_sdt_paragraph(document, "[1]")
+            _append_sdt_paragraph(document, "A. Author, Article title, Journal of Testing, 2025.")
+            document.add_paragraph("BIOGRAPHIES OF AUTHORS")
+            document.save(path)
+
+            result = ManuscriptChecker(_rules()).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+
+            highlighted = Document(BytesIO(fixer.get_highlighted_document_bytes()))
+            references = get_sdt_reference_paragraphs(highlighted)
+
+        self.assertEqual(len(references), 2)
+        highlighted_runs = [
+            run
+            for paragraph in references
+            for run in paragraph.runs
+            if run.text.strip() and run.font.highlight_color == WD_COLOR_INDEX.YELLOW
+        ]
+        self.assertTrue(highlighted_runs)
 
 
 if __name__ == "__main__":
