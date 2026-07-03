@@ -1249,6 +1249,66 @@ def format_change_display_value(value):
     return format_user_value(value)
 
 
+def group_changes_for_display(changes):
+    """Return grouped change rows even if an older report module is loaded."""
+    grouping_method = getattr(ReportGenerator, "_group_repeated_changes", None)
+    if callable(grouping_method):
+        return grouping_method(changes)
+
+    grouped = {}
+    order = []
+    groupable_reference_properties = {
+        "font_name",
+        "font_size",
+        "bold",
+        "left_indent",
+        "hanging_indent",
+        "line_spacing",
+        "space_after",
+        "reference_number_tab",
+    }
+
+    for change in changes:
+        current_value = change.current_value or change.before
+        target_value = change.target_value or change.after
+        key = None
+        if change.change_type == "reference" and change.property_name in groupable_reference_properties:
+            key = (change.change_type, change.property_name, current_value, target_value)
+
+        if key is None:
+            order.append({
+                "location": change.location,
+                "change_type": change.change_type,
+                "property_name": change.property_name or change.change_type,
+                "current_value": current_value,
+                "target_value": target_value,
+                "text_preview": change.text_preview,
+                "evidence": change.evidence,
+            })
+            continue
+
+        if key not in grouped:
+            grouped[key] = {
+                "location": "Reference entries",
+                "change_type": change.change_type,
+                "property_name": change.property_name or change.change_type,
+                "current_value": current_value,
+                "target_value": target_value,
+                "text_preview": change.text_preview,
+                "evidence": change.evidence,
+                "count": 0,
+            }
+            order.append(grouped[key])
+        grouped[key]["count"] += 1
+
+    for item in order:
+        count = item.pop("count", None)
+        if count and count > 1:
+            item["location"] = f"{item['location']} ({count} changes)"
+
+    return order
+
+
 def display_comparison_view(changes):
     """Display structured change records without parsing free-text strings."""
     st.header("Format Changes Applied")
@@ -1274,7 +1334,7 @@ def display_comparison_view(changes):
             st.write(f"- **{change_type.replace('_', ' ').title()}**: {count} properties")
 
     table_data = []
-    display_changes = ReportGenerator._group_repeated_changes(changes)
+    display_changes = group_changes_for_display(changes)
     for index, change in enumerate(display_changes, 1):
         text_preview = change["text_preview"][:60] + "..." if len(change["text_preview"]) > 60 else change["text_preview"]
         table_data.append({
