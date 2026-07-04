@@ -11,6 +11,10 @@ from .report_generator import ReportGenerator
 from .llm_integration import LLMIntegration
 from .review_guidance import ReviewGuidanceBuilder
 from .utils import *
+from .jiwe_caption_patch import apply_jiwe_caption_patch
+
+# Apply the isolated test-branch patch after the core classes are imported.
+apply_jiwe_caption_patch()
 
 __all__ = [
     'TemplateExtractor',
