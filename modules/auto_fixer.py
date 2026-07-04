@@ -1767,8 +1767,14 @@ class AutoFixer:
 
         if has_left_indent_rule and self._property_allowed("left_indent", allowed_properties):
             current_left_indent = get_direct_left_indent_inches(paragraph)
-            if expected_left_indent is None:
-                if current_left_indent is not None:
+            current_hanging_indent = get_hanging_indent_inches(paragraph)
+            if not self._reference_left_indent_is_acceptable(
+                current_left_indent,
+                expected_left_indent,
+                expected_hanging_indent,
+                current_hanging_indent,
+            ):
+                if expected_left_indent is None:
                     paragraph.paragraph_format.left_indent = None
                     changes.append({
                         "property_name": "left_indent",
@@ -1776,9 +1782,8 @@ class AutoFixer:
                         "target_value": "No explicit left indent",
                         "evidence": "Reference left indent did not match target rule",
                     })
-            else:
-                effective_left_indent = 0.0 if current_left_indent is None else float(current_left_indent)
-                if abs(effective_left_indent - float(expected_left_indent)) > 0.03:
+                else:
+                    effective_left_indent = 0.0 if current_left_indent is None else float(current_left_indent)
                     paragraph.paragraph_format.left_indent = Inches(float(expected_left_indent))
                     changes.append({
                         "property_name": "left_indent",
@@ -1817,6 +1822,27 @@ class AutoFixer:
                 text_preview=truncate_text(get_paragraph_text(paragraph), 40),
                 paragraph_type=ParagraphType.REFERENCE.value,
             )
+
+    @staticmethod
+    def _reference_left_indent_is_acceptable(
+        current_left_indent,
+        expected_left_indent,
+        expected_hanging_indent,
+        current_hanging_indent,
+    ) -> bool:
+        """Allow Word's alternate citation-manager encoding for JIWE hanging references."""
+        if expected_left_indent is None:
+            if current_left_indent is None:
+                return True
+            if expected_hanging_indent is not None and current_hanging_indent is not None:
+                return (
+                    abs(float(current_left_indent) - float(expected_hanging_indent)) <= 0.03
+                    and abs(float(current_hanging_indent) - float(expected_hanging_indent)) <= 0.03
+                )
+            return False
+
+        effective_left_indent = 0.0 if current_left_indent is None else float(current_left_indent)
+        return abs(effective_left_indent - float(expected_left_indent)) <= 0.03
 
     @staticmethod
     def _normalize_reference_number_tab(paragraph) -> bool:
@@ -2022,7 +2048,7 @@ class AutoFixer:
                 return True
 
             reference_number, separator, remainder = match.groups()
-            if remainder:
+            if separator or remainder:
                 cloned_run_element = deepcopy(run._r)
                 run._r.addnext(cloned_run_element)
                 cloned_run = Run(cloned_run_element, paragraph)

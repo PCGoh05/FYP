@@ -237,6 +237,36 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertAlmostEqual(abs(reference.paragraph_format.first_line_indent.inches), 0.44, places=2)
         self.assertEqual(reference._p.pPr.ind.get(qn("w:hanging")), "640")
 
+    def test_reference_explicit_left_with_matching_hanging_is_accepted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "reference_citation_manager_indent.docx"
+            _save_spacing_issue_document(path)
+            document = Document(path)
+            reference = document.paragraphs[11]
+            reference.text = '[1] A. Author, "Article title," Journal of Testing, vol. 1, no. 1, pp. 1-5, 2026.'
+            reference.paragraph_format.left_indent = Inches(0.4444444444444444)
+            reference.paragraph_format.first_line_indent = Inches(-0.4444444444444444)
+            reference.paragraph_format.line_spacing = 1.15
+            reference.paragraph_format.space_after = Pt(10)
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            reference_descriptions = [
+                issue.description
+                for issue in result.issues_by_category.get("references", [])
+            ]
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        fixed_reference = fixed.paragraphs[11]
+        self.assertNotIn("Reference left indent does not match template", reference_descriptions)
+        self.assertIn("Reference number should be followed by a tab", reference_descriptions)
+        self.assertAlmostEqual(fixed_reference.paragraph_format.left_indent.inches, 0.4444444444444444)
+        self.assertAlmostEqual(fixed_reference.paragraph_format.first_line_indent.inches, -0.4444444444444444)
+        self.assertTrue(fixed_reference.text.startswith("[1]\t"))
+
     def test_highlighted_reference_layout_fix_marks_number_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "reference_highlight_marker.docx"
@@ -259,7 +289,13 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
             for run in reference.runs
             if run.text.strip() and run.font.highlight_color != WD_COLOR_INDEX.YELLOW
         ]
+        raw_highlighted_runs = [
+            run.text
+            for run in reference.runs
+            if run.text and run.font.highlight_color == WD_COLOR_INDEX.YELLOW
+        ]
         self.assertEqual(highlighted_runs, ["[1]"])
+        self.assertEqual(raw_highlighted_runs, ["[1]"])
         self.assertTrue(any("A. Author" in text for text in unhighlighted_runs), reference.text)
 
     def test_auto_fix_replaces_body_manual_line_breaks_before_justifying(self):
