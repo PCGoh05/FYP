@@ -1203,12 +1203,25 @@ def handle_auto_fix():
     try:
         with st.spinner("Applying formatting fixes..."):
             rules = st.session_state.template_rules or get_default_template_rules()
-            classifications = st.session_state.classifications
+            loader = ProfileLoader()
+            profile_name = (
+                (rules.get("_profile") or {}).get("name", "JIWE")
+                if isinstance(rules, dict)
+                else "JIWE"
+            )
+            profile_key = "jiwe" if "jiwe" in str(profile_name).lower() else "generic"
+            rules = loader.apply_rule_defaults(rules, loader.load(profile_key))
+
+            checker = ManuscriptChecker(rules, None)
+            checker.load_manuscript(BytesIO(st.session_state.manuscript_bytes))
+            current_check_result = checker.check_all()
+            st.session_state.template_rules = rules
+            st.session_state.check_result = current_check_result
+            st.session_state.classifications = current_check_result.classifications
+            classifications = current_check_result.classifications
 
             # Create auto-fixer
-            issues_by_category = {}
-            if st.session_state.check_result:
-                issues_by_category = st.session_state.check_result.issues_by_category
+            issues_by_category = current_check_result.issues_by_category
             fixer = AutoFixer(rules, classifications, issues_by_category=issues_by_category)
             fixer.load_manuscript(BytesIO(st.session_state.manuscript_bytes))
 
@@ -1232,7 +1245,7 @@ def handle_auto_fix():
             report_gen = build_report_generator(
                 rules,
                 changes,
-                st.session_state.check_result,
+                current_check_result,
                 post_fix_validation=st.session_state.post_fix_validation,
                 post_fix_result=st.session_state.post_fix_result,
             )
