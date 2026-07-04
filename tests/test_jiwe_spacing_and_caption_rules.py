@@ -31,6 +31,26 @@ def _add_paragraph(document, text, size=10, alignment=WD_ALIGN_PARAGRAPH.JUSTIFY
     return paragraph
 
 
+def _docx_bytes(document):
+    buffer = BytesIO()
+    document.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+def _blank_count_before(document, text):
+    target_index = next(
+        index for index, paragraph in enumerate(document.paragraphs)
+        if paragraph.text.strip() == text
+    )
+    count = 0
+    index = target_index - 1
+    while index >= 0 and not document.paragraphs[index].text.strip():
+        count += 1
+        index -= 1
+    return count
+
+
 def _add_drawing_paragraph(document):
     from docx.oxml import OxmlElement
 
@@ -88,7 +108,73 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertEqual(rules["subheading"]["line_spacing"], 1.0)
         self.assertEqual(rules["subheading"]["space_before"], 0.0)
         self.assertEqual(rules["subheading"]["space_after"], 7.5)
+        self.assertEqual(rules["subheading"]["blank_before"], 1)
+        self.assertEqual(rules["biography_heading"]["font_size"], 10.5)
+        self.assertEqual(rules["biography_heading"]["line_spacing"], 1.15)
+        self.assertEqual(rules["biography_heading"]["space_after"], 10.0)
         self.assertTrue(rules["reference"]["number_tab_required"])
+
+    def test_jiwe_biography_heading_uses_template_style(self):
+        document = Document()
+        _add_paragraph(document, "5. REFERENCES", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+        _add_paragraph(
+            document,
+            '[1]\tA. Author, "Article title," Journal of Testing, vol. 1, no. 1, pp. 1-5, 2026.',
+            9,
+        )
+        document.add_paragraph("")
+        biography = document.add_paragraph()
+        biography.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        biography.paragraph_format.line_spacing = 1.15
+        biography.paragraph_format.space_after = Pt(10)
+        run = biography.add_run("BIOGRAPHIES OF AUTHORS")
+        run.font.name = "Times New Roman"
+        run.font.size = Pt(10.5)
+        run.font.bold = True
+
+        result = ManuscriptChecker(_jiwe_rules()).load_manuscript(_docx_bytes(document)).check_all()
+
+        biography_issues = [
+            issue.description
+            for issue in result.issues_by_category.get("headings", [])
+            if "BIOGRAPHIES" in issue.text_preview
+        ]
+        self.assertEqual(biography_issues, [])
+
+    def test_jiwe_subheading_blank_paragraphs_are_detected_and_fixed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "subheading_blanks.docx"
+            document = Document()
+            _add_paragraph(document, "1. INTRODUCTION", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            _add_paragraph(document, "This body paragraph should be separated from the next numbered subheading.")
+            subheading = _add_paragraph(document, "1.1 Missing Blank Before", 10, WD_ALIGN_PARAGRAPH.LEFT)
+            for run in subheading.runs:
+                run.font.italic = True
+            _add_paragraph(document, "This body paragraph is followed by too many blank paragraphs.")
+            for _ in range(4):
+                blank = document.add_paragraph("")
+                blank.paragraph_format.line_spacing = 1.15
+                blank.paragraph_format.space_before = Pt(4)
+                blank.paragraph_format.space_after = Pt(4)
+            subheading = _add_paragraph(document, "1.2 Excess Blank Before", 10, WD_ALIGN_PARAGRAPH.LEFT)
+            for run in subheading.runs:
+                run.font.italic = True
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            heading_descriptions = [
+                issue.description
+                for issue in result.issues_by_category.get("headings", [])
+            ]
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        self.assertIn("Heading is missing required blank paragraph before it", heading_descriptions)
+        self.assertIn("Heading has too many blank paragraphs before it", heading_descriptions)
+        self.assertEqual(_blank_count_before(fixed, "1.1 Missing Blank Before"), 1)
+        self.assertEqual(_blank_count_before(fixed, "1.2 Excess Blank Before"), 1)
 
     def test_jiwe_heading_spacing_is_detected_and_fixed(self):
         with tempfile.TemporaryDirectory() as tmp:

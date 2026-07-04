@@ -1162,6 +1162,38 @@ class ManuscriptChecker:
                             text_preview=cp.text
                         )
 
+                expected_blank_before = heading_rules.get("blank_before")
+                if expected_blank_before is not None:
+                    blank_count, previous_index = self._blank_paragraphs_before(cp.index)
+                    previous_is_heading = self._classification_type_for_index(previous_index) == ParagraphType.SECTION_HEADING
+                    expected_blank_before = int(expected_blank_before)
+                    if (
+                        previous_index is not None
+                        and not previous_is_heading
+                        and blank_count < expected_blank_before
+                    ):
+                        self._add_issue(
+                            category="headings",
+                            location=f"Heading: {truncate_text(cp.text, 30)}",
+                            para_index=cp.index,
+                            description="Heading is missing required blank paragraph before it",
+                            current=f"{blank_count} blank paragraphs",
+                            expected=f"{expected_blank_before} blank paragraph",
+                            severity="warning",
+                            text_preview=cp.text
+                        )
+                    elif blank_count > expected_blank_before:
+                        self._add_issue(
+                            category="headings",
+                            location=f"Heading: {truncate_text(cp.text, 30)}",
+                            para_index=cp.index,
+                            description="Heading has too many blank paragraphs before it",
+                            current=f"{blank_count} blank paragraphs",
+                            expected=f"{expected_blank_before} blank paragraph",
+                            severity="warning",
+                            text_preview=cp.text
+                        )
+
     def _declaration_alignment_is_allowed(self, cp: ClassifiedParagraph) -> bool:
         """Allow JIWE declaration bodies to follow the template's mixed left/justify layout."""
         if cp.alignment not in {"LEFT", "JUSTIFY"}:
@@ -1246,9 +1278,33 @@ class ManuscriptChecker:
     def _heading_rules_for_text(self, text: str) -> Dict[str, Any]:
         """Return the correct heading rule for main headings or subheadings."""
         stripped = re.sub(r"\s+", " ", text.strip())
+        normalized = self._normalize_declaration_heading_text(stripped)
+        if normalized.startswith("biographies of authors"):
+            return self.rules.get("biography_heading", self.rules.get("heading", {}))
         if re.match(r"^\d+\.\d+", stripped):
             return self.rules.get("subheading", self.rules.get("heading", {}))
         return self.rules.get("heading", {})
+
+    def _classification_type_for_index(self, index: Optional[int]):
+        """Return the classified paragraph type for an index, when available."""
+        if index is None:
+            return None
+        for cp in self.classifications:
+            if cp.index == index:
+                return cp.paragraph_type
+        return None
+
+    def _blank_paragraphs_before(self, index: int) -> tuple:
+        """Count contiguous empty paragraphs immediately before an index."""
+        blank_count = 0
+        previous_index = index - 1
+        while previous_index >= 0:
+            text = get_paragraph_text(self.document.paragraphs[previous_index])
+            if text:
+                return blank_count, previous_index
+            blank_count += 1
+            previous_index -= 1
+        return blank_count, None
 
     @staticmethod
     def _heading_text_is_all_caps(text: str) -> bool:

@@ -244,6 +244,8 @@ class AutoFixer:
 
         if "line spacing" in description:
             return "line_spacing"
+        if "blank paragraph" in description:
+            return "blank_before"
         if "spacing before" in description or "before spacing" in description:
             return "space_before"
         if "spacing after" in description or "after spacing" in description:
@@ -399,6 +401,8 @@ class AutoFixer:
 
         if self._has_category_issue("references"):
             self._fix_sdt_references()
+        if self._has_category_issue("headings"):
+            self._fix_heading_blank_paragraphs()
         if (
             self._has_explicit_issues
             and self._category_allows_global_property("structure", "declaration_template")
@@ -1119,6 +1123,7 @@ class AutoFixer:
                 "line_spacing",
                 "space_before",
                 "space_after",
+                "blank_before",
                 "number_font_name",
                 "number_font_size",
                 "number_bold",
@@ -1244,9 +1249,114 @@ class AutoFixer:
     def _heading_rules_for_text(self, text: str) -> Dict[str, Any]:
         """Return the correct heading rule for main headings or subheadings."""
         stripped = re.sub(r"\s+", " ", text.strip())
+        normalized = self._normalize_declaration_heading(stripped)
+        if normalized.startswith("biographies of authors"):
+            return self.rules.get("biography_heading", self.rules.get("heading", {}))
         if re.match(r"^\d+\.\d+", stripped):
             return self.rules.get("subheading", self.rules.get("heading", {}))
         return self.rules.get("heading", {})
+
+    def _fix_heading_blank_paragraphs(self):
+        """Normalize JIWE blank paragraphs before numbered subheadings."""
+        heading_items = [
+            cp for cp in self.classifications
+            if cp.paragraph_type == ParagraphType.SECTION_HEADING
+        ]
+        for cp in sorted(heading_items, key=lambda item: item.index, reverse=True):
+            heading_rules = self._heading_rules_for_text(cp.text)
+            expected_blank_before = heading_rules.get("blank_before")
+            if expected_blank_before is None:
+                continue
+
+            allowed_properties = self._allowed_properties_for(
+                cp.index,
+                categories=["headings"],
+                fallback=["blank_before"],
+            )
+            if not self._property_allowed("blank_before", allowed_properties):
+                continue
+
+            index = self._current_heading_index(cp.index, cp.text)
+            if index is None:
+                continue
+
+            expected_blank_before = int(expected_blank_before)
+            blank_indices, previous_index = self._blank_paragraph_indices_before(index)
+            previous_is_heading = self._is_current_paragraph_heading(previous_index)
+
+            if previous_index is not None and not previous_is_heading and len(blank_indices) < expected_blank_before:
+                inserted = self.document.paragraphs[index].insert_paragraph_before("")
+                inserted.paragraph_format.line_spacing = 1.0
+                inserted.paragraph_format.space_after = Pt(7.5)
+                self._add_change_record(
+                    paragraph_index=-1,
+                    location="Section Heading",
+                    change_type="heading",
+                    property_name="blank_before",
+                    current_value=f"{len(blank_indices)} blank paragraphs",
+                    target_value=f"{expected_blank_before} blank paragraph",
+                    text_preview=truncate_text(cp.text, 40),
+                    paragraph_type=ParagraphType.SECTION_HEADING.value,
+                    evidence="Numbered JIWE subheading was missing the template blank paragraph before it",
+                )
+            elif len(blank_indices) > expected_blank_before:
+                for blank_index in sorted(blank_indices[:-expected_blank_before], reverse=True):
+                    paragraph = self.document.paragraphs[blank_index]
+                    paragraph._element.getparent().remove(paragraph._element)
+                self._add_change_record(
+                    paragraph_index=-1,
+                    location="Section Heading",
+                    change_type="heading",
+                    property_name="blank_before",
+                    current_value=f"{len(blank_indices)} blank paragraphs",
+                    target_value=f"{expected_blank_before} blank paragraph",
+                    text_preview=truncate_text(cp.text, 40),
+                    paragraph_type=ParagraphType.SECTION_HEADING.value,
+                    evidence="Excess blank paragraphs before numbered JIWE subheading were collapsed",
+                )
+
+    def _current_heading_index(self, original_index: int, text: str) -> Optional[int]:
+        """Find a heading in the current document after paragraph insertions/removals."""
+        normalized = re.sub(r"\s+", " ", text.strip())
+        paragraphs = self.document.paragraphs
+        if original_index < len(paragraphs):
+            current = re.sub(r"\s+", " ", get_paragraph_text(paragraphs[original_index]).strip())
+            if current == normalized:
+                return original_index
+
+        for radius in range(1, 8):
+            for candidate in (original_index - radius, original_index + radius):
+                if 0 <= candidate < len(paragraphs):
+                    current = re.sub(r"\s+", " ", get_paragraph_text(paragraphs[candidate]).strip())
+                    if current == normalized:
+                        return candidate
+        return None
+
+    def _blank_paragraph_indices_before(self, index: int) -> Tuple[List[int], Optional[int]]:
+        """Return contiguous empty paragraph indices immediately before an index."""
+        blank_indices = []
+        previous_index = index - 1
+        while previous_index >= 0:
+            text = get_paragraph_text(self.document.paragraphs[previous_index])
+            if text:
+                return blank_indices, previous_index
+            blank_indices.append(previous_index)
+            previous_index -= 1
+        return blank_indices, None
+
+    def _is_current_paragraph_heading(self, index: Optional[int]) -> bool:
+        """Return True when a current document paragraph looks like a section heading."""
+        if index is None or index < 0 or index >= len(self.document.paragraphs):
+            return False
+        text = get_paragraph_text(self.document.paragraphs[index])
+        if not text:
+            return False
+        normalized = self._normalize_declaration_heading(text)
+        if normalized in {"references", "bibliography"} or normalized.startswith("biographies of authors"):
+            return True
+        if re.match(r"^\d+(?:\.\d+)*\.?\s+\S", text.strip()):
+            return True
+        return self._heading_text_is_all_caps(text)
 
     @staticmethod
     def _heading_text_is_all_caps(text: str) -> bool:

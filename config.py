@@ -72,7 +72,18 @@ DEFAULT_RULES = {
         "italic": True,
         "line_spacing": 1.0,
         "space_before": 0.0,
-        "space_after": 7.5
+        "space_after": 7.5,
+        "blank_before": 1
+    },
+    "biography_heading": {
+        "font_name": "Times New Roman",
+        "font_size": 10.5,
+        "bold": True,
+        "italic": None,
+        "alignment": "LEFT",
+        "all_caps": True,
+        "line_spacing": 1.15,
+        "space_after": 10.0
     },
     "abstract": {
         "font_name": "Times New Roman",
