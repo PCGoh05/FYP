@@ -1328,6 +1328,12 @@ def display_comparison_view(changes):
         st.info("No changes were made to the document")
         return
 
+    st.info(
+        "Use the clean Corrected Manuscript as the final editable output. "
+        "The Highlighted Corrected Manuscript uses the same fixed document but marks changed locations in yellow for review. "
+        "Yellow highlighting is a review marker, not a sign that the text is still wrong."
+    )
+
     changes_by_type = {}
     for change in changes:
         changes_by_type[change.change_type] = changes_by_type.get(change.change_type, 0) + 1
@@ -1363,6 +1369,10 @@ def display_comparison_view(changes):
     df = pd.DataFrame(table_data)
     st.dataframe(df, use_container_width=True, hide_index=True)
     st.success(f"Recorded {len(changes)} formatting property changes")
+    st.caption(
+        "Only deterministic auto-fixes are listed here. Items not listed were not changed automatically "
+        "and may appear under remaining manual-review issues."
+    )
 
 
 def display_post_fix_validation():

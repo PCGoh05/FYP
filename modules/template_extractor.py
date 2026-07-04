@@ -1054,6 +1054,7 @@ Answer with ONLY "yes" or "no"."""
             return {
                 "font_name": Counter(caption_fonts).most_common(1)[0][0] if caption_fonts else default_caption.get("font_name", "Times New Roman"),
                 "font_size": Counter(caption_sizes).most_common(1)[0][0] if caption_sizes else default_caption.get("font_size", 10),
+                "bold": default_caption.get("bold", False),
                 "italic": Counter(caption_italic).most_common(1)[0][0] if caption_italic else default_caption.get("italic", False),
                 "space_after": default_caption.get("space_after"),
                 "title_case": default_caption.get("title_case"),
@@ -1064,6 +1065,7 @@ Answer with ONLY "yes" or "no"."""
             return {
                 "font_name": Counter(instruction_fonts).most_common(1)[0][0] if instruction_fonts else default_caption.get("font_name", "Times New Roman"),
                 "font_size": Counter(instruction_sizes).most_common(1)[0][0] if instruction_sizes else default_caption.get("font_size", 10),
+                "bold": default_caption.get("bold", False),
                 "italic": default_caption.get("italic", False),
                 "space_after": default_caption.get("space_after"),
                 "title_case": default_caption.get("title_case"),

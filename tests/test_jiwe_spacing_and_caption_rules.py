@@ -73,6 +73,7 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
 
         self.assertEqual(rules["body"]["space_after"], 7.5)
         self.assertEqual(rules["caption"]["space_after"], 7.5)
+        self.assertFalse(rules["caption"]["bold"])
         self.assertTrue(rules["caption"]["title_case"])
         self.assertEqual(rules["reference"]["line_spacing"], 1.15)
         self.assertEqual(rules["reference"]["space_after"], 10.0)
@@ -412,7 +413,7 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
             "Figure 2. Distribution of Learning Gains. The Treatment Distribution with Control Group",
         )
 
-    def test_caption_title_case_preserves_mixed_bold_formatting(self):
+    def test_caption_auto_fix_removes_bold_and_preserves_title_case_runs(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "caption_case_mixed_bold.docx"
             document = Document()
@@ -429,6 +430,13 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
             document.save(path)
 
             result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            descriptions = [
+                issue.description
+                for issues in result.issues_by_category.values()
+                for issue in issues
+            ]
+            self.assertIn("Figure caption bold formatting does not match template", descriptions)
+
             fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
             fixer.load_manuscript(str(path))
             fixer.fix_all()
@@ -440,11 +448,42 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
             if run.text.strip()
         ]
         self.assertEqual(fixed.paragraphs[1].text, "Figure 1. Dual-Phase Evidence Chain")
-        self.assertTrue(visible_runs[0][1])
-        self.assertTrue(
-            any("Dual-Phase Evidence Chain" in text and bold is False for text, bold in visible_runs),
-            visible_runs,
-        )
+        self.assertTrue(visible_runs)
+        self.assertTrue(all(bold is False for _, bold in visible_runs), visible_runs)
+
+    def test_table_caption_auto_fix_removes_bold(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "table_caption_bold.docx"
+            document = Document()
+            caption = _add_paragraph(
+                document,
+                "Table 2. Bootstrap Metrics for Model Performance",
+                bold=True,
+            )
+            caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            document.add_table(rows=2, cols=2)
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            descriptions = [
+                issue.description
+                for issues in result.issues_by_category.values()
+                for issue in issues
+            ]
+            self.assertIn("Table caption bold formatting does not match template", descriptions)
+
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        visible_runs = [
+            (run.text, run.font.bold)
+            for run in fixed.paragraphs[0].runs
+            if run.text.strip()
+        ]
+        self.assertTrue(visible_runs)
+        self.assertTrue(all(bold is False for _, bold in visible_runs), visible_runs)
 
     def test_caption_title_case_preserves_acronyms(self):
         with tempfile.TemporaryDirectory() as tmp:

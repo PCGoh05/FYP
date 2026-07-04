@@ -1588,11 +1588,12 @@ class AutoFixer:
         allowed_properties = self._allowed_properties_for(
             index,
             categories=["figures", "tables"],
-            fallback=["font_name", "font_size", "italic", "space_after", "capitalization"],
+            fallback=["font_name", "font_size", "bold", "italic", "space_after", "capitalization"],
         )
 
         expected_font = caption_rules.get("font_name", "Times New Roman")
         expected_size = caption_rules.get("font_size", 10)
+        expected_bold = caption_rules.get("bold")
         expected_italic = caption_rules.get("italic", None)
         expected_space_after = caption_rules.get("space_after")
         title_case_required = bool(caption_rules.get("title_case"))
@@ -1603,7 +1604,7 @@ class AutoFixer:
                     run,
                     expected_font,
                     expected_size,
-                    None,
+                    expected_bold,
                     expected_italic,
                     allowed_properties=allowed_properties,
                 ))

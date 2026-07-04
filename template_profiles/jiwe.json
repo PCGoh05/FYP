@@ -228,6 +228,7 @@
     "caption": {
       "font_name": "Times New Roman",
       "font_size": 10,
+      "bold": false,
       "italic": false,
       "space_after": 7.5,
       "title_case": true

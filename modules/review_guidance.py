@@ -582,6 +582,7 @@ class ReviewGuidanceBuilder:
             ("heading", "bold"): "Section heading bold formatting was corrected.",
             ("headings", "bold"): "Section heading bold formatting was corrected.",
             ("caption", "capitalization"): "Caption capitalization was corrected to journal title case.",
+            ("caption", "bold"): "Caption bold formatting was corrected.",
             ("caption", "space_after"): "Caption paragraph spacing after was corrected.",
             ("declaration", "declaration_template"): "JIWE declaration template wording was inserted for author review.",
             ("reference", "font_size"): "Reference font size was corrected.",

@@ -91,6 +91,7 @@ DEFAULT_RULES = {
     "caption": {
         "font_name": "Times New Roman",
         "font_size": 10,
+        "bold": False,
         "italic": False,
         "space_after": 7.5,
         "title_case": True

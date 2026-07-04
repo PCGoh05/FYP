@@ -1428,6 +1428,7 @@ class ManuscriptChecker:
             caption_rules = self.rules.get("caption", {})
             expected_font = caption_rules.get("font_name", "Times New Roman")
             expected_size = caption_rules.get("font_size", 10)
+            expected_bold = caption_rules.get("bold")
             expected_italic = caption_rules.get("italic")
             expected_space_after = caption_rules.get("space_after")
             title_case_required = bool(caption_rules.get("title_case"))
@@ -1435,6 +1436,7 @@ class ManuscriptChecker:
             for cp in table_captions:
                 current_font = cp.font_info.get("font_name")
                 current_size = cp.font_info.get("font_size")
+                current_bold = bool(cp.font_info.get("bold"))
                 current_italic = bool(cp.font_info.get("italic"))
 
                 if current_font and not is_font_equivalent(current_font, expected_font):
@@ -1469,6 +1471,18 @@ class ManuscriptChecker:
                         description="Table caption italic formatting does not match template",
                         current="Italic" if current_italic else "Not Italic",
                         expected="Italic" if expected_italic else "Not Italic",
+                        severity="warning",
+                        text_preview=truncate_text(cp.text, 50)
+                    )
+
+                if expected_bold is not None and current_bold != bool(expected_bold):
+                    self._add_issue(
+                        category="tables",
+                        location=f"Caption: {truncate_text(cp.text, 30)}",
+                        para_index=cp.index,
+                        description="Table caption bold formatting does not match template",
+                        current="Bold" if current_bold else "Not Bold",
+                        expected="Bold" if expected_bold else "Not Bold",
                         severity="warning",
                         text_preview=truncate_text(cp.text, 50)
                     )
@@ -1536,6 +1550,7 @@ class ManuscriptChecker:
         caption_rules = self.rules.get("caption", {})
         expected_font = caption_rules.get("font_name", "Times New Roman")
         expected_size = caption_rules.get("font_size", 10)
+        expected_bold = caption_rules.get("bold")
         expected_italic = caption_rules.get("italic")
         expected_space_after = caption_rules.get("space_after")
         title_case_required = bool(caption_rules.get("title_case"))
@@ -1543,6 +1558,7 @@ class ManuscriptChecker:
         for cp in figure_captions:
             current_font = cp.font_info.get("font_name")
             current_size = cp.font_info.get("font_size")
+            current_bold = bool(cp.font_info.get("bold"))
             current_italic = bool(cp.font_info.get("italic"))
             
             if current_font and not is_font_equivalent(current_font, expected_font):
@@ -1577,6 +1593,18 @@ class ManuscriptChecker:
                     description="Figure caption italic formatting does not match template",
                     current="Italic" if current_italic else "Not Italic",
                     expected="Italic" if expected_italic else "Not Italic",
+                    severity="warning",
+                    text_preview=truncate_text(cp.text, 50)
+                )
+
+            if expected_bold is not None and current_bold != bool(expected_bold):
+                self._add_issue(
+                    category="figures",
+                    location=f"Caption: {truncate_text(cp.text, 30)}",
+                    para_index=cp.index,
+                    description="Figure caption bold formatting does not match template",
+                    current="Bold" if current_bold else "Not Bold",
+                    expected="Bold" if expected_bold else "Not Bold",
                     severity="warning",
                     text_preview=truncate_text(cp.text, 50)
                 )
