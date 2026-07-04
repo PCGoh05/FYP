@@ -466,6 +466,14 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
             "Table 2. Bootstrap Metrics for Model Performance with Features from Training Data via Resampling",
         )
 
+    def test_caption_title_case_keeps_hyphenated_joining_words_lowercase(self):
+        self.assertEqual(
+            to_journal_caption_title_case(
+                "Figure 10. real-time attack alerts for state-of-the-art methods"
+            ),
+            "Figure 10. Real-Time Attack Alerts for State-of-the-Art Methods",
+        )
+
     def test_caption_title_case_capitalizes_word_after_sentence_boundary(self):
         self.assertEqual(
             to_journal_caption_title_case(

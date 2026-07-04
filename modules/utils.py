@@ -706,7 +706,7 @@ def _caption_title_case_token(token: str, force_capital: bool = False) -> str:
         lower = part.lower()
         should_lower = (
             not force_capital
-            and index == 0
+            and (index == 0 or index > 1)
             and lower in CAPTION_LOWERCASE_WORDS
         )
         if should_lower:
