@@ -9,8 +9,10 @@ from docx.enum.section import WD_ORIENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.text.run import Run
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
+from copy import deepcopy
 import re
 from io import BytesIO
 
@@ -1985,11 +1987,53 @@ class AutoFixer:
         for paragraph in get_sdt_reference_paragraphs(document):
             if not self._paragraph_matches_change_preview(paragraph, change):
                 continue
+            if self._should_mark_reference_number_only(change):
+                highlighted = self._highlight_reference_number_marker(paragraph) or highlighted
+                continue
             for run in paragraph.runs:
                 if run.text.strip():
                     run.font.highlight_color = WD_COLOR_INDEX.YELLOW
                     highlighted = True
         return highlighted
+
+    @staticmethod
+    def _should_mark_reference_number_only(change: ChangeRecord) -> bool:
+        """Return True for reference layout fixes where full-line highlighting is misleading."""
+        return (
+            change.change_type == "reference"
+            and change.property_name in {
+                "reference_number_tab",
+                "left_indent",
+                "hanging_indent",
+                "line_spacing",
+                "space_after",
+            }
+        )
+
+    def _highlight_reference_number_marker(self, paragraph) -> bool:
+        """Highlight only the reference number marker for paragraph-level reference fixes."""
+        for run in paragraph.runs:
+            if not run.text or not run.text.strip():
+                continue
+
+            match = re.match(r"^(\s*\[\d+\])(\s*)(.*)$", run.text, flags=re.DOTALL)
+            if not match:
+                run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+                return True
+
+            reference_number, separator, remainder = match.groups()
+            if remainder:
+                cloned_run_element = deepcopy(run._r)
+                run._r.addnext(cloned_run_element)
+                cloned_run = Run(cloned_run_element, paragraph)
+                self._set_run_text_preserving_drawings(cloned_run, f"{separator}{remainder}")
+                cloned_run.font.highlight_color = None
+                self._set_run_text_preserving_drawings(run, reference_number)
+
+            run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+            return True
+
+        return False
 
     def get_highlighted_document_bytes(self) -> bytes:
         """
@@ -2013,6 +2057,10 @@ class AutoFixer:
                 continue
 
             paragraph = highlighted_document.paragraphs[index]
+            if self._should_mark_reference_number_only(change):
+                if self._highlight_reference_number_marker(paragraph):
+                    continue
+
             matched_any_run = False
             for run in paragraph.runs:
                 if not run.text.strip():

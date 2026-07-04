@@ -4,7 +4,7 @@ from io import BytesIO
 from pathlib import Path
 
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK, WD_COLOR_INDEX
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
@@ -236,6 +236,31 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertAlmostEqual(reference.paragraph_format.space_after.pt, 10.0)
         self.assertAlmostEqual(abs(reference.paragraph_format.first_line_indent.inches), 0.44, places=2)
         self.assertEqual(reference._p.pPr.ind.get(qn("w:hanging")), "640")
+
+    def test_highlighted_reference_layout_fix_marks_number_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "reference_highlight_marker.docx"
+            _save_spacing_issue_document(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            highlighted = Document(BytesIO(fixer.get_highlighted_document_bytes()))
+
+        reference = highlighted.paragraphs[11]
+        highlighted_runs = [
+            run.text.strip()
+            for run in reference.runs
+            if run.text.strip() and run.font.highlight_color == WD_COLOR_INDEX.YELLOW
+        ]
+        unhighlighted_runs = [
+            run.text
+            for run in reference.runs
+            if run.text.strip() and run.font.highlight_color != WD_COLOR_INDEX.YELLOW
+        ]
+        self.assertEqual(highlighted_runs, ["[1]"])
+        self.assertTrue(any("A. Author" in text for text in unhighlighted_runs), reference.text)
 
     def test_auto_fix_replaces_body_manual_line_breaks_before_justifying(self):
         with tempfile.TemporaryDirectory() as tmp:
