@@ -1194,6 +1194,22 @@ class ManuscriptChecker:
                             text_preview=cp.text
                         )
 
+                expected_blank_before_max = heading_rules.get("blank_before_max")
+                if expected_blank_before_max is not None:
+                    blank_count, _ = self._blank_paragraphs_before(cp.index)
+                    expected_blank_before_max = int(expected_blank_before_max)
+                    if blank_count > expected_blank_before_max:
+                        self._add_issue(
+                            category="headings",
+                            location=f"Heading: {truncate_text(cp.text, 30)}",
+                            para_index=cp.index,
+                            description="Heading has too many blank paragraphs before it",
+                            current=f"{blank_count} blank paragraphs",
+                            expected=f"At most {expected_blank_before_max} blank paragraph",
+                            severity="warning",
+                            text_preview=cp.text
+                        )
+
     def _declaration_alignment_is_allowed(self, cp: ClassifiedParagraph) -> bool:
         """Allow JIWE declaration bodies to follow the template's mixed left/justify layout."""
         if cp.alignment not in {"LEFT", "JUSTIFY"}:

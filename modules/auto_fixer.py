@@ -1265,7 +1265,8 @@ class AutoFixer:
         for cp in sorted(heading_items, key=lambda item: item.index, reverse=True):
             heading_rules = self._heading_rules_for_text(cp.text)
             expected_blank_before = heading_rules.get("blank_before")
-            if expected_blank_before is None:
+            expected_blank_before_max = heading_rules.get("blank_before_max")
+            if expected_blank_before is None and expected_blank_before_max is None:
                 continue
 
             allowed_properties = self._allowed_properties_for(
@@ -1280,11 +1281,17 @@ class AutoFixer:
             if index is None:
                 continue
 
-            expected_blank_before = int(expected_blank_before)
             blank_indices, previous_index = self._blank_paragraph_indices_before(index)
             previous_is_heading = self._is_current_paragraph_heading(previous_index)
 
-            if previous_index is not None and not previous_is_heading and len(blank_indices) < expected_blank_before:
+            target_blank_count = (
+                int(expected_blank_before)
+                if expected_blank_before is not None
+                else int(expected_blank_before_max)
+            )
+            should_add_missing = expected_blank_before is not None
+
+            if should_add_missing and previous_index is not None and not previous_is_heading and len(blank_indices) < target_blank_count:
                 inserted = self.document.paragraphs[index].insert_paragraph_before("")
                 inserted.paragraph_format.line_spacing = 1.0
                 inserted.paragraph_format.space_after = Pt(7.5)
@@ -1294,13 +1301,13 @@ class AutoFixer:
                     change_type="heading",
                     property_name="blank_before",
                     current_value=f"{len(blank_indices)} blank paragraphs",
-                    target_value=f"{expected_blank_before} blank paragraph",
+                    target_value=f"{target_blank_count} blank paragraph",
                     text_preview=truncate_text(cp.text, 40),
                     paragraph_type=ParagraphType.SECTION_HEADING.value,
                     evidence="Numbered JIWE subheading was missing the template blank paragraph before it",
                 )
-            elif len(blank_indices) > expected_blank_before:
-                for blank_index in sorted(blank_indices[:-expected_blank_before], reverse=True):
+            elif len(blank_indices) > target_blank_count:
+                for blank_index in sorted(blank_indices[:-target_blank_count], reverse=True):
                     paragraph = self.document.paragraphs[blank_index]
                     paragraph._element.getparent().remove(paragraph._element)
                 self._add_change_record(
@@ -1309,10 +1316,10 @@ class AutoFixer:
                     change_type="heading",
                     property_name="blank_before",
                     current_value=f"{len(blank_indices)} blank paragraphs",
-                    target_value=f"{expected_blank_before} blank paragraph",
+                    target_value=f"{target_blank_count} blank paragraph",
                     text_preview=truncate_text(cp.text, 40),
                     paragraph_type=ParagraphType.SECTION_HEADING.value,
-                    evidence="Excess blank paragraphs before numbered JIWE subheading were collapsed",
+                    evidence="Excess blank paragraphs before JIWE heading were collapsed",
                 )
 
     def _current_heading_index(self, original_index: int, text: str) -> Optional[int]:

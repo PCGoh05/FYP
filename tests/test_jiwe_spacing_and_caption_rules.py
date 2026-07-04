@@ -104,6 +104,7 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertEqual(rules["heading"]["line_spacing"], 1.0)
         self.assertEqual(rules["heading"]["space_before"], 0.0)
         self.assertEqual(rules["heading"]["space_after"], 7.5)
+        self.assertEqual(rules["heading"]["blank_before_max"], 1)
         self.assertEqual(rules["subheading"]["alignment"], "LEFT")
         self.assertEqual(rules["subheading"]["line_spacing"], 1.0)
         self.assertEqual(rules["subheading"]["space_before"], 0.0)
@@ -175,6 +176,31 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertIn("Heading has too many blank paragraphs before it", heading_descriptions)
         self.assertEqual(_blank_count_before(fixed, "1.1 Missing Blank Before"), 1)
         self.assertEqual(_blank_count_before(fixed, "1.2 Excess Blank Before"), 1)
+
+    def test_jiwe_main_heading_excess_blank_paragraphs_are_collapsed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main_heading_blanks.docx"
+            document = Document()
+            _add_paragraph(document, "Figure 1. System Architecture Diagram", 10, WD_ALIGN_PARAGRAPH.CENTER)
+            for _ in range(4):
+                blank = document.add_paragraph("")
+                blank.paragraph_format.line_spacing = 1.0
+                blank.paragraph_format.space_after = Pt(7.5)
+            _add_paragraph(document, "CONCLUSION", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            heading_descriptions = [
+                issue.description
+                for issue in result.issues_by_category.get("headings", [])
+            ]
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        self.assertIn("Heading has too many blank paragraphs before it", heading_descriptions)
+        self.assertEqual(_blank_count_before(fixed, "CONCLUSION"), 1)
 
     def test_jiwe_heading_spacing_is_detected_and_fixed(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -63,7 +63,8 @@ DEFAULT_RULES = {
         "all_caps": True,
         "line_spacing": 1.0,
         "space_before": 0.0,
-        "space_after": 7.5
+        "space_after": 7.5,
+        "blank_before_max": 1
     },
     "subheading": {
         "font_name": "Times New Roman",
