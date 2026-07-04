@@ -747,6 +747,24 @@ class AutoFixer:
             if index != first_index:
                 self._clear_run_text_preserving_drawings(run)
 
+    def _replace_paragraph_text_preserving_run_formatting(self, paragraph, text: str):
+        """Replace same-length paragraph text without collapsing mixed run formatting."""
+        visible_runs = [run for run in paragraph.runs if run.text]
+        if not visible_runs:
+            paragraph.add_run(text)
+            return
+
+        original_text = "".join(run.text for run in visible_runs)
+        if len(original_text) != len(text):
+            self._replace_paragraph_text_preserving_first_run(paragraph, text)
+            return
+
+        offset = 0
+        for run in visible_runs:
+            length = len(run.text)
+            self._set_run_text_preserving_drawings(run, text[offset:offset + length])
+            offset += length
+
     def _run_has_drawing_or_pict(self, run) -> bool:
         """Return True when a run contains a Word drawing/picture object."""
         xml = run._r.xml
@@ -1618,7 +1636,7 @@ class AutoFixer:
         ):
             target_text = to_journal_caption_title_case(current_text)
             if target_text != current_text:
-                self._replace_paragraph_text_preserving_first_run(paragraph, target_text)
+                self._replace_paragraph_text_preserving_run_formatting(paragraph, target_text)
                 changes.append({
                     "property_name": "capitalization",
                     "current_value": current_text,

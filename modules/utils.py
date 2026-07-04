@@ -678,9 +678,12 @@ def to_journal_caption_title_case(text: str) -> str:
         token = match_obj.group(0)
         if _caption_token_is_inside_numeric_expression(caption_body, match_obj.start(), match_obj.end()):
             return token
+        starts_new_phrase = words_seen == 0 or _caption_token_starts_new_phrase(
+            caption_body,
+            match_obj.start(),
+        )
         words_seen += 1
-        force_capital = words_seen == 1
-        return _caption_title_case_token(token, force_capital)
+        return _caption_title_case_token(token, starts_new_phrase)
 
     converted_body = re.sub(r"[A-Za-z][A-Za-z'’]*(?:[-–][A-Za-z][A-Za-z'’]*)*", convert_word, caption_body)
     return f"{leading}{label}{converted_body}"
@@ -730,6 +733,14 @@ def _caption_token_is_inside_numeric_expression(text: str, start: int, end: int)
     previous_char = text[start - 1] if start > 0 else ""
     next_char = text[end] if end < len(text) else ""
     return previous_char.isdigit() and next_char.isdigit()
+
+
+def _caption_token_starts_new_phrase(text: str, start: int) -> bool:
+    """Return True when a caption word follows sentence-like punctuation."""
+    previous_text = text[:start].rstrip()
+    if not previous_text:
+        return True
+    return previous_text[-1] in ".:;?!"
 
 
 def is_empty_paragraph(paragraph) -> bool:

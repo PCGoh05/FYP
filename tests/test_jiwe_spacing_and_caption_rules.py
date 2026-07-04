@@ -11,7 +11,7 @@ from docx.shared import Inches, Pt
 from modules.auto_fixer import AutoFixer
 from modules.manuscript_checker import ManuscriptChecker
 from modules.profile_loader import ProfileLoader
-from modules.utils import paragraph_has_manual_line_breaks
+from modules.utils import paragraph_has_manual_line_breaks, to_journal_caption_title_case
 
 
 def _jiwe_rules():
@@ -394,6 +394,56 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertEqual(
             fixed.paragraphs[1].text,
             "Figure 3. Top 20 Features Ranked by Their Chi-Squared Scores with the Target Variable",
+        )
+
+    def test_caption_title_case_keeps_joining_words_lowercase(self):
+        self.assertEqual(
+            to_journal_caption_title_case(
+                "Table 2. bootstrap metrics for model performance with features from training data via resampling"
+            ),
+            "Table 2. Bootstrap Metrics for Model Performance with Features from Training Data via Resampling",
+        )
+
+    def test_caption_title_case_capitalizes_word_after_sentence_boundary(self):
+        self.assertEqual(
+            to_journal_caption_title_case(
+                "Figure 2. distribution of learning gains. the treatment distribution with control group"
+            ),
+            "Figure 2. Distribution of Learning Gains. The Treatment Distribution with Control Group",
+        )
+
+    def test_caption_title_case_preserves_mixed_bold_formatting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "caption_case_mixed_bold.docx"
+            document = Document()
+            _add_drawing_paragraph(document)
+            caption = document.add_paragraph()
+            label = caption.add_run("Figure 1. ")
+            label.font.name = "Times New Roman"
+            label.font.size = Pt(10)
+            label.font.bold = True
+            body = caption.add_run("dual-phase evidence chain")
+            body.font.name = "Times New Roman"
+            body.font.size = Pt(10)
+            body.font.bold = False
+            document.save(path)
+
+            result = ManuscriptChecker(_jiwe_rules()).load_manuscript(str(path)).check_all()
+            fixer = AutoFixer(_jiwe_rules(), result.classifications, result.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        visible_runs = [
+            (run.text, run.font.bold)
+            for run in fixed.paragraphs[1].runs
+            if run.text.strip()
+        ]
+        self.assertEqual(fixed.paragraphs[1].text, "Figure 1. Dual-Phase Evidence Chain")
+        self.assertTrue(visible_runs[0][1])
+        self.assertTrue(
+            any("Dual-Phase Evidence Chain" in text and bold is False for text, bold in visible_runs),
+            visible_runs,
         )
 
     def test_caption_title_case_preserves_acronyms(self):
