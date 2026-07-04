@@ -505,6 +505,38 @@ def get_space_after_pt(paragraph) -> Optional[float]:
     return space_after.pt if space_after is not None else None
 
 
+def get_space_before_pt(paragraph) -> Optional[float]:
+    """Get effective paragraph spacing before in points."""
+    space_before = paragraph.paragraph_format.space_before
+    if space_before is None and paragraph.style is not None:
+        space_before = paragraph.style.paragraph_format.space_before
+
+    base_style = paragraph.style.base_style if paragraph.style is not None else None
+    if space_before is None and base_style is not None:
+        space_before = base_style.paragraph_format.space_before
+
+    if space_before is None:
+        document = getattr(paragraph.part, "document", None)
+        styles = document.styles.element if document is not None else None
+        doc_defaults = styles.find(qn("w:docDefaults")) if styles is not None else None
+        spacing = (
+            doc_defaults.find(
+                f"{qn('w:pPrDefault')}/{qn('w:pPr')}/{qn('w:spacing')}"
+            )
+            if doc_defaults is not None
+            else None
+        )
+        if spacing is not None:
+            before_value = spacing.get(qn("w:before"))
+            if before_value is not None:
+                try:
+                    return int(before_value) / 20
+                except ValueError:
+                    return None
+
+    return space_before.pt if space_before is not None else None
+
+
 def get_hanging_indent_inches(paragraph) -> Optional[float]:
     """Get effective hanging indent distance in inches."""
     first_line_indent = paragraph.paragraph_format.first_line_indent

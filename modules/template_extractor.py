@@ -12,7 +12,7 @@ from .profile_loader import ProfileLoader
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_font_info,
     get_paragraph_alignment, get_margins, get_line_spacing,
-    get_space_after_pt, get_direct_left_indent_inches, get_hanging_indent_inches, get_sdt_reference_paragraphs,
+    get_space_before_pt, get_space_after_pt, get_direct_left_indent_inches, get_hanging_indent_inches, get_sdt_reference_paragraphs,
     count_columns, get_run_font_info
 )
 from config import DEFAULT_RULES, SECTION_HEADING_PATTERNS
@@ -399,6 +399,7 @@ class TemplateExtractor:
             },
             "body": self._extract_body_style(),
             "heading": self._extract_heading_style(),
+            "subheading": self._extract_subheading_style(),
             "abstract": self._extract_abstract_style(),
             "keywords": self._extract_keywords_style(default_rules, abstract_size),
             "caption": self._extract_caption_style(),
@@ -841,6 +842,9 @@ Answer with ONLY "yes" or "no"."""
         heading_fonts = []
         heading_sizes = []
         heading_bold = []
+        line_spacings = []
+        space_befores = []
+        space_afters = []
         all_caps_count = 0
         
         for para in self.document.paragraphs:
@@ -858,6 +862,15 @@ Answer with ONLY "yes" or "no"."""
             if (is_all_caps or is_numbered or is_pattern_match) and len(text) < 100:
                 if is_all_caps:
                     all_caps_count += 1
+                spacing = get_line_spacing(para)
+                if spacing is not None:
+                    line_spacings.append(round(float(spacing), 2))
+                space_before = get_space_before_pt(para)
+                if space_before is not None:
+                    space_befores.append(round(float(space_before), 2))
+                space_after = get_space_after_pt(para)
+                if space_after is not None:
+                    space_afters.append(round(float(space_after), 2))
                 
                 # Get font info from the FIRST run only (heading text, not annotations)
                 for run in para.runs:
@@ -911,10 +924,68 @@ Answer with ONLY "yes" or "no"."""
                 "font_name": Counter(heading_fonts).most_common(1)[0][0] if heading_fonts else self._profile_default("heading", DEFAULT_RULES["heading"]).get("font_name", "Times New Roman"),
                 "font_size": Counter(heading_sizes).most_common(1)[0][0] if heading_sizes else self._profile_default("heading", DEFAULT_RULES["heading"]).get("font_size", 10),
                 "bold": detected_bold,  # Based on template analysis
-                "all_caps": all_caps_count > 0
+                "all_caps": all_caps_count > 0,
+                "line_spacing": Counter(line_spacings).most_common(1)[0][0] if line_spacings else self._profile_default("heading", DEFAULT_RULES["heading"]).get("line_spacing"),
+                "space_before": Counter(space_befores).most_common(1)[0][0] if space_befores else self._profile_default("heading", DEFAULT_RULES["heading"]).get("space_before"),
+                "space_after": Counter(space_afters).most_common(1)[0][0] if space_afters else self._profile_default("heading", DEFAULT_RULES["heading"]).get("space_after"),
             }
         
         return self._profile_default("heading", DEFAULT_RULES["heading"])
+
+    def _extract_subheading_style(self) -> Dict[str, Any]:
+        """Extract numbered subheading style, including template spacing."""
+        default_rule = self._profile_default("subheading", DEFAULT_RULES["subheading"])
+        fonts = []
+        sizes = []
+        bold_values = []
+        italic_values = []
+        line_spacings = []
+        space_befores = []
+        space_afters = []
+
+        for para in self.document.paragraphs:
+            text = get_paragraph_text(para).strip()
+            if not re.match(r"^\d+\.\d+(?:\.\d+)*\.?\s+\S", text):
+                continue
+            if len(text) >= 120:
+                continue
+
+            spacing = get_line_spacing(para)
+            if spacing is not None:
+                line_spacings.append(round(float(spacing), 2))
+            space_before = get_space_before_pt(para)
+            if space_before is not None:
+                space_befores.append(round(float(space_before), 2))
+            space_after = get_space_after_pt(para)
+            if space_after is not None:
+                space_afters.append(round(float(space_after), 2))
+            for run in para.runs:
+                run_text = run.text.strip()
+                if not run_text or run_text.startswith("(") or "font" in run_text.lower():
+                    continue
+                run_info = get_run_font_info(run)
+                if run_info.get("font_name"):
+                    fonts.append(run_info["font_name"])
+                if run_info.get("font_size"):
+                    sizes.append(run_info["font_size"])
+                if run.font.bold is not None:
+                    bold_values.append(run.font.bold)
+                if run.font.italic is not None:
+                    italic_values.append(run.font.italic)
+                break
+
+        if not any([fonts, sizes, bold_values, italic_values, line_spacings, space_befores, space_afters]):
+            return default_rule
+
+        return {
+            "font_name": Counter(fonts).most_common(1)[0][0] if fonts else default_rule.get("font_name"),
+            "font_size": Counter(sizes).most_common(1)[0][0] if sizes else default_rule.get("font_size"),
+            "bold": Counter(bold_values).most_common(1)[0][0] if bold_values else default_rule.get("bold"),
+            "italic": Counter(italic_values).most_common(1)[0][0] if italic_values else default_rule.get("italic"),
+            "line_spacing": Counter(line_spacings).most_common(1)[0][0] if line_spacings else default_rule.get("line_spacing"),
+            "space_before": Counter(space_befores).most_common(1)[0][0] if space_befores else default_rule.get("space_before"),
+            "space_after": Counter(space_afters).most_common(1)[0][0] if space_afters else default_rule.get("space_after"),
+        }
     
     def _extract_abstract_style(self) -> Dict[str, Any]:
         """Extract abstract text style"""

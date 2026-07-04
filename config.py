@@ -60,13 +60,19 @@ DEFAULT_RULES = {
         "font_name": "Times New Roman",
         "font_size": 10,
         "bold": True,
-        "all_caps": True
+        "all_caps": True,
+        "line_spacing": 1.0,
+        "space_before": 0.0,
+        "space_after": 7.5
     },
     "subheading": {
         "font_name": "Times New Roman",
         "font_size": 10,
         "bold": False,
-        "italic": True
+        "italic": True,
+        "line_spacing": 1.0,
+        "space_before": 0.0,
+        "space_after": 7.5
     },
     "abstract": {
         "font_name": "Times New Roman",

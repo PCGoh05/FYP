@@ -19,7 +19,8 @@ from io import BytesIO
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_alignment, truncate_text,
     is_font_equivalent, get_run_font_info, get_sdt_reference_paragraphs,
-    classify_author_info_role, get_space_after_pt, get_direct_left_indent_inches, get_hanging_indent_inches,
+    classify_author_info_role, get_line_spacing, get_space_before_pt, get_space_after_pt,
+    get_direct_left_indent_inches, get_hanging_indent_inches,
     to_journal_caption_title_case, paragraph_has_manual_line_breaks,
     replace_manual_line_breaks_with_spaces
 )
@@ -243,6 +244,8 @@ class AutoFixer:
 
         if "line spacing" in description:
             return "line_spacing"
+        if "spacing before" in description or "before spacing" in description:
+            return "space_before"
         if "spacing after" in description or "after spacing" in description:
             return "space_after"
         if "left indent" in description:
@@ -1113,6 +1116,9 @@ class AutoFixer:
                 "italic",
                 "alignment",
                 "capitalization",
+                "line_spacing",
+                "space_before",
+                "space_after",
                 "number_font_name",
                 "number_font_size",
                 "number_bold",
@@ -1125,6 +1131,9 @@ class AutoFixer:
         expected_italic = heading_rules.get("italic", None)
         expected_alignment = heading_rules.get("alignment")
         expected_all_caps = heading_rules.get("all_caps")
+        expected_line_spacing = heading_rules.get("line_spacing")
+        expected_space_before = heading_rules.get("space_before")
+        expected_space_after = heading_rules.get("space_after")
 
         changes.extend(self._fix_numbering_formatting(
             paragraph,
@@ -1175,6 +1184,51 @@ class AutoFixer:
                 "current_value": current_alignment,
                 "target_value": expected_alignment,
                 "evidence": "Heading alignment did not match target rule",
+            })
+
+        current_line_spacing = get_line_spacing(paragraph)
+        if (
+            expected_line_spacing is not None
+            and current_line_spacing is not None
+            and self._property_allowed("line_spacing", allowed_properties)
+            and abs(float(current_line_spacing) - float(expected_line_spacing)) > 0.05
+        ):
+            paragraph.paragraph_format.line_spacing = float(expected_line_spacing)
+            changes.append({
+                "property_name": "line_spacing",
+                "current_value": str(current_line_spacing),
+                "target_value": str(expected_line_spacing),
+                "evidence": "Heading line spacing did not match target rule",
+            })
+
+        current_space_before = get_space_before_pt(paragraph)
+        if (
+            expected_space_before is not None
+            and current_space_before is not None
+            and self._property_allowed("space_before", allowed_properties)
+            and abs(float(current_space_before) - float(expected_space_before)) > 0.5
+        ):
+            paragraph.paragraph_format.space_before = Pt(float(expected_space_before))
+            changes.append({
+                "property_name": "space_before",
+                "current_value": f"{current_space_before}pt",
+                "target_value": f"{expected_space_before}pt",
+                "evidence": "Heading spacing before did not match target rule",
+            })
+
+        current_space_after = get_space_after_pt(paragraph)
+        if (
+            expected_space_after is not None
+            and current_space_after is not None
+            and self._property_allowed("space_after", allowed_properties)
+            and abs(float(current_space_after) - float(expected_space_after)) > 0.5
+        ):
+            paragraph.paragraph_format.space_after = Pt(float(expected_space_after))
+            changes.append({
+                "property_name": "space_after",
+                "current_value": f"{current_space_after}pt",
+                "target_value": f"{expected_space_after}pt",
+                "evidence": "Heading spacing after did not match target rule",
             })
 
         if changes:

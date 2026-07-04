@@ -11,6 +11,7 @@ from docx.shared import Inches, Pt
 from modules.auto_fixer import AutoFixer
 from modules.manuscript_checker import ManuscriptChecker
 from modules.profile_loader import ProfileLoader
+from modules.template_extractor import TemplateExtractor
 from modules.utils import paragraph_has_manual_line_breaks, to_journal_caption_title_case
 
 
@@ -80,8 +81,74 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertIsNone(rules["reference"]["left_indent"])
         self.assertAlmostEqual(rules["reference"]["hanging_indent"], 0.4444444444444444)
         self.assertEqual(rules["heading"]["alignment"], "LEFT")
+        self.assertEqual(rules["heading"]["line_spacing"], 1.0)
+        self.assertEqual(rules["heading"]["space_before"], 0.0)
+        self.assertEqual(rules["heading"]["space_after"], 7.5)
         self.assertEqual(rules["subheading"]["alignment"], "LEFT")
+        self.assertEqual(rules["subheading"]["line_spacing"], 1.0)
+        self.assertEqual(rules["subheading"]["space_before"], 0.0)
+        self.assertEqual(rules["subheading"]["space_after"], 7.5)
         self.assertTrue(rules["reference"]["number_tab_required"])
+
+    def test_jiwe_heading_spacing_is_detected_and_fixed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "heading_spacing.docx"
+            document = Document()
+            _add_paragraph(document, "Journal of Informatics and", 24, WD_ALIGN_PARAGRAPH.CENTER, True)
+            _add_paragraph(document, "Web Engineering", 24, WD_ALIGN_PARAGRAPH.CENTER, True)
+            _add_paragraph(document, "Vol. 5 No. 2 (June 2026) eISSN: 2821-370X", 10, WD_ALIGN_PARAGRAPH.CENTER)
+            _add_paragraph(document, "A Test Paper Title for Heading Spacing", 24, WD_ALIGN_PARAGRAPH.CENTER)
+            _add_paragraph(document, "Abstract - " + "word " * 210, 9)
+            _add_paragraph(document, "Keywords - Template, Checking, Rules, References, Formatting", 9)
+            _add_paragraph(document, "1. INTRODUCTION", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            subheading = _add_paragraph(document, "1.1 Experimental Setup", 10, WD_ALIGN_PARAGRAPH.LEFT)
+            subheading.paragraph_format.line_spacing = 1.15
+            subheading.paragraph_format.space_before = Pt(4)
+            subheading.paragraph_format.space_after = Pt(4)
+            for run in subheading.runs:
+                run.font.italic = True
+            _add_paragraph(document, "This body paragraph is correctly justified.")
+            _add_paragraph(document, "4. CONCLUSION", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            _add_paragraph(document, "Conclusion text for the manuscript.")
+            _add_paragraph(document, "5. REFERENCES", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            _add_paragraph(
+                document,
+                '[1]\tA. Author, "Article title," Journal of Testing, vol. 1, no. 1, pp. 1-5, 2026.',
+                9,
+            )
+            document.save(path)
+
+            rules = _jiwe_rules()
+            before = ManuscriptChecker(rules).load_manuscript(str(path)).check_all()
+            heading_descriptions = [
+                issue.description
+                for issue in before.issues_by_category.get("headings", [])
+            ]
+            fixer = AutoFixer(rules, before.classifications, before.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        fixed_subheading = next(paragraph for paragraph in fixed.paragraphs if paragraph.text == "1.1 Experimental Setup")
+        self.assertIn("Heading line spacing does not match template", heading_descriptions)
+        self.assertIn("Heading spacing before does not match template", heading_descriptions)
+        self.assertIn("Heading spacing after does not match template", heading_descriptions)
+        self.assertAlmostEqual(fixed_subheading.paragraph_format.line_spacing, 1.0)
+        self.assertAlmostEqual(fixed_subheading.paragraph_format.space_before.pt, 0.0)
+        self.assertAlmostEqual(fixed_subheading.paragraph_format.space_after.pt, 7.5)
+
+    def test_template_extraction_includes_subheading_spacing(self):
+        document = Document()
+        _add_paragraph(document, "3. RESEARCH METHODOLOGY", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+        subheading = _add_paragraph(document, "3.1 Research approach", 10, WD_ALIGN_PARAGRAPH.LEFT)
+        for run in subheading.runs:
+            run.font.italic = True
+
+        rules = TemplateExtractor(document=document).extract_all_rules()
+
+        self.assertEqual(rules["subheading"]["line_spacing"], 1.0)
+        self.assertEqual(rules["subheading"]["space_before"], 0.0)
+        self.assertEqual(rules["subheading"]["space_after"], 7.5)
 
     def test_jiwe_heading_alignment_is_detected_and_fixed(self):
         with tempfile.TemporaryDirectory() as tmp:

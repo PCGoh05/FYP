@@ -12,7 +12,7 @@ from difflib import SequenceMatcher
 from .utils import (
     load_document, get_paragraph_text, get_paragraph_alignment, get_paragraph_font_info,
     get_sdt_reference_paragraphs, get_margins, get_line_spacing,
-    get_space_after_pt, get_direct_left_indent_inches, get_hanging_indent_inches,
+    get_space_before_pt, get_space_after_pt, get_direct_left_indent_inches, get_hanging_indent_inches,
     detect_reference_style, calculate_compliance_score, count_columns,
     truncate_text, is_font_equivalent, classify_author_info_role,
     to_journal_caption_title_case, paragraph_has_manual_line_breaks,
@@ -1116,6 +1116,51 @@ class ManuscriptChecker:
                         severity="warning",
                         text_preview=cp.text
                     )
+
+                expected_line_spacing = heading_rules.get("line_spacing")
+                if expected_line_spacing is not None:
+                    current_line_spacing = get_line_spacing(paragraph)
+                    if current_line_spacing is not None and abs(float(current_line_spacing) - float(expected_line_spacing)) > 0.05:
+                        self._add_issue(
+                            category="headings",
+                            location=f"Heading: {truncate_text(cp.text, 30)}",
+                            para_index=cp.index,
+                            description="Heading line spacing does not match template",
+                            current=f"{current_line_spacing}",
+                            expected=f"{expected_line_spacing}",
+                            severity="warning",
+                            text_preview=cp.text
+                        )
+
+                expected_space_before = heading_rules.get("space_before")
+                if expected_space_before is not None:
+                    current_space_before = get_space_before_pt(paragraph)
+                    if current_space_before is not None and abs(float(current_space_before) - float(expected_space_before)) > 0.5:
+                        self._add_issue(
+                            category="headings",
+                            location=f"Heading: {truncate_text(cp.text, 30)}",
+                            para_index=cp.index,
+                            description="Heading spacing before does not match template",
+                            current=f"{current_space_before}pt",
+                            expected=f"{expected_space_before}pt",
+                            severity="warning",
+                            text_preview=cp.text
+                        )
+
+                expected_space_after = heading_rules.get("space_after")
+                if expected_space_after is not None:
+                    current_space_after = get_space_after_pt(paragraph)
+                    if current_space_after is not None and abs(float(current_space_after) - float(expected_space_after)) > 0.5:
+                        self._add_issue(
+                            category="headings",
+                            location=f"Heading: {truncate_text(cp.text, 30)}",
+                            para_index=cp.index,
+                            description="Heading spacing after does not match template",
+                            current=f"{current_space_after}pt",
+                            expected=f"{expected_space_after}pt",
+                            severity="warning",
+                            text_preview=cp.text
+                        )
 
     def _declaration_alignment_is_allowed(self, cp: ClassifiedParagraph) -> bool:
         """Allow JIWE declaration bodies to follow the template's mixed left/justify layout."""
