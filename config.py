@@ -67,7 +67,8 @@ DEFAULT_RULES = {
         "blank_before_max": 1
     },
     "introduction_heading": {
-        "space_before": 15.0
+        "space_before": 15.0,
+        "blank_before_max": None
     },
     "subheading": {
         "font_name": "Times New Roman",

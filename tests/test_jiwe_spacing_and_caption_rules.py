@@ -232,6 +232,34 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertAlmostEqual(fixed_heading.paragraph_format.space_before.pt, 15.0)
         self.assertAlmostEqual(fixed_conclusion.paragraph_format.space_before.pt, 0.0)
 
+    def test_jiwe_introduction_front_matter_blank_paragraphs_are_preserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "introduction_front_matter_blanks.docx"
+            document = Document()
+            _add_paragraph(document, "Published: 16 June 2026", 10, WD_ALIGN_PARAGRAPH.RIGHT)
+            for _ in range(2):
+                blank = document.add_paragraph("")
+                blank.paragraph_format.line_spacing = 1.0
+                blank.paragraph_format.space_after = Pt(7.5)
+            _add_paragraph(document, "INTRODUCTION", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            document.save(path)
+
+            rules = _jiwe_rules()
+            before = ManuscriptChecker(rules).load_manuscript(str(path)).check_all()
+            intro_blank_issues = [
+                issue.description
+                for issue in before.issues_by_category.get("headings", [])
+                if issue.text_preview == "INTRODUCTION"
+                and issue.description == "Heading has too many blank paragraphs before it"
+            ]
+            fixer = AutoFixer(rules, before.classifications, before.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        self.assertEqual(intro_blank_issues, [])
+        self.assertEqual(_blank_count_before(fixed, "INTRODUCTION"), 2)
+
     def test_jiwe_heading_spacing_is_detected_and_fixed(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "heading_spacing.docx"
