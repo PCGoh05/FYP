@@ -102,9 +102,10 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
         self.assertAlmostEqual(rules["reference"]["hanging_indent"], 0.4444444444444444)
         self.assertEqual(rules["heading"]["alignment"], "LEFT")
         self.assertEqual(rules["heading"]["line_spacing"], 1.0)
-        self.assertEqual(rules["heading"]["space_before"], 0.0)
+        self.assertIsNone(rules["heading"]["space_before"])
         self.assertEqual(rules["heading"]["space_after"], 7.5)
         self.assertEqual(rules["heading"]["blank_before_max"], 1)
+        self.assertEqual(rules["introduction_heading"]["space_before"], 15.0)
         self.assertEqual(rules["subheading"]["alignment"], "LEFT")
         self.assertEqual(rules["subheading"]["line_spacing"], 1.0)
         self.assertEqual(rules["subheading"]["space_before"], 0.0)
@@ -201,6 +202,35 @@ class JIWESpacingAndCaptionRulesTest(unittest.TestCase):
 
         self.assertIn("Heading has too many blank paragraphs before it", heading_descriptions)
         self.assertEqual(_blank_count_before(fixed, "CONCLUSION"), 1)
+
+    def test_jiwe_introduction_heading_space_before_matches_template(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "introduction_heading_space_before.docx"
+            document = Document()
+            introduction = _add_paragraph(document, "1. INTRODUCTION", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            introduction.paragraph_format.space_before = Pt(0)
+            conclusion = _add_paragraph(document, "CONCLUSION", 10, WD_ALIGN_PARAGRAPH.LEFT, True)
+            conclusion.paragraph_format.space_before = Pt(0)
+            document.save(path)
+
+            rules = _jiwe_rules()
+            before = ManuscriptChecker(rules).load_manuscript(str(path)).check_all()
+            spacing_before_previews = [
+                issue.text_preview
+                for issue in before.issues_by_category.get("headings", [])
+                if issue.description == "Heading spacing before does not match template"
+            ]
+            fixer = AutoFixer(rules, before.classifications, before.issues_by_category)
+            fixer.load_manuscript(str(path))
+            fixer.fix_all()
+            fixed = Document(BytesIO(fixer.get_fixed_document_bytes()))
+
+        fixed_heading = next(paragraph for paragraph in fixed.paragraphs if paragraph.text == "1. INTRODUCTION")
+        fixed_conclusion = next(paragraph for paragraph in fixed.paragraphs if paragraph.text == "CONCLUSION")
+        self.assertIn("1. INTRODUCTION", spacing_before_previews)
+        self.assertNotIn("CONCLUSION", spacing_before_previews)
+        self.assertAlmostEqual(fixed_heading.paragraph_format.space_before.pt, 15.0)
+        self.assertAlmostEqual(fixed_conclusion.paragraph_format.space_before.pt, 0.0)
 
     def test_jiwe_heading_spacing_is_detected_and_fixed(self):
         with tempfile.TemporaryDirectory() as tmp:

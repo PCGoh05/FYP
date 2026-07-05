@@ -62,9 +62,12 @@ DEFAULT_RULES = {
         "bold": True,
         "all_caps": True,
         "line_spacing": 1.0,
-        "space_before": 0.0,
+        "space_before": None,
         "space_after": 7.5,
         "blank_before_max": 1
+    },
+    "introduction_heading": {
+        "space_before": 15.0
     },
     "subheading": {
         "font_name": "Times New Roman",

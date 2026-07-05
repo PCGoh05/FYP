@@ -1299,7 +1299,15 @@ class ManuscriptChecker:
             return self.rules.get("biography_heading", self.rules.get("heading", {}))
         if re.match(r"^\d+\.\d+", stripped):
             return self.rules.get("subheading", self.rules.get("heading", {}))
+        if normalized == "introduction":
+            return self._merged_heading_rules("introduction_heading")
         return self.rules.get("heading", {})
+
+    def _merged_heading_rules(self, rule_name: str) -> Dict[str, Any]:
+        """Merge a heading-specific override onto the base heading rule."""
+        heading_rules = dict(self.rules.get("heading", {}))
+        heading_rules.update(self.rules.get(rule_name, {}))
+        return heading_rules
 
     def _classification_type_for_index(self, index: Optional[int]):
         """Return the classified paragraph type for an index, when available."""
